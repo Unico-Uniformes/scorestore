@@ -1659,3 +1659,22 @@ body.theme-dark .shipQuote{
   max-height:none;
   border-radius:0;
 }
+
+/* ====== PASTE YOUR CURRENT styles.css CONTENT HERE ======
+   Reemplázalo completo por el archivo que ya traes,
+   y deja el patch al final (incluido abajo).
+*/
+
+/* =========================================
+   PATCH 2026_PROD_UNIFIED_361
+   ========================================= */
+
+/* Grid para productos dentro del modal */
+.catGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+/* Evita que botones tipo <button> en links del footer rompan foco */
+.footerLinks button { font-family: var(--font-body); }
