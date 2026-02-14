@@ -3,525 +3,245 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>SCORE Store | Tienda Oficial</title>
 
-  <title>SCORE STORE | Mercancía Oficial Off-Road</title>
-  <meta name="description" content="Tienda oficial de mercancía SCORE International. Fabricado por Único Uniformes. Envíos a México y USA." />
+  <meta name="description" content="Merchandise oficial de SCORE International. Fabricado por Único Uniformes." />
   <meta name="theme-color" content="#E10600" />
-  <meta name="facebook-domain-verification" content="wuo7x5sxsjcer1t0epn1id5xgjp8su" />
-  <meta name="robots" content="index,follow" />
 
-  <!-- Open Graph / Social -->
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="SCORE STORE | Mercancía Oficial Off-Road" />
-  <meta property="og:description" content="Tienda oficial de mercancía SCORE International. Fabricado por Único Uniformes. Envíos a México y USA." />
+  <meta property="og:title" content="SCORE Store | Tienda Oficial" />
+  <meta property="og:description" content="Merchandise oficial de SCORE International. Fabricado por Único Uniformes." />
   <meta property="og:image" content="/assets/hero.webp" />
-  <meta property="og:locale" content="es_MX" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="SCORE STORE | Mercancía Oficial Off-Road" />
-  <meta name="twitter:description" content="Tienda oficial de mercancía SCORE International. Fabricado por Único Uniformes. Envíos a México y USA." />
-  <meta name="twitter:image" content="/assets/hero.webp" />
 
-  <!-- Hotfixes PRO (Hero + Background + Score title) -->
-  <style>
-    .pageBgImg{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-3;opacity:.25;pointer-events:none;}
-    .heroScoreTitle{letter-spacing:.04em}
-    .heroScoreWhite{color:#fff}
-    .heroScoreRed{color:var(--score-red,#E10600)}
-    .heroScoreLogo{margin:10px 0 0; display:flex; justify-content:center}
-    .heroScoreLogo .scoreLogoImg{height:auto; max-width:280px; filter:drop-shadow(0 10px 18px rgba(0,0,0,.35))}
-  </style>
-
+  <link rel="icon" href="/icons-score.svg" type="image/svg+xml" />
   <link rel="manifest" href="/site.webmanifest" />
-  <link rel="icon" href="/assets/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/assets/icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <!-- Fonts -->
+  <!-- Cache-bust version (mantén el mismo valor en sw.js) -->
+  <link rel="stylesheet" href="/css/styles.css?v=2026_PROD_UNIFIED_361">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Teko:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <!-- Styles -->
-  <link rel="stylesheet" href="/css/styles.css?v=2026_PROD_UNIFIED_360" />
+  <link rel="preload" href="/assets/hero.webp" as="image">
 
-  <!-- Icons (Font Awesome) -->
-  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
-        as="style"
-        onload="this.onload=null;this.rel='stylesheet'">
-  <noscript>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  </noscript>
+  <script src="https://js.stripe.com/v3" async></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Stripe -->
-  <script src="https://js.stripe.com/v3/" async></script>
-
-  <!-- Meta Pixel -->
-  <link rel="preconnect" href="https://connect.facebook.net" crossorigin>
-  <script>
-    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '4249947775334413');
-    fbq('track', 'PageView');
-  </script>
-  <noscript>
-    <img height="1" width="1" style="display:none"
-         src="https://www.facebook.com/tr?id=4249947775334413&ev=PageView&noscript=1"/>
-  </noscript>
+  <style>
+    /* Estilos Críticos (cookie banner) */
+    .cookieBanner { position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 5000; max-width: 980px; margin: 0 auto; background: rgba(0,0,0,0.92); border: 1px solid rgba(255,255,255,0.14); border-left: 6px solid #E10600; border-radius: 16px; padding: 14px; display: none; box-shadow: 0 20px 60px rgba(0,0,0,0.55); }
+    .cookieInner { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+    .cookieText { color:#fff; font-family: 'Inter', sans-serif; font-size: 13px; flex: 1; }
+    .cookieBtn { border-radius: 999px; padding: 8px 16px; cursor: pointer; font-family: 'Teko', sans-serif; text-transform: uppercase; font-size: 16px; background: #E10600; color: #fff; border: none; }
+    .cookieBtn.ghost { background: transparent; border: 1px solid rgba(255,255,255,0.3); margin-right: 10px; }
+  </style>
 </head>
 
 <body>
-  <!-- Fondo real de página -->
-  <img class="pageBgImg" src="/assets/fondo-pagina-score.webp" alt="" aria-hidden="true" decoding="async" />
-
-  <!-- Splash -->
-  <div id="splash" class="splash" aria-hidden="true">
-    <div class="splash-inner">
-      <div class="splash-logo">SCORE<br><span>STORE</span></div>
-      <div class="splash-text">LOADING ENGINE...</div>
+  <div id="splash-screen">
+    <div class="splash-content">
+      <img src="/assets/logo-score.webp" alt="SCORE" class="splash-logo">
+      <div class="rpm-bar-container"><div class="rpm-bar"></div></div>
+      <div class="splash-text">INICIANDO MOTORES...</div>
     </div>
   </div>
 
-  <div id="app">
-    <!-- Header -->
-    <header class="header" aria-label="Header">
-      <div class="container headerInner">
-        <a class="brand" href="#top" aria-label="SCORE STORE">
-          <span class="brandMark">S</span>
-          <span class="brandText">SCORE STORE</span>
-        </a>
+  <div id="overlay" class="page-overlay" aria-hidden="true" onclick="closeAll()"></div>
 
-        <nav class="nav" aria-label="Navegación">
-          <a href="#catalogo">CATÁLOGO</a>
-          <a href="#partners">PARTNERS</a>
-          <a href="#envios">ENVÍOS</a>
-        </nav>
-
-        <div class="headerActions">
-          <button id="cartBtn" class="cartBtn" type="button" onclick="openDrawerCompat()" aria-label="Abrir carrito">
-            <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>
-            <span id="cartCount" class="cartCount">0</span>
-          </button>
-        </div>
-      </div>
-    </header>
-
-    <!-- HERO -->
-    <section class="hero" id="top" aria-label="Portada">
-      <img class="heroBgImg" src="/assets/hero.webp" alt="" width="1920" height="1080" decoding="async" />
-      <div class="heroOverlayDark" aria-hidden="true"></div>
-
-      <div class="container heroInner">
-        <!-- SCORE INTERNATIONAL (ROJO/BLANCO) -->
-        <h1 class="hero-title heroScoreTitle">
-          <span class="heroScoreWhite">SCORE</span>
-          <span class="accent heroScoreRed">INTERNATIONAL</span>
-        </h1>
-
-        <div class="heroScoreLogo" aria-label="SCORE International">
-          <img src="/assets/logo-score.webp" alt="SCORE International" class="scoreLogoImg" width="260" height="60" decoding="async" loading="eager" />
-        </div>
-
-        <div class="hero-logos" aria-label="Sello World Desert">
-          <img src="/assets/logo-world-desert.webp" class="heroDesertBig" alt="World Desert Championship" width="180" height="180" decoding="async" />
-        </div>
-
-        <p class="hero-copy">Fabricado por <b>Único Uniformes</b>, Patrocinador oficial.</p>
-
-        <div class="ctaRow">
-          <a href="#catalogo" class="btn primary pulse-btn">VER CATÁLOGO</a>
-          <button class="btn ghost" type="button" onclick="openDrawerCompat()">MI CARRITO</button>
-        </div>
-
-        <div class="heroLogos" aria-label="Eventos SCORE">
-          <img src="/assets/logo-baja1000.webp" alt="Baja 1000" width="120" height="44" loading="lazy" />
-          <img src="/assets/logo-baja500.webp" alt="Baja 500" width="120" height="44" loading="lazy" />
-          <img src="/assets/logo-baja400.webp" alt="Baja 400" width="120" height="44" loading="lazy" />
-          <img src="/assets/logo-sf250.webp" alt="San Felipe 250" width="120" height="44" loading="lazy" />
-        </div>
-      </div>
-    </section>
-
-    <!-- COTIZADOR / ENVÍOS -->
-    <section id="envios" class="section envios" aria-label="Envíos">
-      <div class="container">
-        <div class="sectionHead">
-          <h2>ENVÍOS <span class="accent">RÁPIDOS</span></h2>
-          <p>Cotiza en tiempo real por código postal (México y USA).</p>
-        </div>
-
-        <div class="shippingBox" role="region" aria-label="Cotizador de envío">
-          <div class="shipRow">
-            <label>Destino</label>
-            <div class="shipModePills">
-              <label class="pill">
-                <input type="radio" name="shipModeHero" value="pickup" checked onchange="toggleShippingCompat('pickup')">
-                <span>Pickup</span>
-              </label>
-              <label class="pill">
-                <input type="radio" name="shipModeHero" value="mx" onchange="toggleShippingCompat('mx')">
-                <span>México</span>
-              </label>
-              <label class="pill">
-                <input type="radio" name="shipModeHero" value="us" onchange="toggleShippingCompat('us')">
-                <span>USA</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="shipRow" id="shipZipWrap">
-            <label for="shipZip">Código Postal</label>
-            <input id="shipZip" placeholder="Ej. 22000" inputmode="numeric" autocomplete="postal-code" />
-          </div>
-
-          <button class="btn primary full" type="button" onclick="quoteShippingUICompat()">COTIZAR ENVÍO</button>
-          <div id="shipQuote" class="shipQuote" aria-live="polite"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- CATÁLOGO (NO TOCADO) -->
-    <section id="catalogo" class="section" aria-label="Catálogo">
-      <div class="container">
-        <div class="sectionHead">
-          <h2>RACE <span class="accent">GEAR</span></h2>
-          <p>Selecciona tu categoría y agrégalo al carrito.</p>
-        </div>
-
-        <div class="filters" aria-label="Filtros de catálogo">
-          <button class="chip active" data-filter="ALL" type="button">TODO</button>
-          <button class="chip" data-filter="HOODIES" type="button">HOODIES</button>
-          <button class="chip" data-filter="TEES" type="button">PLAYERAS</button>
-          <button class="chip" data-filter="CAPS" type="button">GORRAS</button>
-          <button class="chip" data-filter="BAJA_1000" type="button">BAJA 1000</button>
-          <button class="chip" data-filter="BAJA_500" type="button">BAJA 500</button>
-        </div>
-
-        <div id="productsGrid" class="grid" aria-live="polite" aria-label="Productos"></div>
-      </div>
-    </section>
-
-    <!-- PARTNERS (ACTUALIZADO) -->
-    <section id="partners" class="partners" aria-label="Partners">
-      <div class="container">
-        <h3>OFFICIAL PARTNERS</h3>
-        <div class="partnersGrid">
-          <img src="/assets/logo-unico.webp" class="pLogo" alt="Único Uniformes" loading="lazy">
-          <img src="/assets/logo-ford.webp" class="pLogo" alt="Ford" loading="lazy">
-          <img src="/assets/logo-bfgodrich.webp" class="pLogo" alt="BFGoodrich" loading="lazy">
-          <img src="/assets/logo-rzr.webp" class="pLogo" alt="RZR" loading="lazy">
-        </div>
-      </div>
-    </section>
-
+  <div class="promo-bar slide-in-top" id="promo-bar" style="display:none;">
+    <span id="promo-text">⚠️ CARGANDO OFERTAS...</span>
   </div>
 
-  <!-- Footer -->
-  <footer class="footer" aria-label="Footer">
+  <header class="topbar">
+    <div class="container topbarInner">
+      <a href="/" class="brand" aria-label="Inicio">
+        <img src="/assets/logo-score.webp" alt="SCORE International" class="brandLogo">
+      </a>
+      <div class="navRight">
+        <button class="cartBtn" onclick="openDrawer()" aria-label="Carrito">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E10600" stroke-width="2"><path d="M9 22C9.55 22 10 21.55 10 21C10 20.45 9.55 20 9 20C8.45 20 8 20.45 8 21C8 21.55 8.45 22 9 22Z"></path><path d="M20 22C20.55 22 21 21.55 21 21C21 20.45 20.55 20 20 20C19.45 20 19 20.45 19 21C19 21.55 19.45 22 20 22Z"></path><path d="M1 1H5L7.68 14.39C7.77 14.85 8.02 15.26 8.39 15.56C8.75 15.85 9.21 16.01 9.68 16H19.4C19.87 16.01 20.33 15.85 20.69 15.56C21.06 15.26 21.31 14.85 21.4 14.39L23 6H6"></path></svg>
+          <span id="cartCount" class="cartCount">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero scroll-reveal" id="top">
+      <div class="heroBg"></div>
+      <div class="heroOverlay"></div>
+      <div class="heroContent">
+        <div class="tagline"><span class="tag-pill">TIENDA OFICIAL 2026</span></div>
+        <h1 class="hero-title" id="hero-title">SCORE STORE</h1>
+        <div class="logos-row">
+          <img src="/assets/logo-score.webp" alt="SCORE" class="hero-main-logo">
+          <img src="/assets/logo-world-desert.webp" alt="World Desert Championship" class="hero-desert-seal">
+        </div>
+        <div class="marketing-copy">
+          <strong>TIENDA OFICIAL DE SCORE INTERNATIONAL</strong><br>
+          Fabricado por <strong>Único Uniformes</strong>, <strong>Patrocinador oficial</strong>.
+        </div>
+        <div class="ctaRow">
+          <button class="btn primary pulse-btn" onclick="scrollToId('collections')">VER COLECCIONES</button>
+          <button class="btn secondary" onclick="openDrawer()">MI PEDIDO</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section scroll-reveal" id="collections">
+      <div class="sectionHead"><h2>COLECCIONES <span>OFICIALES</span></h2><p>SELECCIONA TU CATEGORÍA</p></div>
+      <div class="grid">
+        <div class="champItem" onclick="openCatalog('BAJA_1000','BAJA 1000')">
+          <div class="card-texture"></div><span class="badge">MÁS VENDIDO</span>
+          <img src="/assets/logo-baja1000.webp" class="float-logo" alt="Baja 1000" loading="lazy">
+          <div class="card-btn">VER PRODUCTOS</div>
+        </div>
+        <div class="champItem" onclick="openCatalog('BAJA_500','BAJA 500')">
+          <div class="card-texture"></div>
+          <img src="/assets/logo-baja500.webp" class="float-logo" alt="Baja 500" loading="lazy">
+          <div class="card-btn">VER PRODUCTOS</div>
+        </div>
+        <div class="champItem" onclick="openCatalog('BAJA_400','BAJA 400')">
+          <div class="card-texture"></div>
+          <img src="/assets/logo-baja400.webp" class="float-logo" alt="Baja 400" loading="lazy">
+          <div class="card-btn">VER PRODUCTOS</div>
+        </div>
+        <div class="champItem" onclick="openCatalog('SF_250','SAN FELIPE 250')">
+          <div class="card-texture"></div>
+          <img src="/assets/logo-sf250.webp" class="float-logo" alt="San Felipe 250" loading="lazy">
+          <div class="card-btn">VER PRODUCTOS</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="partners scroll-reveal">
+      <h3>PATROCINADORES OFICIALES</h3>
+      <div class="partnersGrid">
+        <img src="/assets/logo-ford.webp" class="pLogo" alt="Ford" loading="lazy">
+        <img src="/assets/logo-rzr.webp" class="pLogo" alt="Polaris RZR" loading="lazy">
+        <img src="/assets/logo-bfgodrich.webp" class="pLogo" alt="BFGoodrich" loading="lazy">
+        <img src="/assets/logo-unico.webp" class="pLogo" alt="Único Uniformes" loading="lazy">
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer scroll-reveal">
     <div class="container footerInner">
       <div class="fCol">
-        <div class="footerBrandName">SCORE<br>STORE</div>
-        <p class="footerDesc">
-          Tienda oficial operada por <strong>Único Uniformes</strong>.<br>
-          Envíos a todo México y Estados Unidos.
-        </p>
-
-        <div class="social-center" style="justify-content:flex-start; margin-top:16px;">
-          <a href="https://www.facebook.com/uniforme.unico/" target="_blank" rel="noopener noreferrer" class="fSocial" aria-label="Facebook">
-            <i class="fa-brands fa-facebook-f" aria-hidden="true"></i>
-          </a>
-          <a href="https://www.instagram.com/uniformes.unico" target="_blank" rel="noopener noreferrer" class="fSocial" aria-label="Instagram">
-            <i class="fa-brands fa-instagram" aria-hidden="true"></i>
-          </a>
+        <div class="footerBrandName">BAJATEX</div>
+        <p class="fText">Operador oficial de merchandise SCORE International.<br>Por <strong>Único Uniformes</strong>.</p>
+        <a href="https://wa.me/526642368701" target="_blank" rel="noopener" class="whatsapp-btn">WhatsApp Oficial</a>
+        <div class="social-row">
+          <a href="https://www.facebook.com/OfficialScoreInternational/" target="_blank" rel="noopener" class="social-link">Facebook SCORE</a>
+          <a href="https://www.instagram.com/scoreinternational/" target="_blank" rel="noopener" class="social-link">Instagram SCORE</a>
+          <a href="https://www.instagram.com/uniformes.unico/" target="_blank" rel="noopener" class="social-link">Instagram Único</a>
         </div>
       </div>
 
       <div class="fCol">
-        <h4>NAVEGACIÓN</h4>
-        <div class="f-links">
-          <a href="#catalogo">Catálogo</a>
-          <a href="#" onclick="openDrawerCompat(); return false;">Carrito de Compras</a>
-          <a href="#" onclick="openLegalCompat('privacy'); return false;">Aviso de Privacidad</a>
-          <a href="#" onclick="openLegalCompat('terms'); return false;">Términos y Condiciones</a>
+        <h4>ATENCIÓN</h4>
+        <div class="footerLinks">
+          <a href="/legal.html#envios">Envíos</a>
+          <a href="/legal.html#devoluciones">Devoluciones</a>
+          <a href="/legal.html#facturacion">Facturación</a>
         </div>
       </div>
 
       <div class="fCol">
-        <h4>CONTACTO</h4>
-        <p>
-          <i class="fa-solid fa-envelope" style="color:var(--score-red)"></i>
-          ventas.unicotextil@gmail.com<br>
-          <i class="fa-brands fa-whatsapp" style="color:var(--score-red)"></i>
-          +52 664 236 8701
-        </p>
-        <p style="font-size:12px; opacity:0.6;">
-          Tijuana, Baja California.<br>México.
-        </p>
+        <h4>LEGAL</h4>
+        <div class="footerLinks">
+          <a href="/legal.html#terminos">Términos</a>
+          <a href="/legal.html#privacidad">Privacidad</a>
+        </div>
+      </div>
+
+      <div class="fCol">
+        <h4>INFO</h4>
+        <div class="footerLinks">
+          <a href="/legal.html#contacto">Contacto</a>
+          <a href="#top" onclick="scrollToId('top'); return false;">Volver arriba</a>
+        </div>
       </div>
     </div>
-
-    <div class="container footerBottom">
-      <span>© <span id="year"></span> SCORE STORE · Fabricado por Único Uniformes</span>
-      <span style="opacity:.6">v2026 PROD</span>
-    </div>
+    <div class="copy">SCORE Store © 2026 · Powered by Único OS</div>
   </footer>
 
-  <!-- Toast -->
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <!-- CART DRAWER -->
-  <aside id="cartDrawer" class="drawer" aria-label="Carrito" aria-hidden="true">
-    <div class="drawerHead">
-      <h3>MI CARRITO</h3>
-      <button class="closeBtn" type="button" onclick="closeDrawerCompat()" aria-label="Cerrar">✕</button>
+  <!-- Catálogo -->
+  <div id="modalCatalog" class="modal" aria-hidden="true">
+    <div class="dHead">
+      <div id="catTitle" class="dTitle logo-header">PRODUCTOS</div>
+      <button class="closeBtn" onclick="closeAll()" aria-label="Cerrar">✕</button>
     </div>
+    <div id="catContent" class="dBody"></div>
+  </div>
 
-    <div class="drawerBody">
-      <div id="cartItems" class="cartItems"></div>
+  <!-- Carrito -->
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div class="dHead"><h3 class="dTitle">TU PEDIDO</h3><button class="closeBtn" onclick="closeAll()" aria-label="Cerrar">✕</button></div>
+    <div class="dBody"><div id="cartItems"></div><div id="cartEmpty" style="text-align:center;padding:40px;color:#999;">Vacío</div></div>
+    <div class="dFoot">
+      <div style="text-align:right; margin-bottom:10px;"><button onclick="emptyCart()" style="background:none;border:none;color:#E10600;font-size:12px;cursor:pointer;text-decoration:underline;">VACIAR</button></div>
 
-      <div class="cartShipping">
-        <div class="shipMode" aria-label="Modo de envío">
-          <label class="radio">
-            <input type="radio" name="shipMode" value="pickup" checked onchange="toggleShippingCompat('pickup')">
-            <span>Pickup (Tijuana)</span>
-          </label>
-          <label class="radio">
-            <input type="radio" name="shipMode" value="mx" onchange="toggleShippingCompat('mx')">
-            <span>México</span>
-          </label>
-          <label class="radio">
-            <input type="radio" name="shipMode" value="us" onchange="toggleShippingCompat('us')">
-            <span>USA</span>
-          </label>
-        </div>
-
-        <div id="zipRow" class="zipRow">
-          <label for="miniZip">CP/ZIP</label>
-          <input id="miniZip" placeholder="Ej. 22000" inputmode="numeric" autocomplete="postal-code" />
-          <button class="btn mini" type="button" onclick="quoteShippingUICompat()">
-            <small>Cotizar</small>
-          </button>
-        </div>
-
-        <div class="cartShipLine">
-          <span id="cartShipLabel">Pickup Gratis</span>
-          <strong id="cartShipping">$0</strong>
-        </div>
+      <div class="shipSelector">
+        <label class="radio-option"><input type="radio" name="shipMode" value="pickup" checked><div><span>Pickup Tienda</span><small style="color:green;display:block;">Gratis (Fábrica TJ)</small></div></label>
+        <label class="radio-option"><input type="radio" name="shipMode" value="tj"><div><span>Local Express</span><small style="color:#555;display:block;">$200 (Solo Tijuana)</small></div></label>
+        <label class="radio-option"><input type="radio" name="shipMode" value="mx"><div><span>Nacional MX</span><small style="color:#555;display:block;">Cotizar (Envia.com)</small></div></label>
+        <label class="radio-option"><input type="radio" name="shipMode" value="us"><div><span>USA</span><small style="color:#555;display:block;">Cotizar (Envia.com)</small></div></label>
       </div>
 
-      <div class="totals">
-        <div class="tRow"><span>Subtotal</span><strong id="cartSubtotal">$0</strong></div>
-        <div class="tRow"><span>Total</span><strong id="cartTotal">$0</strong></div>
+      <div id="shipForm" style="display:none; margin-bottom:15px; background:#f9f9f9; padding:10px; border-radius:8px;">
+        <p style="margin-bottom:8px; font-weight:bold; color:#333; font-size:13px;">Datos de Envío:</p>
+        <input id="cp" type="tel" placeholder="Código Postal / ZIP" class="inputField" style="width:100%; margin-bottom:8px;">
+        <input id="addr" type="text" placeholder="Dirección Completa" class="inputField" style="width:100%; margin-bottom:8px;">
+        <input id="name" type="text" placeholder="Nombre Receptor" class="inputField" style="width:100%;">
       </div>
 
-      <button id="checkoutBtn" class="btn primary full" type="button" onclick="checkoutCompat()">
-        PAGAR AHORA
-      </button>
-
-      <p class="smallNote">
-        Al comprar aceptas nuestros <a href="#" onclick="openLegalCompat('terms'); return false;">términos</a>.
-      </p>
+      <div class="sumRow"><span>Subtotal</span><strong id="subTotal">$0.00</strong></div>
+      <div class="sumRow"><span>Envío</span><strong id="shipTotal">Gratis</strong></div>
+      <div class="sumRow total"><span>TOTAL</span><strong id="grandTotal">$0.00</strong></div>
+      <button class="btn primary full" id="checkoutBtn" onclick="checkout()" style="width:100%; margin-top:15px;">PAGAR AHORA</button>
     </div>
   </aside>
 
-  <div id="pageOverlay" class="page-overlay" onclick="closeDrawerCompat()" aria-label="Cerrar overlay" aria-hidden="true"></div>
+  <div class="toast" id="toast">Mensaje</div>
 
-  <!-- LEGAL MODAL -->
-  <div id="legalModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
-    <div class="modal-card">
-      <div class="modal-head">
-        <h3 id="legalTitle">LEGAL</h3>
-        <button id="legalClose" type="button" aria-label="Cerrar" onclick="closeLegalCompat()">✕</button>
-      </div>
-      <div id="legalBody" class="modal-body"></div>
-    </div>
-    <div class="modal-backdrop" onclick="closeLegalCompat()" aria-hidden="true"></div>
-  </div>
-
-  <!-- COOKIE -->
-  <div id="cookieBanner" class="cookieBanner" role="dialog" aria-live="polite" aria-label="Cookies">
-    <div class="cookieText">
-      Usamos cookies para mejorar tu experiencia y medir rendimiento (Meta Pixel).
-    </div>
-    <div class="cookieBtns">
-      <div class="cookieBtn ghost" role="button" tabindex="0" onclick="acceptCookiesCompat()">Cerrar</div>
-      <div class="cookieBtn primary" role="button" tabindex="0" onclick="acceptCookiesCompat()">ACEPTAR</div>
-    </div>
-  </div>
-
-  <!-- AI FLOAT BUTTON -->
-  <button id="aiFloatBtn" class="ai-float" type="button" aria-label="Abrir asistente">
-    <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
-  </button>
-
-  <!-- AI MODAL -->
-  <div id="aiModal" class="aiModal" aria-hidden="true" role="dialog" aria-modal="true">
-    <div class="aiCard">
-      <div class="aiHead">
-        <div class="aiTitle">SCORE AI</div>
-        <button class="aiClose" type="button" aria-label="Cerrar">✕</button>
-      </div>
-      <div id="aiMsgs" class="aiMsgs" aria-label="Mensajes"></div>
-      <div class="aiInputRow">
-        <input id="aiInput" class="ai-input" type="text" placeholder="Escribe aquí..." autocomplete="off" />
-        <button id="aiSend" class="btn mini" type="button">Enviar</button>
+  <section class="cookieBanner" id="cookieBanner">
+    <div class="cookieInner">
+      <div class="cookieText">Usamos cookies esenciales para que la tienda funcione y cookies opcionales para mejorar tu experiencia.</div>
+      <div class="cookieActions">
+        <button class="cookieBtn ghost" id="cookieReject">Cerrar</button>
+        <button class="cookieBtn primary" id="cookieAccept">Aceptar</button>
       </div>
     </div>
-    <div class="aiBackdrop" aria-hidden="true"></div>
-  </div>
+  </section>
 
-  <!-- Main JS -->
-  <script src="/js/main.js?v=2026_PROD_UNIFIED_360"></script>
+  <script src="/js/main.js?v=2026_PROD_UNIFIED_361" defer></script>
 
-  <!-- =========================
-       COMPAT LAYER SAFE (PROD)
-       - NO pisa funciones reales de main.js
-       ========================= -->
   <script>
-    // Año footer
-    (function(){
-      const y = document.getElementById("year");
-      if (y) y.textContent = new Date().getFullYear();
+    function scrollToId(id){ const el = document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth'}); }
+
+    (function () {
+      const KEY = "score_cookie_consent";
+      const banner = document.getElementById("cookieBanner");
+      if (!localStorage.getItem(KEY)) banner.style.display = "block";
+      document.getElementById("cookieAccept").onclick = () => { localStorage.setItem(KEY, "all"); banner.style.display = "none"; };
+      document.getElementById("cookieReject").onclick = () => { localStorage.setItem(KEY, "essential"); banner.style.display = "none"; };
     })();
 
-    // Toast compat
-    window.showToastCompat = function(msg){
-      const t = document.getElementById("toast");
-      if (!t) return;
-      t.textContent = msg;
-      t.classList.add("show");
-      clearTimeout(window.__toastTimer);
-      window.__toastTimer = setTimeout(()=>t.classList.remove("show"), 2600);
-    };
-
-    // Drawer compat
-    window.openDrawerCompat = function(){
-      if (typeof window.openDrawer === "function") return window.openDrawer();
-      if (typeof window.openCart === "function") return window.openCart();
-      const drawer = document.getElementById("cartDrawer");
-      const overlay = document.getElementById("pageOverlay");
-      if (drawer) drawer.classList.add("open");
-      if (overlay) overlay.classList.add("show");
-      document.body.classList.add("no-scroll");
-    };
-
-    window.closeDrawerCompat = function(){
-      if (typeof window.closeDrawer === "function") return window.closeDrawer();
-      if (typeof window.closeCart === "function") return window.closeCart();
-      const drawer = document.getElementById("cartDrawer");
-      const overlay = document.getElementById("pageOverlay");
-      if (drawer) drawer.classList.remove("open");
-      if (overlay) overlay.classList.remove("show");
-      document.body.classList.remove("no-scroll");
-    };
-
-    // Shipping mode compat
-    window.toggleShippingCompat = function(mode){
-      if (typeof window.toggleShipping === "function") return window.toggleShipping(mode);
-
-      // Fallback UI (si main.js no cargó)
-      const zipWrap = document.getElementById("shipZipWrap");
-      const shipQuote = document.getElementById("shipQuote");
-      const label = document.getElementById("cartShipLabel");
-
-      if (zipWrap) zipWrap.style.display = (mode === "pickup") ? "none" : "block";
-      if (shipQuote) shipQuote.textContent = "";
-      if (label){
-        if (mode === "pickup") label.textContent = "Pickup Gratis";
-        else if (mode === "mx") label.textContent = "Cotiza envío (MX)";
-        else label.textContent = "Cotiza envío (USA)";
-      }
-    };
-
-    // Quote compat
-    window.quoteShippingUICompat = function(){
-      if (typeof window.quoteShippingUI === "function") return window.quoteShippingUI();
-      if (typeof window.quoteShipping === "function") return window.quoteShipping();
-      window.showToastCompat("No se pudo cotizar en este momento. Intenta de nuevo.");
-    };
-
-    // Checkout compat
-    window.checkoutCompat = function(){
-      if (typeof window.doCheckout === "function") return window.doCheckout();
-      if (typeof window.checkout === "function") return window.checkout();
-      window.showToastCompat("Checkout no disponible.");
-    };
-
-    // Legal compat
-    window.openLegalCompat = function(which){
-      if (typeof window.openLegal === "function") return window.openLegal(which);
-      const modal = document.getElementById("legalModal");
-      const body = document.getElementById("legalBody");
-      const title = document.getElementById("legalTitle");
-      if (!modal || !body || !title) return;
-
-      const map = {
-        privacy: {
-          t: "AVISO DE PRIVACIDAD",
-          b: "<p><b>Privacidad:</b> Usamos tus datos solo para procesar compras, envíos y soporte. No vendemos tu información.</p>"
-        },
-        terms: {
-          t: "TÉRMINOS Y CONDICIONES",
-          b: "<p><b>Términos:</b> Al comprar aceptas tiempos de producción, envíos y políticas de devolución.</p>"
-        },
-        contact: {
-          t: "CONTACTO",
-          b: "<p><b>Email:</b> ventas.unicotextil@gmail.com<br><b>WhatsApp:</b> +52 664 236 8701</p>"
-        }
-      };
-
-      const data = map[which] || map.terms;
-      title.textContent = data.t;
-      body.innerHTML = data.b;
-      modal.classList.add("show","active");
-      modal.setAttribute("aria-hidden","false");
-      document.body.classList.add("no-scroll");
-    };
-
-    window.closeLegalCompat = function(){
-      if (typeof window.closeLegal === "function") return window.closeLegal();
-      const modal = document.getElementById("legalModal");
-      if (modal) {
-        modal.classList.remove("show","active");
-        modal.setAttribute("aria-hidden","true");
-      }
-      document.body.classList.remove("no-scroll");
-    };
-
-    // Cookies compat
-    window.acceptCookiesCompat = function(){
-      if (typeof window.acceptCookies === "function") return window.acceptCookies();
-      const b = document.getElementById("cookieBanner");
-      if (b) b.style.display = "none";
-      try { localStorage.setItem("cookieConsent","1"); } catch(e){}
-    };
-
-    // AI modal minimal (si main.js no lo engancha, igual funciona)
-    (function(){
-      const btn = document.getElementById("aiFloatBtn");
-      const modal = document.getElementById("aiModal");
-      const closeBtn = modal ? modal.querySelector(".aiClose") : null;
-      const backdrop = modal ? modal.querySelector(".aiBackdrop") : null;
-
-      function openAI(){
-        if (!modal) return;
-        modal.classList.add("show");
-        modal.setAttribute("aria-hidden","false");
-        document.body.classList.add("no-scroll");
-      }
-      function closeAI(){
-        if (!modal) return;
-        modal.classList.remove("show");
-        modal.setAttribute("aria-hidden","true");
-        document.body.classList.remove("no-scroll");
-      }
-
-      if (btn) btn.addEventListener("click", openAI);
-      if (closeBtn) closeBtn.addEventListener("click", closeAI);
-      if (backdrop) backdrop.addEventListener("click", closeAI);
-    })();
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js?v=2026_PROD_UNIFIED_361").then(reg => {
+        reg.onupdatefound = () => {
+          const w = reg.installing;
+          w.onstatechange = () => {
+            if (w.state === 'installed' && navigator.serviceWorker.controller) window.location.reload();
+          };
+        };
+      }).catch(console.warn);
+    }
   </script>
 </body>
 </html>
