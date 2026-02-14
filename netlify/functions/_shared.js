@@ -1,10 +1,10 @@
 /* =========================================================
-   SCORE STORE / UNICOS — SHARED HELPERS (PROD) v2026
-   ✅ Compatible con tus Netlify Functions actuales
+   SCORE STORE / UNICOS — SHARED HELPERS (PROD) v2026.02
    ✅ ENVIA_API_KEY (preferred) + fallback ENVIA_API_TOKEN
-   ✅ UnicOs Ready: DEFAULT_ORG_ID + getOrgIdFromEvent()
-   ✅ safeJsonParse devuelve {} (no null) para evitar crashes
-   ✅ Mantiene exports que tu repo YA usa
+   ✅ DEFAULT_ORG_ID + getOrgIdFromEvent()
+   ✅ safeJsonParse devuelve {} (no null)
+   ✅ getEnviaQuote: devuelve amount (y mantiene cost alias)
+   ✅ sendTelegram incluido (lo usa stripe_webhook)
    ========================================================= */
 
 const axios = require("axios");
@@ -16,7 +16,6 @@ const { createClient } = require("@supabase/supabase-js");
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.URL ||
   "";
 
 const SUPABASE_ANON =
@@ -34,49 +33,38 @@ const DEFAULT_ORG_ID =
   process.env.SCORE_STORE_ORG_ID ||
   "1f3b9980-a1c5-4557-b4eb-a75bb9a8aaa6";
 
+function isUuid(v) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(v || "")
+  );
+}
+
 function getOrgIdFromEvent(event, fallback = DEFAULT_ORG_ID) {
   const qp = event?.queryStringParameters || {};
   const headers = event?.headers || {};
   const fromHeader =
-    headers["x-org-id"] || headers["X-Org-Id"] || headers["X-ORG-ID"] || "";
-
-  const candidate =
-    qp.org_id ||
-    qp.orgId ||
-    qp.org ||
-    fromHeader ||
+    headers["x-org-id"] ||
+    headers["X-Org-Id"] ||
+    headers["X-ORG-ID"] ||
     "";
 
-  const v = (candidate || "").toString().trim();
-  if (
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
-  )
-    return v;
-
-  return fallback;
+  const candidate = qp.org_id || qp.orgId || qp.org || fromHeader || "";
+  const v = String(candidate || "").trim();
+  return isUuid(v) ? v : fallback;
 }
 
 /* -----------------------
    3) ENVIA (clave)
 ------------------------ */
 // ✅ Preferred: ENVIA_API_KEY
-// ✅ Fallback: ENVIA_API_TOKEN (por compatibilidad)
+// ✅ Fallback: ENVIA_API_TOKEN (compat)
 const ENVIA_KEY = process.env.ENVIA_API_KEY || process.env.ENVIA_API_TOKEN || "";
 
 /* -----------------------
    4) Fallback Shipping Prices
 ------------------------ */
-const FALLBACK_MX_PRICE = {
-  base: 180,
-  per_item: 35,
-  max: 380,
-};
-
-const FALLBACK_US_PRICE = {
-  base: 800,
-  per_item: 90,
-  max: 1600,
-};
+const FALLBACK_MX_PRICE = { base: 180, per_item: 35, max: 380 };
+const FALLBACK_US_PRICE = { base: 800, per_item: 90, max: 1600 };
 
 /* -----------------------
    5) Factory Origin (MX)
@@ -93,7 +81,7 @@ const FACTORY_ORIGIN = {
 };
 
 /* -----------------------
-   6) Promo Rules (kill switch support future)
+   6) Promo Rules (future)
 ------------------------ */
 const PROMO_RULES = {
   default: { active: false, percent: 0 },
@@ -154,12 +142,8 @@ function safeJsonParse(str) {
 }
 
 function baseUrl(event) {
-  const headers = event.headers || {};
-  const proto =
-    headers["x-forwarded-proto"] ||
-    headers["X-Forwarded-Proto"] ||
-    "https";
-
+  const headers = event?.headers || {};
+  const proto = headers["x-forwarded-proto"] || headers["X-Forwarded-Proto"] || "https";
   const host =
     headers["x-forwarded-host"] ||
     headers["X-Forwarded-Host"] ||
@@ -168,14 +152,13 @@ function baseUrl(event) {
     "";
 
   const explicit = process.env.SITE_URL || process.env.DEPLOY_PRIME_URL || "";
-
   if (explicit) return explicit.replace(/\/$/, "");
   if (!host) return "";
   return `${proto}://${host}`.replace(/\/$/, "");
 }
 
 function digitsOnly(s) {
-  return (s || "").toString().replace(/[^\d]/g, "");
+  return String(s || "").replace(/[^\d]/g, "");
 }
 
 function normalizeZip(zip) {
@@ -193,8 +176,9 @@ function normalizeQty(n) {
 
 function getFallbackShipping({ country = "MX", items_qty = 1 }) {
   const qty = normalizeQty(items_qty);
+  const c = String(country || "MX").toUpperCase();
 
-  if (String(country || "MX").toUpperCase() === "US") {
+  if (c === "US") {
     const calc = FALLBACK_US_PRICE.base + (qty - 1) * FALLBACK_US_PRICE.per_item;
     return Math.min(FALLBACK_US_PRICE.max, calc);
   }
@@ -209,13 +193,7 @@ function getFallbackShipping({ country = "MX", items_qty = 1 }) {
 function getPackageSpecs(items_qty = 1) {
   const qty = normalizeQty(items_qty);
   const weightKg = Math.max(1, qty * 0.7);
-
-  return {
-    weight: weightKg,
-    length: 30,
-    width: 25,
-    height: Math.min(35, 8 + qty * 4),
-  };
+  return { weight: weightKg, length: 30, width: 25, height: Math.min(35, 8 + qty * 4) };
 }
 
 function estimateParcel(items) {
@@ -227,13 +205,18 @@ function estimateParcel(items) {
 
 /* -----------------------
    11) Envía Quote (live or fallback)
+   IMPORTANT: retorna amount (compat con tus functions)
 ------------------------ */
 async function getEnviaQuote({ zip, country = "MX", items_qty = 1 }) {
+  const c = String(country || "MX").toUpperCase();
+
   if (!validateZip(zip)) {
+    const amount = getFallbackShipping({ country: c, items_qty });
     return {
       ok: false,
       mode: "fallback",
-      cost: getFallbackShipping({ country, items_qty }),
+      amount,
+      cost: amount, // alias
       label: "CP inválido (estimación)",
       carrier: null,
       raw: null,
@@ -241,10 +224,12 @@ async function getEnviaQuote({ zip, country = "MX", items_qty = 1 }) {
   }
 
   if (!ENVIA_KEY) {
+    const amount = getFallbackShipping({ country: c, items_qty });
     return {
       ok: false,
       mode: "fallback",
-      cost: getFallbackShipping({ country, items_qty }),
+      amount,
+      cost: amount,
       label: "Envío (estimación)",
       carrier: null,
       raw: null,
@@ -254,11 +239,10 @@ async function getEnviaQuote({ zip, country = "MX", items_qty = 1 }) {
 
   try {
     const pkg = getPackageSpecs(items_qty);
-
     const url = "https://api.envia.com/ship/rate/";
     const payload = {
       origin: { country_code: "MX", postal_code: FACTORY_ORIGIN.postal_code },
-      destination: { country_code: country, postal_code: normalizeZip(zip) },
+      destination: { country_code: c, postal_code: normalizeZip(zip) },
       packages: [
         {
           content: "merch",
@@ -293,10 +277,12 @@ async function getEnviaQuote({ zip, country = "MX", items_qty = 1 }) {
       .filter((x) => x.amount > 0);
 
     if (!normalized.length) {
+      const amount = getFallbackShipping({ country: c, items_qty });
       return {
         ok: false,
         mode: "fallback",
-        cost: getFallbackShipping({ country, items_qty }),
+        amount,
+        cost: amount,
         label: "Envío (estimación)",
         carrier: null,
         raw: data,
@@ -307,19 +293,23 @@ async function getEnviaQuote({ zip, country = "MX", items_qty = 1 }) {
     normalized.sort((a, b) => a.amount - b.amount);
     const best = normalized[0];
 
+    const amount = Math.round(best.amount);
     return {
       ok: true,
       mode: "live",
-      cost: Math.round(best.amount),
+      amount,
+      cost: amount,
       label: `${best.carrier || "Paquetería"}${best.service ? " · " + best.service : ""}`,
       carrier: best.carrier,
       raw: best.raw,
     };
   } catch (err) {
+    const amount = getFallbackShipping({ country: c, items_qty });
     return {
       ok: false,
       mode: "fallback",
-      cost: getFallbackShipping({ country, items_qty }),
+      amount,
+      cost: amount,
       label: "Envío (estimación)",
       carrier: null,
       raw: err?.response?.data || null,
@@ -330,7 +320,23 @@ async function getEnviaQuote({ zip, country = "MX", items_qty = 1 }) {
 
 /* -----------------------
    12) Envía Label (used by stripe_webhook)
+   Nota: Envia casi siempre requiere address completo.
+   Si falta, mejor devolver skipped en vez de fallar duro.
 ------------------------ */
+function isDestinationComplete(dest) {
+  const d = dest || {};
+  const need = [
+    d.postal_code,
+    d.address1,
+    d.city,
+    d.state,
+    d.country_code,
+    d.name,
+    d.phone,
+  ].every(Boolean);
+  return !!need;
+}
+
 async function createEnviaLabel({ order, destination }) {
   if (!ENVIA_KEY) {
     return {
@@ -344,9 +350,20 @@ async function createEnviaLabel({ order, destination }) {
     };
   }
 
+  if (!isDestinationComplete(destination)) {
+    return {
+      ok: false,
+      skipped: true,
+      error: "Destination incomplete (needs full address)",
+      tracking_number: null,
+      label_url: null,
+      carrier: null,
+      raw: null,
+    };
+  }
+
   try {
     const pkg = getPackageSpecs(order?.items_qty || 1);
-
     const url = "https://api.envia.com/ship/generate/";
     const payload = {
       order_reference: order?.id || order?.stripe_session_id || "",
@@ -432,7 +449,32 @@ async function getProductsFromDb(supabaseAdminClient, orgSlug = "score-store") {
 }
 
 /* -----------------------
-   14) Exports (mantiene estructura usada por tus functions)
+   14) Telegram notify (optional)
+   ENV:
+   - TELEGRAM_BOT_TOKEN
+   - TELEGRAM_CHAT_ID
+------------------------ */
+async function sendTelegram(text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN || "";
+  const chatId = process.env.TELEGRAM_CHAT_ID || "";
+  if (!token || !chatId) return { ok: false, skipped: true };
+
+  try {
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    const r = await axios.post(
+      url,
+      { chat_id: chatId, text: String(text || "").slice(0, 3900) },
+      { timeout: 12000 }
+    );
+    return { ok: true, raw: r.data };
+  } catch (e) {
+    console.error("[telegram] error:", e?.message || e);
+    return { ok: false, error: e?.message || "telegram error" };
+  }
+}
+
+/* -----------------------
+   15) Exports
 ------------------------ */
 module.exports = {
   HEADERS,
@@ -444,6 +486,7 @@ module.exports = {
 
   DEFAULT_ORG_ID,
   getOrgIdFromEvent,
+  isUuid,
 
   ENVIA_KEY,
 
@@ -471,4 +514,5 @@ module.exports = {
   createEnviaLabel,
 
   getProductsFromDb,
+  sendTelegram,
 };
