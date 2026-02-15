@@ -8,21 +8,21 @@ const {
   safeJsonParse,
   supabaseAdmin,
   getEnviaQuote,
+  getFallbackShipping,
+  baseUrl,
 } = require("./_shared");
 
-// =========================================================
 // /.netlify/functions/create_checkout
-// Purpose: Create a Stripe Checkout Session from cart items.
-// Supports:
-//  - Frontend payload: { items:[{id,size,qty}], shipping:{mode,cost,postal_code,country}, customer:{name,address,postal_code,country} }
-//  - Legacy payload:   { cart:[{name,price,qty,image?}], shippingMode, shippingAmount, zip, country }
+// Front payload (v2026_PROD_UNIFIED_401):
+//  {
+//    cart:[{id,sku,name,price,img,qty,section,subSection}],
+//    shippingMode:"pickup"|"mx"|"us",
+//    shippingLabel:"...",
+//    shipping:<number>,
+//    shippingData:{ zip, carrier, label }
+//  }
 //
-// Notes:
-//  - Prices are always charged in MXN.
-//  - Images passed to Stripe MUST be absolute URLs.
-// =========================================================
-
-const SITE_URL = (process.env.SITE_URL || "https://scorestore.netlify.app").replace(/\/$/, "");
+// Also supports legacy/new formats already in your file.
 
 let CATALOG_CACHE = null;
 function loadCatalog() {
@@ -37,16 +37,15 @@ function loadCatalog() {
 }
 
 function isUuid(v) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ""));
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(v || "")
+  );
 }
 
-function toAbsImage(url) {
-  if (!url) return null;
-  const u = String(url).trim();
-  if (!u) return null;
-  if (/^https?:\/\//i.test(u)) return u;
-  if (u.startsWith("/")) return `${SITE_URL}${u}`;
-  return `${SITE_URL}/${u}`;
+function clamp(n, min, max) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return min;
+  return Math.max(min, Math.min(max, x));
 }
 
 function normalizeBody(event) {
@@ -54,6 +53,7 @@ function normalizeBody(event) {
 }
 
 function normalizeShipping(body) {
+  // mode
   const mode =
     body?.shipping?.mode ||
     body?.mode ||
@@ -61,39 +61,66 @@ function normalizeShipping(body) {
     body?.shippingMode ||
     "pickup";
 
+  // cost: acepta body.shipping (number) del front
   const cost =
-    Number(body?.shipping?.cost ?? body?.shipping_cost ?? body?.shippingAmount ?? 0) || 0;
+    Number(
+      body?.shipping?.cost ??
+        body?.shipping_cost ??
+        body?.shippingAmount ??
+        body?.shipping ??
+        0
+    ) || 0;
 
+  // label (del front)
+  const label =
+    String(body?.shippingLabel || body?.shipping?.label || body?.shipping?.name || "").trim();
+
+  // country
+  const modeNorm = String(mode).toLowerCase();
   const country =
-    String(body?.shipping?.country || body?.country || body?.shippingCountry || "MX").toUpperCase();
+    modeNorm === "us"
+      ? "US"
+      : String(body?.shipping?.country || body?.country || body?.shippingCountry || "MX").toUpperCase();
 
+  // postal/zip: acepta shippingData.zip del front
   const postal =
     String(
       body?.shipping?.postal_code ||
         body?.shipping?.zip ||
+        body?.shippingData?.zip ||
         body?.zip ||
         body?.postal_code ||
         body?.cp ||
         ""
     ).trim();
 
-  return { mode: String(mode), cost, country, postal_code: postal };
+  return { mode: String(modeNorm), cost, country, postal_code: postal, label };
 }
 
-function normalizeCustomer(body, shipping) {
-  const c = body?.customer || {};
-  return {
-    name: String(c.name || body?.name || "").trim(),
-    address: String(c.address || body?.address || body?.addr || "").trim(),
-    postal_code: String(c.postal_code || shipping.postal_code || "").trim(),
-    country: String(c.country || shipping.country || "MX").toUpperCase(),
-  };
-}
+function normalizeItemsFromCart(body) {
+  // Prefer: front cart
+  const cart = Array.isArray(body?.cart) ? body.cart : [];
+  if (cart.length) {
+    return cart
+      .map((i) => ({
+        id: String(i.id || i.sku || i.name || "").trim(),
+        qty: Math.max(1, Number(i.qty || 1) || 1),
+        size: String(i.size || "").trim(),
+        legacy: {
+          name: i.name,
+          price: i.price,
+          image: i.img || i.image,
+          sku: i.sku,
+          section: i.section,
+          subSection: i.subSection,
+        },
+      }))
+      .filter((i) => i.id);
+  }
 
-function normalizeItems(body) {
   // New format
-  const items = Array.isArray(body?.items) ? body.items : null;
-  if (items && items.length) {
+  const items = Array.isArray(body?.items) ? body.items : [];
+  if (items.length) {
     return items
       .map((i) => ({
         id: String(i.id || "").trim(),
@@ -103,26 +130,12 @@ function normalizeItems(body) {
       .filter((i) => i.id);
   }
 
-  // Legacy format
-  const cart = Array.isArray(body?.cart) ? body.cart : [];
-  return cart
-    .map((i) => ({
-      id: String(i.id || i.sku || i.name || "").trim(),
-      qty: Math.max(1, Number(i.qty || 1) || 1),
-      size: String(i.size || "").trim(),
-      legacy: {
-        name: i.name,
-        price: i.price,
-        image: i.image,
-      },
-    }))
-    .filter((i) => i.id);
+  return [];
 }
 
 async function resolveProducts(items) {
-  // If we have Supabase Admin and IDs look like UUIDs, prefer DB as source of truth.
+  // Prefer DB only if all UUID
   const allUuid = items.length && items.every((i) => isUuid(i.id));
-
   if (supabaseAdmin && allUuid) {
     const ids = items.map((i) => i.id);
     const { data, error } = await supabaseAdmin
@@ -136,22 +149,31 @@ async function resolveProducts(items) {
     }
   }
 
-  // Fallback to local catalog.json
+  // Fallback local catalog
   const { map } = loadCatalog();
   return { source: "catalog", map };
 }
 
-function buildLineItems(items, productMap, source) {
+function toAbsImage(site, url) {
+  if (!url) return null;
+  const u = String(url).trim();
+  if (!u) return null;
+  if (/^https?:\/\//i.test(u)) return u;
+  if (u.startsWith("/")) return `${site}${u}`;
+  return `${site}/${u}`;
+}
+
+function buildLineItems(items, productMap, source, site) {
   const line_items = [];
 
   for (const i of items) {
     const ref = productMap.get(String(i.id));
 
-    // If catalog source and not found, allow legacy fallback
+    // Allow legacy fallback if not found
     if (!ref && i.legacy && i.legacy.name && i.legacy.price) {
       const name = String(i.legacy.name);
       const unit = Math.max(1, Number(i.legacy.price) || 0);
-      const img = toAbsImage(i.legacy.image);
+      const img = toAbsImage(site, i.legacy.image);
       line_items.push({
         quantity: i.qty,
         price_data: {
@@ -160,6 +182,11 @@ function buildLineItems(items, productMap, source) {
           product_data: {
             name: i.size ? `${name} (${i.size})` : name,
             ...(img ? { images: [img] } : {}),
+            metadata: {
+              sku: String(i.legacy.sku || i.id || ""),
+              edition: String(i.legacy.section || ""),
+              sub: String(i.legacy.subSection || ""),
+            },
           },
         },
       });
@@ -176,7 +203,7 @@ function buildLineItems(items, productMap, source) {
       throw new Error(`Precio inválido para ${i.id}`);
     }
 
-    const img = toAbsImage(ref.image_url || ref.img || (ref.images && ref.images[0]));
+    const img = toAbsImage(site, ref.image_url || ref.img || (ref.images && ref.images[0]));
 
     line_items.push({
       quantity: i.qty,
@@ -186,6 +213,9 @@ function buildLineItems(items, productMap, source) {
         product_data: {
           name: i.size ? `${name} (${i.size})` : name,
           ...(img ? { images: [img] } : {}),
+          metadata: {
+            sku: String(ref.sku || i.id || ""),
+          },
         },
       },
     });
@@ -195,46 +225,37 @@ function buildLineItems(items, productMap, source) {
 }
 
 async function computeShipping(shipping, items) {
-  const mode = String(shipping.mode || "pickup");
+  const mode = String(shipping.mode || "pickup").toLowerCase();
+  const items_qty = items.reduce((a, it) => a + (Number(it.qty) || 1), 0) || 1;
 
-  // Pickup = no shipping
-  if (mode === "pickup") {
-    return { amount: 0, label: "Pickup" };
-  }
+  if (mode === "pickup") return { amount: 0, label: "Pickup Gratis" };
 
-  // Local TJ fixed
-  if (mode === "tj") {
-    return { amount: 200, label: "Local Express TJ" };
-  }
-
-  // If frontend already quoted a cost, trust it (but clamp)
+  // si el front ya cotizó, usamos eso (clamp)
   if (Number(shipping.cost) > 0) {
-    const amt = Math.max(0, Math.min(100000, Number(shipping.cost)));
-    return { amount: amt, label: "Envío" };
+    const amt = clamp(Number(shipping.cost), 0, 100000);
+    return { amount: amt, label: shipping.label || "Envío" };
   }
 
-  // Try quote via Envia
+  // intentar Envia si hay CP
   if (shipping.postal_code) {
-    try {
-      // getEnviaQuote expects items array with qty fields
-      const enviaItems = [{ qty: items.reduce((a, it) => a + (Number(it.qty) || 1), 0) }];
-      const q = await getEnviaQuote({
-        zip: shipping.postal_code,
-        country: shipping.country || "MX",
-        items: enviaItems,
-      });
+    const q = await getEnviaQuote({
+      zip: shipping.postal_code,
+      country: shipping.country || (mode === "us" ? "US" : "MX"),
+      items_qty,
+    });
 
-      if (q?.ok && Number(q.amount_mxn) >= 0) {
-        return { amount: Number(q.amount_mxn), label: q.label || "Envío" };
-      }
-    } catch (e) {
-      // ignore
+    const amount = Number(q?.amount ?? q?.amount_mxn ?? q?.cost ?? 0) || 0;
+    if (q?.ok && amount >= 0) {
+      return { amount, label: q.label || "Envío", carrier: q.carrier || null };
     }
   }
 
-  // Fallback
-  const fallback = (String(shipping.country || "MX").toUpperCase() === "US") ? 800 : 250;
-  return { amount: fallback, label: "Envío Estándar" };
+  // fallback conservador
+  const fallback = getFallbackShipping({
+    country: shipping.country || (mode === "us" ? "US" : "MX"),
+    items_qty,
+  });
+  return { amount: fallback, label: "Envío (estimación)" };
 }
 
 exports.handler = async (event) => {
@@ -246,26 +267,28 @@ exports.handler = async (event) => {
   }
 
   if (!stripe) {
-    return jsonResponse(500, { ok: false, error: "Stripe no configurado (STRIPE_SECRET_KEY missing)" });
+    return jsonResponse(500, {
+      ok: false,
+      error: "Stripe no configurado (STRIPE_SECRET_KEY missing o dependencia stripe faltante)",
+    });
   }
 
   try {
     const body = normalizeBody(event);
 
-    const items = normalizeItems(body);
-    if (!items.length) {
-      return jsonResponse(400, { ok: false, error: "Carrito vacío" });
-    }
+    const items = normalizeItemsFromCart(body);
+    if (!items.length) return jsonResponse(400, { ok: false, error: "Carrito vacío" });
 
     const shipping = normalizeShipping(body);
-    const customer = normalizeCustomer(body, shipping);
+
+    const site = baseUrl(event) || (process.env.SITE_URL || process.env.URL || "https://scorestore.netlify.app").replace(/\/$/, "");
 
     const { source, map } = await resolveProducts(items);
-    const line_items = buildLineItems(items, map, source);
+    const line_items = buildLineItems(items, map, source, site);
 
     const ship = await computeShipping(shipping, items);
 
-    // Add shipping as line item (keeps everything in MXN)
+    // Add shipping as line item (MXN)
     if (ship.amount > 0) {
       line_items.push({
         quantity: 1,
@@ -277,10 +300,12 @@ exports.handler = async (event) => {
       });
     }
 
-    const success_url = `${SITE_URL}/?status=success&session_id={CHECKOUT_SESSION_ID}`;
-    const cancel_url = `${SITE_URL}/?status=cancel`;
+    const success_url = `${site}/?status=success&session_id={CHECKOUT_SESSION_ID}`;
+    const cancel_url = `${site}/?status=cancel`;
 
     const needsAddress = shipping.mode !== "pickup";
+
+    const items_qty = items.reduce((a, it) => a + (Number(it.qty) || 1), 0) || 1;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -292,22 +317,22 @@ exports.handler = async (event) => {
       phone_number_collection: { enabled: true },
 
       ...(needsAddress
-        ? {
-            shipping_address_collection: {
-              allowed_countries: ["MX", "US"],
-            },
-          }
+        ? { shipping_address_collection: { allowed_countries: ["MX", "US"] } }
         : {}),
 
       metadata: {
         app: "score-store",
-        version: "2026_PROD_UNIFIED_361",
+        version: "2026_PROD_UNIFIED_401_PATCH",
+        items_qty: String(items_qty),
+
         shipping_mode: String(shipping.mode),
         shipping_country: String(shipping.country || "MX"),
         shipping_postal_code: String(shipping.postal_code || ""),
         shipping_amount_mxn: String(ship.amount || 0),
-        customer_name: customer.name,
-        customer_address: customer.address,
+
+        // compat para webhook
+        customer_cp: String(shipping.postal_code || ""),
+        customer_country: String(shipping.country || "MX"),
       },
     });
 
@@ -317,21 +342,18 @@ exports.handler = async (event) => {
         const raw_meta = {
           source,
           items,
-          shipping: { ...shipping, computed_amount: ship.amount, label: ship.label },
-          customer,
+          shipping: { ...shipping, computed_amount: ship.amount, label: ship.label || ship.label },
           stripe: { id: session.id },
         };
 
-        await supabaseAdmin
-          .from("orders")
-          .insert({
-            stripe_session_id: session.id,
-            status: "pending",
-            shipping_mode: String(shipping.mode),
-            shipping_amount_mxn: Number(ship.amount || 0),
-            total_mxn: null,
-            raw_meta: JSON.stringify(raw_meta),
-          });
+        await supabaseAdmin.from("orders").insert({
+          stripe_session_id: session.id,
+          status: "pending",
+          shipping_mode: String(shipping.mode),
+          shipping_amount_mxn: Number(ship.amount || 0),
+          total_mxn: null,
+          raw_meta: JSON.stringify(raw_meta),
+        });
       } catch (e) {
         console.warn("orders insert skipped:", e?.message || e);
       }
