@@ -1,38 +1,24 @@
-const { jsonResponse, handleOptions, safeJsonParse, getEnviaQuote } = require("./_shared");
+const { jsonResponse, handleOptions, safeJsonParse, getEnviaQuote, validateZip } = require("./_shared");
 
-// /.netlify/functions/quote_shipping
-// Input (frontend v2026_PROD_UNIFIED_401):
-//  { mode:"pickup"|"mx"|"us", zip:"22000", cart:[{qty,price,sku}], items:[{quantity,...}] }
-//
-// Output (frontend expects):
-//  { ok:true, amount:<mxn>, label, carrier }
-//
-// Compat extra:
-//  also returns: cost + amount_mxn
+// Input:
+// { shipping_mode:"envia_mx"|"envia_us"|"pickup"|"local_tj", postal_code:"22000", items_qty: 3 }
+// Output:
+// { ok:true, amount_cents: 25000, service:"Nacional Estándar", carrier:"fedex" }
 
 function normalizeMode(body) {
-  const m = String(body?.mode || body?.shippingMode || body?.shipping_mode || "").toLowerCase();
+  const m = String(body?.shipping_mode || body?.mode || "").toLowerCase();
   if (m === "pickup") return "pickup";
-  if (m === "us" || m === "usa") return "us";
-  if (m === "mx" || m === "mex" || m === "mexico") return "mx";
-  // fallback by country
-  const c = String(body?.country || body?.shippingCountry || "MX").toUpperCase();
-  return c === "US" ? "us" : "mx";
+  if (m === "local_tj" || m === "local" || m === "tijuana") return "local_tj";
+  if (m === "envia_us" || m === "us" || m === "usa") return "envia_us";
+  return "envia_mx";
 }
 
-function sumQtyFromBody(body) {
-  // Prefer cart qty (es lo que manda tu front)
-  if (Array.isArray(body?.cart) && body.cart.length) {
-    const s = body.cart.reduce((a, it) => a + (Number(it?.qty) || 1), 0);
-    return Math.max(1, Math.round(s || 1));
-  }
-  // else items array
-  if (Array.isArray(body?.items) && body.items.length) {
-    const s = body.items.reduce((a, it) => a + (Number(it?.quantity ?? it?.qty) || 1), 0);
-    return Math.max(1, Math.round(s || 1));
-  }
-  // else explicit
+function sumQty(body) {
   if (Number(body?.items_qty)) return Math.max(1, Math.round(Number(body.items_qty)));
+  if (Array.isArray(body?.items) && body.items.length) {
+    const s = body.items.reduce((a, it) => a + (Number(it?.qty ?? it?.quantity) || 1), 0);
+    return Math.max(1, Math.round(s || 1));
+  }
   return 1;
 }
 
@@ -46,48 +32,42 @@ exports.handler = async (event) => {
 
   try {
     const body = safeJsonParse(event.body || "{}") || {};
-
     const mode = normalizeMode(body);
+
     if (mode === "pickup") {
-      return jsonResponse(200, {
-        ok: true,
-        amount: 0,
-        cost: 0,
-        amount_mxn: 0,
-        label: "Pickup Gratis",
-        carrier: "pickup",
-        provider: "pickup",
-      });
+      return jsonResponse(200, { ok: true, amount_cents: 0, service: "Pickup en fábrica", carrier: "pickup" });
+    }
+    if (mode === "local_tj") {
+      return jsonResponse(200, { ok: true, amount_cents: 0, service: "Envío local TJ (Uber/Didi)", carrier: "local" });
     }
 
-    const zip = String(body.zip || body.postal_code || body.cp || body.shippingData?.zip || "").trim();
-    const country = mode === "us" ? "US" : "MX";
+    const postal_code = String(body?.postal_code || body?.zip || body?.cp || "").trim();
+    if (!validateZip(postal_code)) {
+      return jsonResponse(400, { ok: false, error: "Código postal inválido" });
+    }
 
-    const items_qty = sumQtyFromBody(body);
+    const country = mode === "envia_us" ? "US" : "MX";
+    const items_qty = sumQty(body);
 
-    const q = await getEnviaQuote({ zip, country, items_qty });
+    const q = await getEnviaQuote({ zip: postal_code, country, items_qty });
 
-    // q ya trae amount + carrier + label, con fallback interno
-    const amount = Number(q?.amount ?? q?.amount_mxn ?? q?.cost ?? 0) || 0;
+    const amount_mxn = Number(q?.amount_mxn ?? q?.amount ?? q?.cost ?? 0) || 0;
+    const amount_cents = Math.max(0, Math.round(amount_mxn * 100));
 
     return jsonResponse(200, {
       ok: true,
-      amount,
-      cost: amount,
-      amount_mxn: amount,
-      label: q?.label || (country === "US" ? "Internacional Estándar" : "Nacional Estándar"),
+      amount_cents,
+      service: q?.label || (country === "US" ? "Internacional Estándar" : "Nacional Estándar"),
       carrier: q?.carrier || null,
-      provider: q?.mode || "fallback",
+      provider: q?.mode || "envia",
     });
   } catch (err) {
-    // fallback duro (no romper checkout)
-    const amount = 250;
+    // fallback suave para no romper el flujo
+    const fallback_mxn = 250;
     return jsonResponse(200, {
       ok: true,
-      amount,
-      cost: amount,
-      amount_mxn: amount,
-      label: "Nacional Estándar",
+      amount_cents: fallback_mxn * 100,
+      service: "Envío estimado (fallback)",
       carrier: null,
       provider: "fallback",
       note: err?.message || String(err),
