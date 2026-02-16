@@ -1,348 +1,286 @@
 <!doctype html>
-<html lang="es-MX">
+<html lang="es">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0b0c10" />
+  <meta name="theme-color" content="#ffffff" />
 
-  <title>SCORE STORE — Merch Oficial</title>
-  <meta name="description" content="Merch oficial por edición. Fabricado por Único Uniformes, patrocinador oficial." />
+  <title>SCORE STORE — Merch oficial</title>
+  <meta name="description" content="Merch oficial de SCORE International. Fabricado por ÚNICO UNIFORMES, patrocinador oficial. Elige tu edición, arma tu carrito y paga seguro." />
 
-  <link rel="icon" href="/assets/favicon.png" type="image/png" />
-  <link rel="apple-touch-icon" href="/assets/icons/icon-192.png" />
-
-  <link rel="manifest" href="/site.webmanifest?v=2026_PROD_UNIFIED_401" />
-  <link rel="preload" as="image" href="/assets/hero.webp" imagesrcset="/assets/hero.webp" />
-
-  <link rel="stylesheet" href="/css/styles.css?v=2026_PROD_UNIFIED_401" />
-
-  <!-- PWA iOS -->
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- Verificación Meta (Facebook) — pega aquí el token real de verificación de dominio -->
+  <meta name="facebook-domain-verification" content="REPLACE_WITH_FACEBOOK_DOMAIN_VERIFICATION" />
 
   <!-- Open Graph -->
-  <meta property="og:title" content="SCORE STORE — Merch Oficial" />
-  <meta property="og:description" content="Merch oficial por edición. Fabricado por Único Uniformes, patrocinador oficial." />
+  <meta property="og:title" content="SCORE STORE — Merch oficial" />
+  <meta property="og:description" content="Merch oficial de SCORE International. Fabricado por ÚNICO UNIFORMES, patrocinador oficial." />
   <meta property="og:image" content="/assets/hero.webp" />
   <meta property="og:type" content="website" />
 
-  <!-- Performance: no bloquear render -->
-  <script>
-    // Splash kill-switch (no bloquea LCP)
-    window.addEventListener('load', () => {
-      const s = document.getElementById('splash');
-      if (s) s.classList.add('hide');
-    });
+  <link rel="stylesheet" href="/css/styles.css" />
 
-    // Register SW
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js?v=2026_PROD_UNIFIED_401').catch(()=>{});
-      });
-    }
-  </script>
+  <!-- Icons / PWA -->
+  <link rel="icon" type="image/png" href="/assets/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
 </head>
 
 <body>
-  <!-- Splash / Intro -->
-  <div id="splash" class="splash" aria-hidden="false">
-    <div class="splashInner">
-      <div class="splashBadge">
-        <span class="dot"></span>
-        <span>DROP EN VIVO</span>
-      </div>
+  <a class="skipLink" href="#editions">Saltar a catálogos</a>
 
-      <div class="splashTitle">
-        <img src="/assets/logo-score.webp" alt="SCORE" width="140" height="56" decoding="async" />
-        <div class="splashLines">
-          <div class="line1">SCORE STORE</div>
-          <div class="line2">Motorsport Merch</div>
-        </div>
-      </div>
-
-      <div class="splashPulse" aria-hidden="true"></div>
-      <div class="splashHint">Cargando ediciones…</div>
-    </div>
-  </div>
-
-  <!-- Cookie banner -->
-  <div id="cookieBanner" class="cookieBanner" aria-hidden="true">
-    <div class="cookieCard">
-      <div class="cookieTitle">Cookies</div>
-      <div class="cookieText">
-        Usamos cookies técnicas para carrito/experiencia. Analítica (Pixel) solo con tu permiso.
-      </div>
-      <div class="cookieActions">
-        <button id="cookieRejectBtn" class="btn small ghost" type="button">Rechazar</button>
-        <button id="cookieAcceptBtn" class="btn small primary" type="button">Aceptar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Topbar -->
-  <header class="topbar" id="top">
-    <div class="topbarInner">
-      <a class="brand" href="#top" aria-label="Ir al inicio">
-        <img src="/assets/logo-score.webp" alt="SCORE STORE" width="112" height="44" decoding="async" />
+  <header class="topbar">
+    <div class="container nav">
+      <a class="brand" href="#top" aria-label="Inicio">
+        <img class="brandLogo" src="/assets/logo-score.webp" alt="SCORE" />
+        <span class="brandText">SCORE STORE</span>
       </a>
 
-      <nav class="nav">
-        <a href="#catalogos" class="navLink">Catálogos</a>
-        <button id="openAiBtn" class="navBtn" type="button">SCORE AI</button>
-        <button id="openLegalBtn" class="navBtn ghost" type="button">Legal</button>
-      </nav>
+      <nav class="navLinks" aria-label="Navegación">
+        <a class="navLink" href="#editions">Catálogos</a>
+        <a class="navLink" href="#partners">Partners</a>
 
-      <button id="openCartBtn" class="cartBtn" type="button" aria-label="Abrir carrito">
-        <span class="cartIcon" aria-hidden="true">🛒</span>
-        <span class="cartLabel">Carrito</span>
-        <span id="cartCount" class="cartCount">0</span>
-      </button>
+        <button id="openCartBtn" class="btn btnPrimary" type="button">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"></path>
+          </svg>
+          Carrito <span id="cartCount" class="badge">0</span>
+        </button>
+
+        <a class="btn btnGhost" href="https://linktr.ee/unicouniformes" target="_blank" rel="noreferrer">Contacto</a>
+        <button id="openLegalBtn" class="btn btnGhost" type="button">Legal</button>
+      </nav>
     </div>
   </header>
 
-  <!-- Hero -->
-  <section class="hero">
-    <div class="heroBg" aria-hidden="true"></div>
+  <main id="top">
+    <!-- HERO -->
+    <section class="hero" aria-label="Hero">
+      <div class="heroBg" aria-hidden="true"></div>
 
-    <div class="heroInner">
-      <div class="heroLeft">
-        <div class="heroKicker">
-          <span class="pill red">SCORE INTERNATIONAL</span>
-          <span class="pill dark">DROP OFICIAL</span>
-        </div>
-
-        <h1 class="heroTitle">
-          Merch por edición, sin rollo.
-        </h1>
-
-        <p class="heroCopy">
-          <b>Fabricado por Único Uniformes, Patrocinador oficial.</b>
-        </p>
-
-        <div class="heroCtas">
-          <a id="heroCtaCatalogos" class="btn primary" href="#catalogos">Ver catálogos</a>
-          <button id="heroCtaAi" class="btn ghost" type="button">Hablar con SCORE AI</button>
-        </div>
-
-        <div class="heroShipping">
-          <div class="heroShipTitle">Entrega</div>
-
-          <div class="heroShipModes">
-            <label class="radioPill">
-              <input type="radio" name="shipModeHero" value="pickup" checked />
-              <span>Pickup</span>
-            </label>
-            <label class="radioPill">
-              <input type="radio" name="shipModeHero" value="mx" />
-              <span>México</span>
-            </label>
-            <label class="radioPill">
-              <input type="radio" name="shipModeHero" value="us" />
-              <span>USA</span>
-            </label>
+      <div class="container heroInner">
+        <div class="heroCard">
+          <div class="heroLogos">
+            <img class="heroLogo desert" src="/assets/logo-world-desert.webp" alt="Desert" />
+            <img class="heroLogo" src="/assets/logo-score.webp" alt="SCORE International" />
+            <img class="heroLogo" src="/assets/logo-unico.webp" alt="Único Uniformes" />
           </div>
 
-          <div id="zipWrapHero" class="zipWrap" style="display:none">
-            <input id="zipInputHero" class="zipInput" inputmode="numeric" placeholder="Código postal / ZIP" />
-            <button id="quoteShipHeroBtn" class="btn small" type="button">Cotizar</button>
+          <h1 class="heroTitle">Merch oficial de SCORE International</h1>
+          <p class="heroSub"><strong>Fabricado por ÚNICO UNIFORMES</strong>, patrocinador oficial.</p>
+          <p class="heroMini">Elige tu edición, agrega al carrito y paga seguro. La entrega se selecciona dentro del carrito.</p>
+
+          <div class="heroCtas">
+            <a class="btn btnPrimary" href="#editions">Ver catálogos</a>
+            <button id="heroOpenCart" class="btn btnOutline" type="button">Abrir carrito</button>
+            <button id="footerAiBtn" class="btn" type="button">Pregúntale a Score AI</button>
           </div>
-
-          <div class="heroShipSummary">
-            <span id="shipLabelHero">Pickup Gratis</span>
-          </div>
-        </div>
-
-        <div class="heroNote">
-          Drops por evento: Baja 1000, Baja 500, Baja 400, SF 250.
-        </div>
-      </div>
-
-      <div class="heroRight">
-        <div class="heroFrame">
-          <img
-            src="/assets/hero.webp"
-            alt="Merch oficial SCORE"
-            width="980"
-            height="1225"
-            decoding="async"
-            fetchpriority="high"
-          />
-          <div class="heroFrameBadge">
-            <span class="badgeDot"></span>
-            <span>Ediciones oficiales</span>
-          </div>
-        </div>
-
-        <div class="heroMiniRow">
-          <img src="/assets/logo-unico-h.webp" alt="Único Uniformes" width="120" height="28" loading="lazy" decoding="async" />
-          <span class="divider"></span>
-          <img src="/assets/logo-world-desert.webp" alt="World Desert" width="120" height="28" loading="lazy" decoding="async" />
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Catalogs -->
-  <main class="main">
-    <section id="catalogos" class="section">
-      <div class="sectionHead">
-        <h2 class="sectionTitle">Catálogos por edición</h2>
-        <p class="sectionSub">Toca una edición para ver productos. (Carga rápida: no render masivo.)</p>
-      </div>
-
-      <div id="editionGrid" class="editionGrid" aria-hidden="false"></div>
-
-      <!-- Products View -->
-      <div id="productsView" class="productsView" aria-hidden="true">
-        <div class="productsTop">
-          <div class="productsTopLeft">
-            <div class="productsBackRow">
-              <button id="backToEditionsBtn" class="btn small ghost" type="button">← Volver</button>
-              <button id="openAllBtn" class="btn small" type="button">Ver todo</button>
-            </div>
-            <h3 id="editionTitle" class="productsTitle">Edición</h3>
-            <div id="editionMeta" class="productsMeta">Drop oficial</div>
-          </div>
-
-          <div class="productsTopRight">
-            <button id="productsAiBtn" class="btn small ghost" type="button">SCORE AI</button>
-            <button id="productsCartBtn" class="btn small primary" type="button">Carrito</button>
-          </div>
-        </div>
-
-        <div id="chips" class="chips"></div>
-
-        <div id="productsGrid" class="productsGrid"></div>
-      </div>
-    </section>
-
-    <!-- Partners -->
-    <section class="section">
-      <div class="sectionHead">
-        <h2 class="sectionTitle">Partners</h2>
-        <p class="sectionSub">Marcas y aliados del universo off-road.</p>
-      </div>
-
-      <div class="partners">
-        <div class="partnerCard">
-          <img src="/assets/logo-ford.webp" alt="Ford" width="140" height="54" loading="lazy" decoding="async" />
-        </div>
-        <div class="partnerCard">
-          <img src="/assets/logo-bfgodrich.webp" alt="BFGoodrich" width="140" height="54" loading="lazy" decoding="async" />
-        </div>
-        <div class="partnerCard">
-          <img src="/assets/logo-rzr.webp" alt="RZR" width="140" height="54" loading="lazy" decoding="async" />
-        </div>
-        <div class="partnerCard">
-          <img src="/assets/logo-unico-h.webp" alt="Único Uniformes" width="140" height="54" loading="lazy" decoding="async" />
         </div>
       </div>
     </section>
 
-    <!-- Footer -->
-    <footer class="footer">
-      <div class="footerInner">
-        <div class="footerLeft">
-          <div class="footerBrand">
-            <img src="/assets/logo-score.webp" alt="SCORE" width="120" height="46" loading="lazy" decoding="async" />
+    <!-- CATÁLOGOS -->
+    <section class="editionsSection" id="editions" aria-label="Catálogos">
+      <div class="container">
+        <div class="sectionHead">
+          <div>
+            <h2 class="sectionTitle">Catálogos por edición</h2>
+            <p class="sectionSub">Selecciona una carrera y descubre el merch disponible.</p>
+          </div>
+        </div>
+
+        <div id="editionGrid" class="editionsGrid" aria-live="polite"></div>
+
+        <section id="productsPanel" class="productsPanel hide" aria-label="Productos">
+          <div class="productsHead">
             <div>
-              <div class="footerTitle">SCORE STORE</div>
-              <div class="footerSub">Merch oficial por edición</div>
+              <h3 id="editionTitle" class="productsTitle">Edición</h3>
+              <p id="editionMeta" class="productsMeta">Selecciona un producto para ver detalles.</p>
+            </div>
+            <div class="productsHeadActions">
+              <button id="closeProductsBtn" class="btn btnGhost" type="button">Cerrar</button>
             </div>
           </div>
 
-          <div class="footerFine">
-            Fabricado por <b>Único Uniformes</b> • Patrocinador oficial.<br/>
-            © <span id="year"></span> SCORE STORE. Todos los derechos reservados.
+          <div id="productsGrid" class="productGrid" aria-live="polite"></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- PARTNERS -->
+    <section class="partnersSection" id="partners" aria-label="Partners">
+      <div class="container">
+        <div class="sectionHead">
+          <div>
+            <h2 class="sectionTitle">Partners</h2>
+            <p class="sectionSub">Colaboradores y marcas aliadas.</p>
           </div>
         </div>
 
-        <div class="footerRight">
-          <button id="footerAiBtn" class="btn small ghost" type="button">SCORE AI</button>
-          <button id="footerCartBtn" class="btn small primary" type="button">Carrito</button>
-          <a id="footerLegalLink" class="footerLink" href="/legal.html">Legal</a>
+        <div class="partnerGrid" aria-label="Logos de partners">
+          <img class="partnerLogo" src="/assets/logo-ford.webp" alt="Ford" loading="lazy" />
+          <img class="partnerLogo" src="/assets/logo-bfgodrich.webp" alt="BFGoodrich" loading="lazy" />
+          <img class="partnerLogo" src="/assets/logo-rzr.webp" alt="RZR" loading="lazy" />
         </div>
       </div>
-    </footer>
+    </section>
   </main>
 
-  <!-- Cart Drawer -->
+  <!-- FOOTER -->
+  <footer class="footer" id="footer">
+    <div class="container footerGrid">
+      <div>
+        <strong>SCORE STORE</strong>
+        <p class="footerText">Merch oficial de SCORE International. Fabricado por ÚNICO UNIFORMES, patrocinador oficial.</p>
+
+        <div class="footerLinks">
+          <a href="https://unicouniformes.com/" target="_blank" rel="noreferrer">Web</a>
+          <a href="https://www.facebook.com/uniforme.unico/" target="_blank" rel="noreferrer">Facebook</a>
+          <a href="https://www.instagram.com/uniformes.unico" target="_blank" rel="noreferrer">Instagram</a>
+          <a href="https://linktr.ee/unicouniformes" target="_blank" rel="noreferrer">Linktree</a>
+          <a href="https://youtu.be/F4lw1EcehIA?si=jFBT9skFLs566g8N" target="_blank" rel="noreferrer">YouTube</a>
+          <a href="https://t.me/unicouniformes" target="_blank" rel="noreferrer">Telegram</a>
+        </div>
+      </div>
+
+      <div>
+        <p class="footerText muted" style="margin-top:0">
+          Contacto: <a href="mailto:ventas.unicotextil@gmail.com">ventas.unicotextil@gmail.com</a><br />
+          © <span id="year"></span> Único Uniformes. Todos los derechos reservados.
+        </p>
+
+        <button id="openAiBtn" class="btn btnOutline" type="button" style="margin-top:10px">Abrir Score AI</button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Floating Score AI (FAB) -->
+  <button id="openAiBtnFab" class="aiFab" type="button" aria-label="Abrir Score AI">
+    <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 8V4H8"></path>
+      <path d="M8 4h8"></path>
+      <path d="M16 4v4"></path>
+      <path d="M4 12h16"></path>
+      <path d="M12 12v8"></path>
+      <path d="M8 20h8"></path>
+    </svg>
+    Score AI
+  </button>
+
   <div id="pageOverlay" class="overlay" aria-hidden="true"></div>
 
-  <aside id="cartDrawer" class="drawer" aria-hidden="true">
+  <!-- CART DRAWER -->
+  <aside id="cartDrawer" class="drawer" aria-label="Carrito" aria-hidden="true">
     <div class="drawerHead">
-      <div>
-        <div class="drawerTitle">Carrito</div>
-        <div class="drawerSub">Checkout Stripe + Envío Envia</div>
-      </div>
-      <button id="closeCartBtn" class="iconBtn" type="button" aria-label="Cerrar">✕</button>
+      <h3 class="drawerTitle">Tu carrito</h3>
+      <button id="closeCartBtn" class="iconBtn" type="button" aria-label="Cerrar">
+        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 6L6 18"></path>
+          <path d="M6 6l12 12"></path>
+        </svg>
+      </button>
     </div>
 
     <div id="drawerBody" class="drawerBody"></div>
 
-    <div class="drawerTotals">
-      <div class="row">
-        <span>Subtotal</span>
-        <b id="subtotalLabel">$0</b>
-      </div>
-      <div class="row">
-        <span>Envío</span>
-        <b id="shipLabel">$0</b>
-      </div>
-      <div class="row total">
-        <span>Total</span>
-        <b id="totalLabel">$0</b>
+    <div class="drawerFooter">
+      <div class="drawerTotals">
+        <div class="totRow"><span class="muted">Subtotal</span><span id="cartSubtotal">$0</span></div>
+        <div id="discountRow" class="totRow" style="display:none"><span class="muted">Descuento</span><span id="cartDiscount">-$0</span></div>
+        <div class="totRow"><span id="cartShipLabel" class="muted">Entrega</span><span id="cartShipping">$0</span></div>
+        <div class="totRow total"><span>Total</span><span id="cartTotal">$0</span></div>
       </div>
 
-      <button id="checkoutBtn" class="btn primary full" type="button">
-        Pagar con Stripe
+      <button id="checkoutBtn" class="btn btnPrimary" type="button" style="width:100%;justify-content:center;margin-top:12px">
+        Pagar seguro
       </button>
-      <div class="drawerNote">
-        Al pagar aceptas Términos y Privacidad.
-      </div>
+
+      <p class="muted" style="margin:10px 0 0;font-weight:750;line-height:1.35">
+        Para envíos con Envia.com, la guía se genera en tiempo real después del pago.
+      </p>
     </div>
   </aside>
 
-  <!-- AI Modal -->
-  <div id="aiModal" class="modal" aria-hidden="true">
+  <!-- PRODUCT MODAL -->
+  <section id="productModal" class="modal" aria-hidden="true">
     <div class="modalCard">
       <div class="modalHead">
-        <div>
-          <div class="modalTitle">SCORE AI</div>
-          <div class="modalSub">Vendedor + soporte (edición, envío, pago)</div>
-        </div>
-        <button id="closeAiBtn" class="iconBtn" type="button" aria-label="Cerrar">✕</button>
+        <h3 id="productTitle" class="modalTitle">Producto</h3>
+        <button id="closeProductBtn" class="iconBtn" type="button" aria-label="Cerrar">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6L6 18"></path>
+            <path d="M6 6l12 12"></path>
+          </svg>
+        </button>
       </div>
-
-      <div id="aiMessages" class="chat"></div>
-
-      <div class="chatBar">
-        <input id="aiInput" class="chatInput" placeholder="Ej: Recomiéndame algo para Baja 1000…" />
-        <button id="aiSendBtn" class="btn small primary" type="button">Enviar</button>
-      </div>
+      <div id="productBody" class="modalBody"></div>
     </div>
-  </div>
+  </section>
 
-  <!-- Legal Modal -->
-  <div id="legalModal" class="modal" aria-hidden="true">
-    <div class="modalCard wide">
+  <!-- AI MODAL -->
+  <section id="aiModal" class="modal" aria-hidden="true">
+    <div class="modalCard">
       <div class="modalHead">
-        <div>
-          <div class="modalTitle">Legal</div>
-          <div class="modalSub">Términos • Privacidad • Cookies</div>
-        </div>
-        <button id="closeLegalBtn" class="iconBtn" type="button" aria-label="Cerrar">✕</button>
+        <h3 class="modalTitle">Score AI</h3>
+        <button id="closeAiBtn" class="iconBtn" type="button" aria-label="Cerrar">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6L6 18"></path>
+            <path d="M6 6l12 12"></path>
+          </svg>
+        </button>
       </div>
-      <div id="legalBody" class="legalBody"></div>
+      <div class="modalBody">
+        <div id="aiMessages" class="chatMessages"></div>
+        <div class="chatComposer">
+          <input id="aiInput" class="input" placeholder="Escribe tu pregunta…" />
+          <button id="aiSendBtn" class="btn btnPrimary" type="button">Enviar</button>
+        </div>
+        <small class="muted" style="display:block;margin-top:8px;font-weight:750">
+          Score AI ayuda con tallas, envíos, disponibilidad y dudas del catálogo.
+        </small>
+      </div>
+    </div>
+  </section>
+
+  <!-- LEGAL MODAL -->
+  <section id="legalModal" class="modal" aria-hidden="true">
+    <div class="modalCard">
+      <div class="modalHead">
+        <h3 class="modalTitle">Legal</h3>
+        <button id="closeLegalBtn" class="iconBtn" type="button" aria-label="Cerrar">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6L6 18"></path>
+            <path d="M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div id="legalBody" class="modalBody"></div>
+    </div>
+  </section>
+
+  <!-- Cookie banner (consentimiento para Meta Pixel) -->
+  <div id="cookieBanner" class="cookieBanner" aria-hidden="true">
+    <div class="cookieCard">
+      <div>
+        <strong>Cookies</strong>
+        <div style="margin-top:4px">
+          <small class="muted" style="font-weight:750">Usamos cookies para medición (Meta Pixel). Puedes aceptar o rechazar.</small>
+        </div>
+      </div>
+      <div class="cookieActions">
+        <button id="cookieRejectBtn" class="btn" type="button">Rechazar</button>
+        <button id="cookieAcceptBtn" class="btn btnPrimary" type="button">Aceptar</button>
+      </div>
     </div>
   </div>
 
-  <div id="toast" class="toast" aria-live="polite"></div>
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
   </script>
-
-  <script defer src="/js/main.js?v=2026_PROD_UNIFIED_401"></script>
+  <script src="/js/main.js" defer></script>
 </body>
 </html>
