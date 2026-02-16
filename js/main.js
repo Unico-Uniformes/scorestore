@@ -1,910 +1,914 @@
-/* SCORE STORE — main.js (Production) */
+/* SCORE STORE — main.js (production)
+   - Home: Hero → Catálogos → Partners → Footer
+   - UI blanca con acentos negro/rojo
+   - Catálogos por edición con logos flotantes
+   - Carrito con envío SOLO dentro del carrito (Pickup / Local TJ / Envia MX / Envia USA)
+   - Código promocional (preview frontend + validación real backend)
+   - Meta Pixel con consentimiento
+   - Score AI (botón flotante) via /api/chat
+*/
 
-(() => {
-  const META_PIXEL_ID = '4249947775334413';
+const CONFIG = {
+  catalogUrl: "/data/catalog.json",
+  promosUrl: "/data/promos.json",
+  endpoints: {
+    quote: "/api/quote",
+    checkout: "/api/checkout",
+    ai: "/api/chat",
+  },
+  storage: {
+    cart: "scorestore_cart_v1",
+    promo: "scorestore_promo_v1",
+    consent: "scorestore_cookie_consent_v1",
+  },
+  metaPixelId: "4249947775334413",
+};
 
-  // Netlify redirects in netlify.toml
-  const API_CHECKOUT = '/api/checkout';
-  const API_QUOTE = '/api/quote';
-  const API_CHAT = '/api/chat';
+const $ = (q) => document.querySelector(q);
+const fmtMXN = (n) =>
+  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(Number(n || 0));
 
-  const CATALOG_URL = '/data/catalog.json';
-  const PROMOS_URL = '/data/promos.json';
+const STATE = {
+  catalog: null,
+  sections: [],
+  products: [],
+  currentSectionId: null,
 
-  const CART_KEY = 'scorestore_cart_v2';
-  const PREFS_KEY = 'scorestore_prefs_v2';
+  cart: loadJson(CONFIG.storage.cart, []),
+  shipping: {
+    mode: "pickup", // pickup | local_tj | envia_mx | envia_us
+    postal_code: "",
+    amount_cents: 0,
+    service: "",
+    quoted: false,
+  },
+  promo: loadJson(CONFIG.storage.promo, null), // {code,type,value,min_subtotal_mxn,active}
+  promosDb: null,
 
-  const $ = (sel) => document.querySelector(sel);
+  ai: {
+    messages: [],
+    busy: false,
+  },
+};
 
-  const state = {
-    catalog: null,
-    promos: [],
-    cart: loadCart(),
-    prefs: loadPrefs(),
-    shipping: {
-      mode: 'pickup',
-      zip: '',
-      country: 'MX',
-      quoted: false,
-      amount_mxn: 0,
-      service: ''
-    },
-    promo: {
-      code: '',
-      valid: false,
-      type: null,
-      value: 0
-    }
-  };
+function loadJson(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+function saveJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
 
-  // ---------- Utilities ----------
-  function safeSrc(path) {
-    try { return encodeURI(path); } catch { return path; }
+function toast(msg) {
+  const el = $("#toast");
+  if (!el) return;
+  el.textContent = String(msg || "");
+  el.style.display = "block";
+  clearTimeout(window.__toast_t);
+  window.__toast_t = setTimeout(() => (el.style.display = "none"), 2200);
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function getJSON(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function postJSON(url, payload) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
+  return data;
+}
+
+function cartQty() {
+  return (STATE.cart || []).reduce((a, b) => a + (Number(b.qty) || 0), 0);
+}
+
+function openOverlay() { $("#pageOverlay")?.classList.add("show"); }
+function closeOverlay() { $("#pageOverlay")?.classList.remove("show"); }
+
+function openDrawer() { $("#cartDrawer")?.classList.add("show"); openOverlay(); }
+function closeDrawer() { $("#cartDrawer")?.classList.remove("show"); closeOverlay(); }
+
+function openModal(id) { $(id)?.classList.add("show"); openOverlay(); }
+function closeModal(id) { $(id)?.classList.remove("show"); closeOverlay(); }
+
+function setCartCount() {
+  const el = $("#cartCount");
+  if (el) el.textContent = String(cartQty());
+}
+
+/* ------------------------------
+   Catalog render
+---------------------------------*/
+function renderEditionGrid() {
+  const host = $("#editionGrid");
+  if (!host) return;
+  host.innerHTML = "";
+
+  for (const s of STATE.sections) {
+    const card = document.createElement("div");
+    card.className = "editionCard";
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", `Abrir catálogo ${s.name}`);
+
+    const cover = s.cover || "/assets/hero.webp";
+    const logo = s.logo || "";
+
+    card.innerHTML = `
+      <img class="editionCover" src="${cover}" alt="${escapeHtml(s.name)}" loading="lazy" />
+      ${logo ? `<div class="editionPill"><img src="${logo}" alt="" /></div>` : ""}
+      <div class="editionBody">
+        <h3 class="editionTitle">${escapeHtml(s.name)}</h3>
+        <p class="editionMeta">${escapeHtml(s.subtitle || "Explora el merch disponible")}</p>
+      </div>
+    `;
+
+    card.addEventListener("click", () => openSection(s.id));
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openSection(s.id);
+      }
+    });
+
+    host.appendChild(card);
+  }
+}
+
+function openSection(sectionId) {
+  STATE.currentSectionId = sectionId;
+  const sec = STATE.sections.find((x) => x.id === sectionId);
+  const panel = $("#productsPanel");
+  if (!panel) return;
+
+  $("#editionTitle").textContent = sec?.name || "Edición";
+  $("#editionMeta").textContent = sec?.meta || "Selecciona un producto para ver detalles.";
+
+  renderProducts(sectionId);
+  panel.classList.remove("hide");
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderProducts(sectionId) {
+  const host = $("#productsGrid");
+  if (!host) return;
+  host.innerHTML = "";
+
+  const products = (STATE.products || []).filter((p) => p.sectionId === sectionId);
+  if (!products.length) {
+    host.innerHTML = `<p class="muted" style="padding:10px 0">No hay productos en esta edición todavía.</p>`;
+    return;
   }
 
-  function mxn(n) {
-    const v = Number.isFinite(n) ? n : 0;
-    return v.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+  for (const p of products) {
+    const card = document.createElement("div");
+    card.className = "productCard";
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", `Ver ${p.name}`);
+
+    card.innerHTML = `
+      <img class="productImg" src="${p.img}" alt="${escapeHtml(p.name)}" loading="lazy" />
+      <div class="productBody">
+        <h4 class="productName">${escapeHtml(p.name)}</h4>
+        <div class="productSub">${escapeHtml(p.short || p.desc || "")}</div>
+        <div class="productPrice">${fmtMXN((Number(p.price_cents) || 0) / 100)}</div>
+      </div>
+    `;
+
+    card.addEventListener("click", () => openProduct(p.sku));
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openProduct(p.sku);
+      }
+    });
+
+    host.appendChild(card);
+  }
+}
+
+/* ------------------------------
+   Product modal
+---------------------------------*/
+function openProduct(sku) {
+  const p = STATE.products.find((x) => x.sku === sku);
+  if (!p) return;
+
+  $("#productTitle").textContent = p.name;
+
+  const sizes = Array.isArray(p.sizes) && p.sizes.length ? p.sizes : ["S", "M", "L", "XL"];
+  const images = Array.isArray(p.images) && p.images.length ? p.images : [p.img];
+
+  const safeSku = sku.replace(/[^a-zA-Z0-9_-]/g, "");
+
+  const body = $("#productBody");
+  body.innerHTML = `
+    <div class="productGallery">
+      ${images
+        .slice(0, 6)
+        .map((src) => `<img class="galleryImg" src="${src}" alt="${escapeHtml(p.name)}" loading="lazy" />`)
+        .join("")}
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="muted" style="font-weight:850">${escapeHtml(p.desc || "")}</div>
+    </div>
+
+    <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+      <div style="font-weight:1100;color:var(--red);font-size:20px">${fmtMXN((Number(p.price_cents) || 0) / 100)}</div>
+      <div class="muted" style="font-weight:850">SKU: ${escapeHtml(p.sku)}</div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-weight:1000;margin-bottom:10px">Selecciona talla</div>
+      <div class="sizeGrid" id="sizeGrid-${safeSku}">
+        ${sizes.map((s, i) => `<button class="sizeBtn ${i === 1 ? "active" : ""}" type="button" data-size="${s}">${s}</button>`).join("")}
+      </div>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+      <button class="btn btnPrimary" type="button" id="addToCartBtn">Agregar al carrito</button>
+      <button class="btn" type="button" id="buyNowBtn">Comprar ahora</button>
+    </div>
+  `;
+
+  let selectedSize = sizes[1] || sizes[0];
+
+  const grid = $(`#sizeGrid-${safeSku}`);
+  grid?.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("button[data-size]");
+    if (!btn) return;
+    selectedSize = btn.dataset.size;
+    grid.querySelectorAll(".sizeBtn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+  });
+
+  $("#addToCartBtn").addEventListener("click", () => {
+    addToCart(p.sku, selectedSize, 1);
+    closeModal("#productModal");
+    toast("Agregado al carrito");
+  });
+
+  $("#buyNowBtn").addEventListener("click", () => {
+    addToCart(p.sku, selectedSize, 1);
+    closeModal("#productModal");
+    openDrawer();
+  });
+
+  openModal("#productModal");
+}
+
+/* ------------------------------
+   Cart
+---------------------------------*/
+function addToCart(sku, size, qty) {
+  const p = STATE.products.find((x) => x.sku === sku);
+  if (!p) return;
+
+  const key = `${sku}::${String(size || "M").trim()}`;
+  const existing = STATE.cart.find((x) => x.key === key);
+  if (existing) existing.qty += Number(qty) || 1;
+  else
+    STATE.cart.push({
+      key,
+      sku,
+      size: String(size || "M").trim(),
+      qty: Number(qty) || 1,
+      name: p.name,
+      img: p.img,
+    });
+
+  if (STATE.shipping.mode === "envia_mx" || STATE.shipping.mode === "envia_us") {
+    STATE.shipping.quoted = false;
   }
 
-  function toast(msg) {
-    const el = $('#toast');
-    if (!el) return;
-    el.textContent = msg;
-    el.classList.add('show');
-    window.clearTimeout(toast._t);
-    toast._t = window.setTimeout(() => el.classList.remove('show'), 3200);
+  saveJson(CONFIG.storage.cart, STATE.cart);
+  setCartCount();
+  renderCartDrawer();
+  updateTotals();
+}
+
+function removeFromCart(key) {
+  STATE.cart = STATE.cart.filter((x) => x.key !== key);
+  saveJson(CONFIG.storage.cart, STATE.cart);
+  setCartCount();
+  renderCartDrawer();
+  updateTotals();
+}
+
+function setQty(key, newQty) {
+  const it = STATE.cart.find((x) => x.key === key);
+  if (!it) return;
+  it.qty = Math.max(1, Math.min(99, Number(newQty) || 1));
+  saveJson(CONFIG.storage.cart, STATE.cart);
+
+  if (STATE.shipping.mode === "envia_mx" || STATE.shipping.mode === "envia_us") {
+    STATE.shipping.quoted = false;
   }
 
-  function escapeHtml(str) {
-    return String(str || '').replace(/[&<>"']/g, (c) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
+  setCartCount();
+  renderCartDrawer();
+  updateTotals();
+}
+
+function cartSubtotalCents() {
+  let sum = 0;
+  for (const it of STATE.cart) {
+    const p = STATE.products.find((x) => x.sku === it.sku);
+    if (!p) continue;
+    sum += (Number(p.price_cents) || 0) * (Number(it.qty) || 0);
+  }
+  return sum;
+}
+
+function promoDiscountCents(subtotalCents) {
+  const promo = STATE.promo;
+  if (!promo || !promo.code || !promo.active) return 0;
+
+  const subtotalMxn = subtotalCents / 100;
+  if (promo.min_subtotal_mxn && subtotalMxn < promo.min_subtotal_mxn) return 0;
+
+  if (promo.type === "percent") {
+    const pct = Number(promo.value) || 0;
+    return Math.round(subtotalCents * (pct / 100));
+  }
+  if (promo.type === "fixed_mxn") {
+    const fixed = Math.round((Number(promo.value) || 0) * 100);
+    return Math.min(fixed, subtotalCents);
+  }
+  return 0;
+}
+
+function effectiveShippingCents() {
+  if (STATE.promo && STATE.promo.active && STATE.promo.type === "free_shipping") return 0;
+  return Number(STATE.shipping.amount_cents) || 0;
+}
+
+function updateTotals() {
+  const subtotalCents = cartSubtotalCents();
+  const discountCents = promoDiscountCents(subtotalCents);
+  const shippingCents = effectiveShippingCents();
+  const totalCents = Math.max(0, subtotalCents - discountCents + shippingCents);
+
+  $("#cartSubtotal").textContent = fmtMXN(subtotalCents / 100);
+  $("#cartShipping").textContent = fmtMXN(shippingCents / 100);
+  $("#cartTotal").textContent = fmtMXN(totalCents / 100);
+
+  const shipLabelEl = $("#cartShipLabel");
+  if (shipLabelEl) shipLabelEl.textContent = shippingLabel();
+
+  const discountRow = $("#discountRow");
+  if (discountRow) discountRow.style.display = discountCents > 0 ? "flex" : "none";
+  const discountEl = $("#cartDiscount");
+  if (discountEl) discountEl.textContent = "-" + fmtMXN(discountCents / 100);
+
+  const checkoutBtn = $("#checkoutBtn");
+  if (checkoutBtn) checkoutBtn.disabled = !STATE.cart.length;
+}
+
+function shippingLabel() {
+  const mode = STATE.shipping.mode;
+  if (mode === "pickup") return "Pickup";
+  if (mode === "local_tj") return "Envío local TJ (Uber/Didi)";
+  if (mode === "envia_mx") return "Envío Nacional (Envia.com)";
+  if (mode === "envia_us") return "Envío USA (Envia.com)";
+  return "Entrega";
+}
+
+function renderCartDrawer() {
+  const host = $("#drawerBody");
+  if (!host) return;
+
+  if (!STATE.cart.length) {
+    host.innerHTML = `
+      <p class="muted" style="text-align:center;margin:20px 0;font-weight:850">Tu carrito está vacío</p>
+      <div style="text-align:center">
+        <a class="btn btnPrimary" href="#editions" onclick="closeDrawer()">Ver catálogos</a>
+      </div>
+    `;
+    return;
   }
 
-  function cssSafe(id) {
-    return String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
-  }
-
-  // ---------- Local storage ----------
-  function loadCart() {
-    try {
-      const raw = localStorage.getItem(CART_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch { return []; }
-  }
-
-  function saveCart() {
-    localStorage.setItem(CART_KEY, JSON.stringify(state.cart));
-    updateCartCount();
-  }
-
-  function loadPrefs() {
-    try {
-      const raw = localStorage.getItem(PREFS_KEY);
-      return raw ? JSON.parse(raw) : { cookieConsent: null, customer: { name: '', email: '', phone: '' } };
-    } catch {
-      return { cookieConsent: null, customer: { name: '', email: '', phone: '' } };
-    }
-  }
-
-  function savePrefs() {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(state.prefs));
-  }
-
-  function updateCartCount() {
-    const count = state.cart.reduce((sum, it) => sum + it.qty, 0);
-    const el = $('#cartCount');
-    if (el) el.textContent = String(count);
-  }
-
-  // ---------- Totals ----------
-  function cartSubtotal() {
-    return state.cart.reduce((sum, it) => sum + (it.price_mxn * it.qty), 0);
-  }
-
-  function computeDiscount() {
-    if (!state.promo.valid) return 0;
-    const sub = cartSubtotal();
-
-    if (state.promo.type === 'percent') {
-      // promos.json usa fracción (0.10 = 10%)
-      return Math.round(sub * Number(state.promo.value || 0));
-    }
-    if (state.promo.type === 'fixed_mxn') {
-      return Math.min(sub, Math.round(Number(state.promo.value || 0)));
-    }
-    return 0;
-  }
-
-  function totalAmount() {
-    const sub = cartSubtotal();
-    const disc = computeDiscount();
-    const ship = state.shipping.amount_mxn || 0;
-    return Math.max(0, sub - disc + ship);
-  }
-
-  // ---------- Data loading ----------
-  async function loadCatalog() {
-    const res = await fetch(CATALOG_URL, { cache: 'no-store' });
-    if (!res.ok) throw new Error('No pude cargar el catálogo');
-    return res.json();
-  }
-
-  async function loadPromos() {
-    const res = await fetch(PROMOS_URL, { cache: 'no-store' });
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (Array.isArray(data)) return data;
-    if (data && Array.isArray(data.rules)) return data.rules;
-    return [];
-  }
-
-  // ---------- Rendering: Editions ----------
-  function renderEditions() {
-    const grid = $('#editionGrid');
-    if (!grid || !state.catalog) return;
-
-    const sections = state.catalog.sections || [];
-    grid.innerHTML = sections.map(sec => {
-      const cover = sec.cover || '/assets/hero.webp';
-      const logo = sec.logo || '';
-      const desc = sec.subtitle || sec.description || 'Ver merch disponible';
+  const itemsHtml = STATE.cart
+    .map((it) => {
+      const p = STATE.products.find((x) => x.sku === it.sku);
+      const price = (Number(p?.price_cents) || 0) / 100;
       return `
-        <article class="editionCard" data-sec="${sec.id}">
-          <div class="editionCover">
-            <img src="${safeSrc(cover)}" alt="${escapeHtml(sec.title)}" loading="lazy" />
-          </div>
-          ${logo ? `<div class="editionLogoCard"><img src="${safeSrc(logo)}" alt="${escapeHtml(sec.title)} logo" loading="lazy" /></div>` : ''}
-          <div class="editionBody">
-            <h3 class="editionName">${escapeHtml(sec.title)}</h3>
-            <p class="editionDesc">${escapeHtml(desc)}</p>
-          </div>
-        </article>
-      `;
-    }).join('');
-
-    grid.querySelectorAll('.editionCard').forEach(card => {
-      card.addEventListener('click', () => openProducts(card.dataset.sec));
-    });
-  }
-
-  // ---------- Rendering: Products ----------
-  function openProducts(sectionId) {
-    const panel = $('#productsPanel') || $('#productsView'); // compat con tus 2 layouts
-    if (!panel || !state.catalog) return;
-
-    const sec = (state.catalog.sections || []).find(s => s.id === sectionId);
-    const products = (state.catalog.products || []).filter(p => p.sectionId === sectionId);
-
-    const t = $('#editionTitle');
-    const m = $('#editionMeta');
-    if (t) t.textContent = sec ? sec.title : 'Catálogo';
-    if (m) m.textContent = sec?.meta || 'Selecciona un producto y agrégalo al carrito.';
-
-    const grid = $('#productsGrid');
-    if (!grid) return;
-
-    grid.innerHTML = products.map(p => renderProductCard(p)).join('');
-
-    grid.querySelectorAll('[data-add]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const pid = btn.getAttribute('data-add');
-        const prod = products.find(x => x.id === pid);
-        if (!prod) return;
-
-        const sizeSel = grid.querySelector(`#size-${cssSafe(pid)}`);
-        const size = sizeSel ? sizeSel.value : (prod.sizes?.[0] || 'ÚNICA');
-        addToCart(prod, size);
-      });
-    });
-
-    grid.querySelectorAll('[data-open]').forEach(el => {
-      el.addEventListener('click', () => {
-        const pid = el.getAttribute('data-open');
-        const prod = products.find(x => x.id === pid);
-        if (prod) openProductModal(prod);
-      });
-    });
-
-    panel.classList.remove('hide');
-    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function closeProducts() {
-    const panel = $('#productsPanel') || $('#productsView');
-    if (panel) panel.classList.add('hide');
-  }
-
-  function renderProductCard(p) {
-    const img = p.img || (p.images && p.images[0]) || '/assets/hero.webp';
-    const sizes = Array.isArray(p.sizes) && p.sizes.length ? p.sizes : ['ÚNICA'];
-
-    return `
-      <article class="productCard" data-open="${p.id}">
-        <div class="productImgWrap" data-open="${p.id}">
-          <img src="${safeSrc(img)}" alt="${escapeHtml(p.name)}" loading="lazy" />
-        </div>
-        <div class="productBody">
-          <h4 class="productName" data-open="${p.id}">${escapeHtml(p.name)}</h4>
-          <p class="productPrice">${mxn(Number(p.baseMXN || 0))}</p>
-
+        <div class="cartItem">
+          <img class="cartThumb" src="${it.img}" alt="" />
           <div>
-            <label class="muted" for="size-${cssSafe(p.id)}" style="font-weight:850; font-size:13px">Talla</label>
-            <select id="size-${cssSafe(p.id)}" class="select">
-              ${sizes.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
-            </select>
-          </div>
-
-          <div class="productActions">
-            <button class="btn btnPrimary" type="button" data-add="${p.id}">
-              <span>Agregar</span>
-            </button>
-            <button class="btn btnGhost" type="button" data-open="${p.id}">Ver</button>
-          </div>
-        </div>
-      </article>
-    `;
-  }
-
-  // ---------- Product modal ----------
-  function openProductModal(prod) {
-    const modal = $('#productModal');
-    const overlay = $('#pageOverlay');
-    if (!modal || !overlay) return;
-
-    const title = $('#productTitle');
-    if (title) title.textContent = prod.name;
-
-    const imgs = [prod.img, ...(prod.images || [])].filter(Boolean);
-    const uniqueImgs = Array.from(new Set(imgs));
-
-    const body = $('#productBody');
-    if (!body) return;
-
-    body.innerHTML = `
-      <div style="display:grid; grid-template-columns: 1fr; gap:12px">
-        <div style="display:flex; gap:10px; overflow:auto; padding-bottom:6px">
-          ${uniqueImgs.map(i => `
-            <div style="min-width:220px; height:220px; border:1px solid rgba(0,0,0,.12); border-radius:18px; background:rgba(0,0,0,.03); overflow:hidden">
-              <img src="${safeSrc(i)}" alt="${escapeHtml(prod.name)}" style="width:100%; height:100%; object-fit:contain" />
-            </div>
-          `).join('')}
-        </div>
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap">
-          <strong style="font-size:18px">${mxn(Number(prod.baseMXN || 0))}</strong>
-          <button class="btn btnPrimary" id="modalAddBtn" type="button">Agregar al carrito</button>
-        </div>
-        <p class="muted" style="margin:0; font-weight:750">Tip: si necesitas ayuda de tallas o envíos, abre <strong>Score AI</strong>.</p>
-      </div>
-    `;
-
-    const btn = $('#modalAddBtn');
-    if (btn) {
-      btn.onclick = () => {
-        const size = (prod.sizes && prod.sizes[0]) || 'ÚNICA';
-        addToCart(prod, size);
-        closeModal(modal);
-      };
-    }
-
-    openModal(modal);
-  }
-
-  // ---------- Cart ----------
-  function addToCart(prod, size) {
-    const key = `${prod.id}__${size}`;
-    const existing = state.cart.find(i => i.key === key);
-    const price = Number(prod.baseMXN || 0);
-
-    if (existing) {
-      existing.qty += 1;
-    } else {
-      state.cart.push({
-        key,
-        id: prod.id,
-        name: prod.name,
-        price_mxn: price,
-        qty: 1,
-        size,
-        img: prod.img || (prod.images && prod.images[0]) || ''
-      });
-    }
-
-    saveCart();
-    renderCart();
-
-    trackPixel('AddToCart', {
-      content_name: prod.name,
-      currency: 'MXN',
-      value: price
-    });
-
-    toast('Agregado al carrito ✅');
-  }
-
-  function removeFromCart(key) {
-    state.cart = state.cart.filter(i => i.key !== key);
-    saveCart();
-    renderCart();
-  }
-
-  function changeQty(key, delta) {
-    const it = state.cart.find(i => i.key === key);
-    if (!it) return;
-    it.qty += delta;
-    if (it.qty <= 0) removeFromCart(key);
-    else {
-      saveCart();
-      renderCart();
-    }
-  }
-
-  function renderCart() {
-    const body = $('#drawerBody');
-    if (!body) return;
-
-    if (state.prefs.shipping) {
-      state.shipping = { ...state.shipping, ...state.prefs.shipping };
-    }
-    if (state.prefs.promo?.code) {
-      state.promo = { ...state.promo, ...state.prefs.promo };
-    }
-
-    if (!state.cart.length) {
-      body.innerHTML = `
-        <div class="block">
-          <h4 class="blockTitle">Tu carrito está vacío</h4>
-          <p class="blockSub">Elige un catálogo, agrega productos y vuelve aquí para elegir la entrega y pagar.</p>
-        </div>
-      `;
-      updateTotals();
-      return;
-    }
-
-    body.innerHTML = `
-      <div>
-        ${state.cart.map(it => `
-          <div class="cartItem">
-            <div class="cartImg"><img src="${safeSrc(it.img || '/assets/hero.webp')}" alt="${escapeHtml(it.name)}"></div>
-            <div class="cartInfo">
-              <p class="cartName">${escapeHtml(it.name)}</p>
-              <p class="cartMeta">Talla: <strong>${escapeHtml(it.size)}</strong> · ${mxn(it.price_mxn)}</p>
-              <div class="cartRow">
-                <button class="qtyBtn" data-qty="-1" data-key="${escapeHtml(it.key)}" type="button">−</button>
-                <strong>${it.qty}</strong>
-                <button class="qtyBtn" data-qty="1" data-key="${escapeHtml(it.key)}" type="button">+</button>
-                <button class="removeBtn" data-remove="1" data-key="${escapeHtml(it.key)}" type="button">Quitar</button>
+            <div class="cartName">${escapeHtml(it.name)}</div>
+            <div class="cartMeta">Talla: <strong>${escapeHtml(it.size)}</strong></div>
+            <div class="cartRow">
+              <div class="qty">
+                <button type="button" aria-label="Menos" data-act="dec" data-key="${escapeHtml(it.key)}">−</button>
+                <span>${Number(it.qty) || 1}</span>
+                <button type="button" aria-label="Más" data-act="inc" data-key="${escapeHtml(it.key)}">+</button>
               </div>
+              <div style="font-weight:1100;color:var(--red)">${fmtMXN(price)}</div>
+              <button class="btn" type="button" style="padding:8px 12px" data-act="rm" data-key="${escapeHtml(it.key)}">Quitar</button>
             </div>
           </div>
-        `).join('')}
-      </div>
-
-      <div class="block" style="margin-top:12px">
-        <h4 class="blockTitle">Entrega</h4>
-        <p class="blockSub">Selecciona cómo lo quieres recibir. Envíos MX/USA se cotizan en tiempo real con Envia.com.</p>
-
-        <label class="radioRow">
-          <input type="radio" name="shipMode" value="pickup" ${state.shipping.mode==='pickup'?'checked':''} />
-          <div>
-            <strong>Pickup (fábrica)</strong>
-            <div class="muted" style="font-weight:750; font-size:13px">Recoges directo en fábrica en Tijuana. Rápido y sin costos extra.</div>
-          </div>
-        </label>
-
-        <label class="radioRow">
-          <input type="radio" name="shipMode" value="local_tj" ${state.shipping.mode==='local_tj'?'checked':''} />
-          <div>
-            <strong>Envío local Tijuana</strong>
-            <div class="muted" style="font-weight:750; font-size:13px">Solo dentro de TJ. Se coordina por Uber/Didi (costo según distancia).</div>
-          </div>
-        </label>
-
-        <label class="radioRow">
-          <input type="radio" name="shipMode" value="envia_mx" ${state.shipping.mode==='envia_mx'?'checked':''} />
-          <div>
-            <strong>Envío Nacional (México)</strong>
-            <div class="muted" style="font-weight:750; font-size:13px">Cotización y guía en tiempo real con Envia.com.</div>
-          </div>
-        </label>
-
-        <label class="radioRow">
-          <input type="radio" name="shipMode" value="envia_us" ${state.shipping.mode==='envia_us'?'checked':''} />
-          <div>
-            <strong>Envío USA</strong>
-            <div class="muted" style="font-weight:750; font-size:13px">Cotización y guía en tiempo real con Envia.com.</div>
-          </div>
-        </label>
-
-        <div id="shipExtra" style="margin-top:12px"></div>
-      </div>
-
-      <div class="block">
-        <h4 class="blockTitle">Código promocional</h4>
-        <p class="blockSub">Si tienes uno, aplícalo aquí. Se valida de nuevo en el checkout.</p>
-        <div style="display:flex; gap:10px; flex-wrap:wrap">
-          <input id="promoInput" class="input" placeholder="Ej: BAJA10" value="${escapeHtml(state.promo.code || '')}" style="flex:1; min-width:200px" />
-          <button id="applyPromoBtn" class="btn" type="button">Aplicar</button>
-          <button id="clearPromoBtn" class="btn btnGhost" type="button" style="display:${state.promo.code?'inline-flex':'none'}">Quitar</button>
         </div>
-        <div id="promoMsg" class="muted" style="margin-top:10px; font-weight:850"></div>
-      </div>
+      `;
+    })
+    .join("");
 
-      <div class="block">
-        <h4 class="blockTitle">Datos de contacto</h4>
-        <p class="blockSub">Para confirmar tu pedido y coordinar entrega si aplica.</p>
-        <div style="display:grid; grid-template-columns:1fr; gap:10px; margin-top:10px">
-          <input id="cName" class="input" placeholder="Nombre" value="${escapeHtml(state.prefs.customer?.name || '')}" />
-          <input id="cEmail" class="input" placeholder="Correo" value="${escapeHtml(state.prefs.customer?.email || '')}" />
-          <input id="cPhone" class="input" placeholder="WhatsApp / Teléfono" value="${escapeHtml(state.prefs.customer?.phone || '')}" />
+  host.innerHTML = `
+    <div>${itemsHtml}</div>
+
+    <div style="margin-top:14px">
+      <h4 style="margin:0 0 10px;font-weight:1100">Entrega</h4>
+
+      <label class="radioRow">
+        <input type="radio" name="ship" value="pickup" ${STATE.shipping.mode === "pickup" ? "checked" : ""}/>
+        <div>
+          <p class="radioTitle">Pickup en fábrica</p>
+          <p class="radioSub">Recoges directo en fábrica. Gratis.</p>
+        </div>
+      </label>
+
+      <label class="radioRow">
+        <input type="radio" name="ship" value="local_tj" ${STATE.shipping.mode === "local_tj" ? "checked" : ""}/>
+        <div>
+          <p class="radioTitle">Envío local Tijuana (Uber/Didi)</p>
+          <p class="radioSub">Solo dentro de Tijuana. El costo se coordina contigo según Uber/Didi.</p>
+        </div>
+      </label>
+
+      <label class="radioRow">
+        <input type="radio" name="ship" value="envia_mx" ${STATE.shipping.mode === "envia_mx" ? "checked" : ""}/>
+        <div>
+          <p class="radioTitle">Envío Nacional (Envia.com)</p>
+          <p class="radioSub">Cotización y guía en tiempo real con Envia.com.</p>
+        </div>
+      </label>
+
+      <label class="radioRow">
+        <input type="radio" name="ship" value="envia_us" ${STATE.shipping.mode === "envia_us" ? "checked" : ""}/>
+        <div>
+          <p class="radioTitle">Envío USA (Envia.com)</p>
+          <p class="radioSub">Cotización y guía en tiempo real con Envia.com.</p>
+        </div>
+      </label>
+
+      <div id="zipBox" style="margin-top:10px;display:${STATE.shipping.mode.startsWith("envia") ? "block" : "none"}">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <input id="zipInput" class="input" placeholder="Código postal" value="${escapeHtml(STATE.shipping.postal_code || "")}" style="max-width:220px"/>
+          <button id="quoteBtn" class="btn btnOutline" type="button">Cotizar</button>
+          <div class="muted" id="quoteHint" style="font-weight:850"></div>
         </div>
       </div>
-    `;
 
-    body.querySelectorAll('[data-qty]').forEach(btn => {
-      btn.addEventListener('click', () => changeQty(btn.dataset.key, Number(btn.dataset.qty)));
-    });
-    body.querySelectorAll('[data-remove]').forEach(btn => {
-      btn.addEventListener('click', () => removeFromCart(btn.dataset.key));
-    });
-
-    body.querySelectorAll('input[name="shipMode"]').forEach(r => {
-      r.addEventListener('change', () => {
-        state.shipping.mode = r.value;
-        state.shipping.quoted = false;
-        state.shipping.amount_mxn = (r.value === 'pickup' || r.value === 'local_tj') ? 0 : state.shipping.amount_mxn;
-        state.shipping.country = (r.value === 'envia_us') ? 'US' : 'MX';
-
-        state.prefs.shipping = { ...state.shipping };
-        savePrefs();
-
-        renderShippingExtra();
-        updateTotals();
-      });
-    });
-
-    $('#applyPromoBtn').addEventListener('click', applyPromo);
-    $('#clearPromoBtn').addEventListener('click', clearPromo);
-
-    ['cName','cEmail','cPhone'].forEach(id => {
-      const inp = $('#'+id);
-      if (!inp) return;
-      inp.addEventListener('input', () => {
-        state.prefs.customer = {
-          name: $('#cName').value.trim(),
-          email: $('#cEmail').value.trim(),
-          phone: $('#cPhone').value.trim(),
-        };
-        savePrefs();
-      });
-    });
-
-    renderShippingExtra();
-    updateTotals();
-  }
-
-  function renderShippingExtra() {
-    const wrap = $('#shipExtra');
-    if (!wrap) return;
-
-    if (state.shipping.mode === 'pickup') {
-      wrap.innerHTML = `<div class="muted" style="font-weight:850">📍 Pickup en fábrica (Tijuana). Te mandamos ubicación al confirmar.</div>`;
-      return;
-    }
-
-    if (state.shipping.mode === 'local_tj') {
-      wrap.innerHTML = `<div class="muted" style="font-weight:850">🚗 Envío local TJ: se coordina por Uber/Didi. El costo se confirma por WhatsApp después del pago.</div>`;
-      return;
-    }
-
-    const label = state.shipping.mode === 'envia_us' ? 'ZIP (USA)' : 'Código Postal (MX)';
-    const placeholder = state.shipping.mode === 'envia_us' ? 'Ej: 92101' : 'Ej: 22000';
-
-    wrap.innerHTML = `
-      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end">
-        <div style="flex:1; min-width:200px">
-          <label class="muted" style="font-weight:850; font-size:13px">${label}</label>
-          <input id="shipZip" class="input" value="${escapeHtml(state.shipping.zip || '')}" placeholder="${placeholder}" />
-        </div>
-        <button id="quoteBtn" class="btn" type="button">Cotizar</button>
+      <div class="muted" style="margin-top:10px;font-weight:850">
+        Para envíos con Envia.com, la guía se genera automáticamente después del pago.
       </div>
-      <div id="shipMsg" class="muted" style="margin-top:10px; font-weight:850"></div>
-    `;
+    </div>
 
-    $('#shipZip').addEventListener('input', (e) => {
-      state.shipping.zip = e.target.value.trim();
-      state.shipping.quoted = false;
-      state.prefs.shipping = { ...state.shipping };
-      savePrefs();
+    <div style="margin-top:14px">
+      <h4 style="margin:0 0 10px;font-weight:1100">Código promocional</h4>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input id="promoInput" class="input" placeholder="Ej: BAJA10" value="${escapeHtml(STATE.promo?.code || "")}" style="max-width:240px"/>
+        <button id="applyPromoBtn" class="btn btnOutline" type="button">Aplicar</button>
+        <button id="clearPromoBtn" class="btn" type="button">Quitar</button>
+      </div>
+      <div id="promoHint" class="muted" style="margin-top:8px;font-weight:850"></div>
+    </div>
+  `;
+
+  host.querySelectorAll("button[data-act]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const act = btn.dataset.act;
+      const key = btn.dataset.key;
+      const it = STATE.cart.find((x) => x.key === key);
+      if (!it) return;
+      if (act === "rm") return removeFromCart(key);
+      if (act === "inc") return setQty(key, (it.qty || 1) + 1);
+      if (act === "dec") return it.qty <= 1 ? removeFromCart(key) : setQty(key, (it.qty || 1) - 1);
+    });
+  });
+
+  host.querySelectorAll('input[name="ship"]').forEach((r) => {
+    r.addEventListener("change", () => setShippingMode(r.value));
+  });
+
+  const zipInput = $("#zipInput");
+  const quoteBtn = $("#quoteBtn");
+  if (zipInput && quoteBtn) {
+    zipInput.addEventListener("input", () => {
+      STATE.shipping.postal_code = zipInput.value.trim();
+      STATE.shipping.quoted = false;
+      saveShippingState();
       updateTotals();
     });
-
-    $('#quoteBtn').addEventListener('click', quoteShipping);
-
-    const msg = $('#shipMsg');
-    msg.textContent = state.shipping.quoted
-      ? `Cotización: ${mxn(state.shipping.amount_mxn)} · ${state.shipping.service || 'Envia.com'}`
-      : 'Cotiza para calcular el total.';
+    quoteBtn.addEventListener("click", () => quoteShipping(true));
   }
 
-  function updateTotals() {
-    const sub = cartSubtotal();
-    const disc = computeDiscount();
-    const ship = state.shipping.amount_mxn || 0;
-    const total = Math.max(0, sub - disc + ship);
+  $("#applyPromoBtn")?.addEventListener("click", applyPromo);
+  $("#clearPromoBtn")?.addEventListener("click", clearPromo);
 
-    const elSub = $('#cartSubtotal');
-    const elDiscRow = $('#discountRow');
-    const elDisc = $('#cartDiscount');
-    const elShip = $('#cartShipping');
-    const elTot = $('#cartTotal');
-    const elShipLabel = $('#cartShipLabel');
+  updateTotals();
+  refreshPromoHint();
+}
 
-    if (elSub) elSub.textContent = mxn(sub);
+function saveShippingState() {
+  saveJson("scorestore_ship_v1", {
+    mode: STATE.shipping.mode,
+    postal_code: STATE.shipping.postal_code,
+    amount_cents: STATE.shipping.amount_cents,
+    service: STATE.shipping.service,
+    quoted: STATE.shipping.quoted,
+  });
+}
+function loadShippingState() {
+  const s = loadJson("scorestore_ship_v1", null);
+  if (!s) return;
+  STATE.shipping.mode = s.mode || "pickup";
+  STATE.shipping.postal_code = s.postal_code || "";
+  STATE.shipping.amount_cents = Number(s.amount_cents) || 0;
+  STATE.shipping.service = s.service || "";
+  STATE.shipping.quoted = Boolean(s.quoted);
+}
 
-    if (disc > 0) {
-      if (elDiscRow) elDiscRow.style.display = '';
-      if (elDisc) elDisc.textContent = '-' + mxn(disc);
-    } else {
-      if (elDiscRow) elDiscRow.style.display = 'none';
-    }
-
-    if (elShipLabel) {
-      const label = {
-        pickup: 'Entrega (Pickup)',
-        local_tj: 'Entrega (Local TJ)',
-        envia_mx: 'Envío (MX)',
-        envia_us: 'Envío (USA)'
-      }[state.shipping.mode] || 'Entrega';
-      elShipLabel.textContent = label;
-    }
-
-    if (elShip) elShip.textContent = mxn(ship);
-    if (elTot) elTot.textContent = mxn(total);
-
-    state.prefs.shipping = { ...state.shipping };
-    savePrefs();
+function setShippingMode(mode) {
+  STATE.shipping.mode = mode;
+  if (mode === "pickup" || mode === "local_tj") {
+    STATE.shipping.amount_cents = 0;
+    STATE.shipping.service = "";
+    STATE.shipping.quoted = true;
+  } else {
+    STATE.shipping.amount_cents = 0;
+    STATE.shipping.service = "";
+    STATE.shipping.quoted = false;
   }
+  saveShippingState();
+  renderCartDrawer();
+}
 
-  async function quoteShipping() {
-    const zip = (state.shipping.zip || '').trim();
-    if (!zip) {
-      toast('Pon tu código postal/ZIP para cotizar.');
+async function quoteShipping(showToast) {
+  try {
+    if (!(STATE.shipping.mode === "envia_mx" || STATE.shipping.mode === "envia_us")) return;
+
+    if (STATE.promo && STATE.promo.active && STATE.promo.type === "free_shipping") {
+      STATE.shipping.amount_cents = 0;
+      STATE.shipping.quoted = true;
+      saveShippingState();
+      updateTotals();
+      if (showToast) toast("Envío gratis aplicado");
       return;
     }
 
-    const msg = $('#shipMsg');
-    if (msg) msg.textContent = 'Cotizando…';
+    const zip = String(STATE.shipping.postal_code || "").trim();
+    if (!zip) { if (showToast) toast("Escribe tu código postal"); return; }
 
-    try {
-      const res = await fetch(API_QUOTE, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          shipping_mode: state.shipping.mode,
-          ship_zip: zip,
-          ship_country: state.shipping.mode === 'envia_us' ? 'US' : 'MX',
-          items: state.cart.map(i => ({
-            id: i.id,
-            qty: i.qty,
-            size: i.size
-          }))
-        })
-      });
+    const data = await postJSON(CONFIG.endpoints.quote, {
+      shipping_mode: STATE.shipping.mode,
+      postal_code: zip,
+      items_qty: STATE.cart.reduce((a, b) => a + (Number(b.qty) || 0), 0),
+    });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'No se pudo cotizar');
+    STATE.shipping.amount_cents = Number(data.amount_cents) || 0;
+    STATE.shipping.service = data.service || "";
+    STATE.shipping.quoted = true;
+    saveShippingState();
 
-      state.shipping.amount_mxn = Number(data.amount_mxn || 0);
-      state.shipping.service = data.service || 'Envia.com';
-      state.shipping.quoted = true;
-
-      state.prefs.shipping = { ...state.shipping };
-      savePrefs();
-
-      if (msg) msg.textContent = `Cotización: ${mxn(state.shipping.amount_mxn)} · ${state.shipping.service}`;
-      updateTotals();
-    } catch (e) {
-      if (msg) msg.textContent = `No pude cotizar: ${e.message}`;
-      state.shipping.quoted = false;
-      updateTotals();
-    }
-  }
-
-  async function applyPromo() {
-    const input = $('#promoInput');
-    const msg = $('#promoMsg');
-    const clearBtn = $('#clearPromoBtn');
-
-    const code = (input?.value || '').trim().toUpperCase();
-    if (!code) {
-      if (msg) msg.textContent = 'Escribe un código.';
-      return;
-    }
-
-    if (!state.promos.length) state.promos = await loadPromos();
-    const promo = state.promos.find(p => (String(p.code || '').toUpperCase() === code) && p.active);
-
-    if (!promo) {
-      state.promo = { code, valid: false, type: null, value: 0 };
-      if (msg) msg.textContent = 'Ese código no existe o ya no está activo.';
-      if (clearBtn) clearBtn.style.display = 'inline-flex';
-      updateTotals();
-      return;
-    }
-
-    state.promo = { code, valid: true, type: promo.type, value: promo.value };
-
-    const d = computeDiscount();
-    if (msg) msg.textContent = `✅ ${code} aplicado: descuento estimado ${mxn(d)}.`;
-    if (clearBtn) clearBtn.style.display = 'inline-flex';
-
-    state.prefs.promo = { ...state.promo };
-    savePrefs();
-
+    const hint = $("#quoteHint");
+    if (hint) hint.textContent = `Cotizado: ${fmtMXN(STATE.shipping.amount_cents / 100)} ${STATE.shipping.service ? "— " + STATE.shipping.service : ""}`;
     updateTotals();
+    if (showToast) toast("Envío cotizado");
+  } catch (e) {
+    $("#quoteHint") && ($("#quoteHint").textContent = "");
+    STATE.shipping.quoted = false;
+    saveShippingState();
+    if (showToast) toast(e?.message || "Error cotizando envío");
+  }
+}
+
+/* ------------------------------
+   Promos
+---------------------------------*/
+function refreshPromoHint() {
+  const hint = $("#promoHint");
+  if (!hint) return;
+
+  if (!STATE.promo || !STATE.promo.code) {
+    hint.textContent = "Si tienes un código, aplícalo aquí.";
+    return;
   }
 
-  function clearPromo() {
-    state.promo = { code: '', valid: false, type: null, value: 0 };
-    if ($('#promoInput')) $('#promoInput').value = '';
-    if ($('#promoMsg')) $('#promoMsg').textContent = '';
-    if ($('#clearPromoBtn')) $('#clearPromoBtn').style.display = 'none';
+  if (!STATE.promo.active) {
+    hint.textContent = "Este código no está activo.";
+    return;
+  }
 
-    state.prefs.promo = null;
-    savePrefs();
+  if (STATE.promo.type === "percent") hint.textContent = `Aplicado: ${STATE.promo.value}% de descuento.`;
+  else if (STATE.promo.type === "fixed_mxn") hint.textContent = `Aplicado: ${fmtMXN(STATE.promo.value)} de descuento.`;
+  else if (STATE.promo.type === "free_shipping") hint.textContent = "Aplicado: envío gratis.";
+  else hint.textContent = "Código aplicado.";
+}
 
+async function ensurePromosLoaded() {
+  if (STATE.promosDb) return STATE.promosDb;
+  try { STATE.promosDb = await getJSON(CONFIG.promosUrl); }
+  catch { STATE.promosDb = { promos: [] }; }
+  return STATE.promosDb;
+}
+
+function normalizePromoCode(code) {
+  return String(code || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 32);
+}
+
+async function applyPromo() {
+  try {
+    const input = $("#promoInput");
+    const code = normalizePromoCode(input?.value || "");
+    if (!code) { toast("Escribe un código"); return; }
+
+    const db = await ensurePromosLoaded();
+    const p = (db.promos || []).find((x) => String(x.code || "").trim().toUpperCase() === code && x.active);
+
+    if (!p) {
+      toast("Código inválido");
+      STATE.promo = null;
+      saveJson(CONFIG.storage.promo, null);
+      refreshPromoHint();
+      updateTotals();
+      return;
+    }
+
+    const subMxn = cartSubtotalCents() / 100;
+    if (p.min_subtotal_mxn && subMxn < p.min_subtotal_mxn) { toast(`Mínimo ${fmtMXN(p.min_subtotal_mxn)} para aplicar`); return; }
+
+    STATE.promo = p;
+    saveJson(CONFIG.storage.promo, p);
+    refreshPromoHint();
     updateTotals();
+
+    if (p.type === "free_shipping") await quoteShipping(false);
+    toast("Código aplicado");
+  } catch {
+    toast("No se pudo aplicar el código");
   }
+}
 
-  // ---------- Checkout ----------
-  async function startCheckout() {
-    if (!state.cart.length) {
-      toast('Tu carrito está vacío.');
-      return;
-    }
+function clearPromo() {
+  STATE.promo = null;
+  saveJson(CONFIG.storage.promo, null);
+  refreshPromoHint();
+  updateTotals();
+  toast("Código removido");
+}
 
-    const customer = {
-      name: ($('#cName')?.value || state.prefs.customer?.name || '').trim(),
-      email: ($('#cEmail')?.value || state.prefs.customer?.email || '').trim(),
-      phone: ($('#cPhone')?.value || state.prefs.customer?.phone || '').trim(),
-    };
+/* ------------------------------
+   Checkout
+---------------------------------*/
+async function checkout() {
+  try {
+    if (!STATE.cart.length) { toast("Carrito vacío"); return; }
 
-    if (!customer.name || !customer.email || !customer.phone) {
-      toast('Completa tu nombre, correo y teléfono.');
-      return;
-    }
-
-    if ((state.shipping.mode === 'envia_mx' || state.shipping.mode === 'envia_us') && !state.shipping.zip) {
-      toast('Pon tu código postal/ZIP para envío.');
-      return;
+    if ((STATE.shipping.mode === "envia_mx" || STATE.shipping.mode === "envia_us") && !STATE.shipping.quoted) {
+      await quoteShipping(false);
+      if (!STATE.shipping.quoted) { toast("Primero cotiza tu envío"); return; }
     }
 
     const payload = {
-      items: state.cart.map(i => ({ id: i.id, qty: i.qty, size: i.size })),
-      customer,
-      shipping_mode: state.shipping.mode,
-      ship_zip: state.shipping.zip,
-      ship_country: state.shipping.mode === 'envia_us' ? 'US' : 'MX',
-      promo_code: state.promo.code || ''
+      origin: window.location.origin,
+      items: STATE.cart.map((it) => ({ sku: it.sku, qty: it.qty, size: it.size })),
+      shipping_mode: STATE.shipping.mode,
+      postal_code: String(STATE.shipping.postal_code || "").trim(),
+      promo_code: STATE.promo?.code || "",
     };
 
-    const btn = $('#checkoutBtn');
-    const old = btn?.textContent;
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = 'Creando checkout…';
-    }
-
-    try {
-      trackPixel('InitiateCheckout', { currency: 'MXN', value: totalAmount() });
-
-      const res = await fetch(API_CHECKOUT, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'No se pudo crear el checkout');
-
-      if (data?.url) window.location.href = data.url;
-      else throw new Error('Stripe no regresó URL de pago');
-
-    } catch (e) {
-      toast('Error: ' + e.message);
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = old || 'Pagar seguro';
-      }
-    }
-  }
-
-  // ---------- Modals / Drawer ----------
-  function openDrawer() {
-    $('#cartDrawer')?.classList.add('show');
-    $('#pageOverlay')?.classList.add('show');
-    renderCart();
-  }
-
-  function closeDrawer() {
-    $('#cartDrawer')?.classList.remove('show');
-    $('#pageOverlay')?.classList.remove('show');
-  }
-
-  function openModal(modal) {
-    modal.classList.add('show');
-    $('#pageOverlay')?.classList.add('show');
-  }
-
-  function closeModal(modal) {
-    modal.classList.remove('show');
-    $('#pageOverlay')?.classList.remove('show');
-  }
-
-  // ---------- Legal ----------
-  async function openLegal() {
-    const modal = $('#legalModal');
-    if (!modal) return;
-
-    const body = $('#legalBody');
-    if (body && !body.dataset.loaded) {
-      try {
-        const res = await fetch('/legal.html', { cache: 'no-store' });
-        body.innerHTML = await res.text();
-        body.dataset.loaded = '1';
-      } catch {
-        body.innerHTML = '<p class="muted">No pude cargar el legal.</p>';
-      }
-    }
-
-    openModal(modal);
-  }
-
-  // ---------- Score AI ----------
-  function openAi() {
-    const modal = $('#aiModal');
-    if (!modal) return;
-    openModal(modal);
-
-    const msgs = $('#aiMessages');
-    if (msgs && !msgs.dataset.seeded) {
-      msgs.dataset.seeded = '1';
-      appendChat('bot', 'Soy Score AI. Dime qué edición estás viendo y te ayudo con tallas, envíos y dudas del merch.');
-    }
-  }
-
-  function appendChat(who, text) {
-    const wrap = $('#aiMessages');
-    if (!wrap) return;
-    const div = document.createElement('div');
-    div.className = `chatBubble ${who === 'me' ? 'me' : 'bot'}`;
-    div.textContent = text;
-    wrap.appendChild(div);
-    wrap.scrollTop = wrap.scrollHeight;
-  }
-
-  async function sendAi() {
-    const input = $('#aiInput');
-    const btn = $('#aiSendBtn');
-    const text = (input?.value || '').trim();
-    if (!text) return;
-
-    appendChat('me', text);
-    input.value = '';
-
-    if (btn) { btn.disabled = true; btn.textContent = '…'; }
-
-    try {
-      const res = await fetch(API_CHAT, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message: text })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'No pude responder');
-      appendChat('bot', data.reply || 'Listo.');
-    } catch (e) {
-      appendChat('bot', 'Error: ' + e.message);
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; }
-    }
-  }
-
-  // ---------- Cookie consent + Pixel ----------
-  function showCookieBannerIfNeeded() {
-    const banner = $('#cookieBanner');
-    if (!banner) return;
-
-    const consent = state.prefs.cookieConsent;
-    if (!consent) {
-      banner.style.display = 'block';
-      return;
-    }
-    banner.style.display = 'none';
-    if (consent === 'accept') initPixel();
-  }
-
-  function initPixel() {
-    if (window.fbq) return;
-
-    !(function(f,b,e,v,n,t,s){
-      if(f.fbq)return; n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq)f._fbq=n; n.push=n; n.loaded=!0; n.version='2.0';
-      n.queue=[]; t=b.createElement(e); t.async=!0;
-      t.src=v; s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s)
-    })(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
-
-    window.fbq('init', META_PIXEL_ID);
-    window.fbq('track', 'PageView');
-  }
-
-  function trackPixel(event, params) {
-    if (!window.fbq) return;
-    try { window.fbq('track', event, params || {}); } catch {}
-  }
-
-  // ---------- Boot ----------
-  async function boot() {
-    $('#openCartBtn')?.addEventListener('click', openDrawer);
-    $('#heroOpenCart')?.addEventListener('click', openDrawer);
-    $('#closeCartBtn')?.addEventListener('click', closeDrawer);
-
-    $('#pageOverlay')?.addEventListener('click', () => {
-      closeDrawer();
-      ['productModal','aiModal','legalModal'].forEach(id => {
-        const m = $('#'+id);
-        if (m?.classList.contains('show')) closeModal(m);
-      });
+    trackPixel("InitiateCheckout", {
+      value: (cartSubtotalCents() + effectiveShippingCents()) / 100,
+      currency: "MXN",
+      num_items: cartQty(),
     });
 
-    $('#checkoutBtn')?.addEventListener('click', startCheckout);
+    $("#checkoutBtn").disabled = true;
+    $("#checkoutBtn").textContent = "Generando pago…";
 
-    $('#openLegalBtn')?.addEventListener('click', openLegal);
-    $('#closeLegalBtn')?.addEventListener('click', () => closeModal($('#legalModal')));
+    const res = await postJSON(CONFIG.endpoints.checkout, payload);
+    if (res?.url) { window.location.href = res.url; return; }
 
-    // AI buttons compat con tus 2 index.html
-    $('#openAiBtnFab')?.addEventListener('click', openAi);
-    $('#openAiBtn')?.addEventListener('click', openAi);
-    $('#footerAiBtn')?.addEventListener('click', openAi);
-    $('#heroCtaAi')?.addEventListener('click', openAi);
-    $('#closeAiBtn')?.addEventListener('click', () => closeModal($('#aiModal')));
-    $('#aiSendBtn')?.addEventListener('click', sendAi);
-    $('#aiInput')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendAi(); });
+    throw new Error("No se pudo crear el checkout");
+  } catch (e) {
+    toast(e?.message || "Error en checkout");
+  } finally {
+    const btn = $("#checkoutBtn");
+    if (btn) { btn.disabled = !STATE.cart.length; btn.textContent = "Pagar seguro"; }
+  }
+}
 
-    $('#closeProductBtn')?.addEventListener('click', () => closeModal($('#productModal')));
-    $('#closeProductsBtn')?.addEventListener('click', closeProducts);
+/* ------------------------------
+   Legal modal
+---------------------------------*/
+async function openLegal() {
+  try {
+    const body = $("#legalBody");
+    body.innerHTML = "<p class='muted'>Cargando…</p>";
+    openModal("#legalModal");
+    const res = await fetch("/legal.html", { cache: "no-store" });
+    if (!res.ok) throw new Error("Legal no disponible");
+    body.innerHTML = await res.text();
+  } catch {
+    $("#legalBody").innerHTML = "<p class='muted'>Legal no disponible por el momento. Escríbenos por Linktree para soporte.</p>";
+  }
+}
 
-    $('#cookieAcceptBtn')?.addEventListener('click', () => {
-      state.prefs.cookieConsent = 'accept';
-      savePrefs();
-      $('#cookieBanner').style.display = 'none';
-      initPixel();
-      toast('Cookies aceptadas ✅');
-    });
+/* ------------------------------
+   Meta Pixel (consent)
+---------------------------------*/
+function getConsent() { return loadJson(CONFIG.storage.consent, null); }
+function setConsent(status) { saveJson(CONFIG.storage.consent, { status, ts: Date.now() }); }
 
-    $('#cookieRejectBtn')?.addEventListener('click', () => {
-      state.prefs.cookieConsent = 'reject';
-      savePrefs();
-      $('#cookieBanner').style.display = 'none';
-      toast('Cookies rechazadas');
-    });
+function ensureCookieBanner() {
+  const banner = $("#cookieBanner");
+  if (!banner) return;
 
-    state.catalog = await loadCatalog();
-    renderEditions();
-
-    updateCartCount();
-    showCookieBannerIfNeeded();
+  const c = getConsent();
+  if (c?.status === "accept" || c?.status === "reject") {
+    banner.style.display = "none";
+    if (c.status === "accept") loadPixel();
+    return;
   }
 
-  boot().catch((e) => {
-    console.error(e);
-    toast('Error cargando el sitio.');
+  banner.style.display = "block";
+  $("#cookieAcceptBtn")?.addEventListener("click", () => {
+    setConsent("accept");
+    banner.style.display = "none";
+    loadPixel();
   });
-})();
+  $("#cookieRejectBtn")?.addEventListener("click", () => {
+    setConsent("reject");
+    banner.style.display = "none";
+  });
+}
+
+function loadPixel() {
+  if (window.__pixel_loaded) return;
+  window.__pixel_loaded = true;
+
+  !(function (f, b, e, v, n, t, s) {
+    if (f.fbq) return;
+    n = f.fbq = function () {
+      n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+    };
+    if (!f._fbq) f._fbq = n;
+    n.push = n;
+    n.loaded = true;
+    n.version = "2.0";
+    n.queue = [];
+    t = b.createElement(e);
+    t.async = true;
+    t.src = v;
+    s = b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t, s);
+  })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
+
+  window.fbq("init", CONFIG.metaPixelId);
+  window.fbq("track", "PageView");
+}
+
+function trackPixel(eventName, params) {
+  try {
+    const c = getConsent();
+    if (c?.status !== "accept") return;
+    if (typeof window.fbq !== "function") return;
+    window.fbq("track", eventName, params || {});
+  } catch {}
+}
+
+/* ------------------------------
+   Score AI
+---------------------------------*/
+function pushAiMessage(role, text) {
+  STATE.ai.messages.push({ role, text: String(text || "") });
+  renderAi();
+}
+
+function renderAi() {
+  const host = $("#aiMessages");
+  if (!host) return;
+  host.innerHTML = "";
+  for (const m of STATE.ai.messages.slice(-30)) {
+    const div = document.createElement("div");
+    div.className = "msg " + (m.role === "user" ? "me" : "");
+    div.textContent = m.text;
+    host.appendChild(div);
+  }
+  host.scrollTop = host.scrollHeight;
+}
+
+async function aiSend() {
+  if (STATE.ai.busy) return;
+  const input = $("#aiInput");
+  const text = String(input?.value || "").trim();
+  if (!text) return;
+
+  input.value = "";
+  pushAiMessage("user", text);
+  STATE.ai.busy = true;
+
+  try {
+    const res = await postJSON(CONFIG.endpoints.ai, { message: text });
+    const reply = res?.reply || res?.text || res?.message || "No pude responder en este momento.";
+    pushAiMessage("assistant", reply);
+  } catch {
+    pushAiMessage("assistant", "Score AI está temporalmente fuera. Intenta de nuevo en un momento.");
+  } finally {
+    STATE.ai.busy = false;
+  }
+}
+
+function openAi() {
+  if (!STATE.ai.messages.length) {
+    pushAiMessage("assistant", "Soy Score AI. Dime qué edición estás viendo y te ayudo con tallas, envíos o disponibilidad.");
+  }
+  openModal("#aiModal");
+}
+
+/* ------------------------------
+   Init
+---------------------------------*/
+async function init() {
+  try {
+    loadShippingState();
+    setCartCount();
+
+    $("#openCartBtn")?.addEventListener("click", openDrawer);
+    $("#heroOpenCart")?.addEventListener("click", openDrawer);
+    $("#closeCartBtn")?.addEventListener("click", closeDrawer);
+
+    $("#pageOverlay")?.addEventListener("click", () => {
+      closeDrawer();
+      closeModal("#productModal");
+      closeModal("#aiModal");
+      closeModal("#legalModal");
+    });
+
+    $("#closeProductBtn")?.addEventListener("click", () => closeModal("#productModal"));
+    $("#closeAiBtn")?.addEventListener("click", () => closeModal("#aiModal"));
+    $("#closeLegalBtn")?.addEventListener("click", () => closeModal("#legalModal"));
+    $("#openLegalBtn")?.addEventListener("click", openLegal);
+
+    $("#openAiBtn")?.addEventListener("click", openAi);
+    $("#openAiBtnFab")?.addEventListener("click", openAi);
+    $("#footerAiBtn")?.addEventListener("click", openAi);
+
+    $("#aiSendBtn")?.addEventListener("click", aiSend);
+    $("#aiInput")?.addEventListener("keydown", (e) => { if (e.key === "Enter") aiSend(); });
+
+    $("#checkoutBtn")?.addEventListener("click", checkout);
+
+    $("#closeProductsBtn")?.addEventListener("click", () => {
+      $("#productsPanel")?.classList.add("hide");
+      STATE.currentSectionId = null;
+    });
+
+    ensureCookieBanner();
+
+    STATE.catalog = await getJSON(CONFIG.catalogUrl);
+    STATE.sections = Array.isArray(STATE.catalog.sections) ? STATE.catalog.sections : [];
+    STATE.products = Array.isArray(STATE.catalog.products) ? STATE.catalog.products : [];
+
+    renderEditionGrid();
+    renderCartDrawer();
+    updateTotals();
+
+    trackPixel("ViewContent", { content_name: "Score Store Home" });
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  } catch (e) {
+    console.error(e);
+    toast("No se pudo cargar el catálogo");
+  }
+}
+
+document.addEventListener("DOMContentLoaded", init);
