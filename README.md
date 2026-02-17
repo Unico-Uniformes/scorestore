@@ -1,11 +1,10 @@
-# SCORE Store — Tienda Oficial
+# SCORE Store — Tienda Oficial (PROD 2026)
 
-**Sitio:** https://scorestore.netlify.app  
-**Operación / fabricación:** Único Uniformes (BAJATEX, Tijuana)  
+**Operación / fabricación:** Único Uniformes (Tijuana)  
 **Checkout:** Stripe Checkout (Tarjeta + OXXO)  
-**Envíos:** Envia.com (cotización + guía en vivo)  
+**Envíos:** Envia.com (cotización + guía)  
 **Notificaciones:** Telegram (opcional)  
-**IA:** Gemini (Score AI: vendedor + soporte) (opcional)
+**IA (opcional):** Gemini (chat soporte/ventas)
 
 ---
 
@@ -24,11 +23,14 @@
 ├─ netlify/
 │  └─ functions/
 │     ├─ _shared.js
-│     ├─ create_checkout.js
-│     ├─ quote_shipping.js
-│     ├─ stripe_webhook.js
-│     └─ chat.js
+│     ├─ create_checkout.js        # /api/checkout
+│     ├─ quote_shipping.js         # /api/quote
+│     ├─ stripe_webhook.js         # /.netlify/functions/stripe_webhook
+│     ├─ envia_webhook.js          # /.netlify/functions/envia_webhook
+│     └─ chat.js                   # /api/chat
 ├─ index.html
+├─ success.html
+├─ cancel.html
 ├─ legal.html
 ├─ netlify.toml
 ├─ package.json
