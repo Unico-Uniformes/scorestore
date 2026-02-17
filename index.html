@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#ffffff" />
 
   <title>SCORE STORE — Merch oficial</title>
-  <meta name="description" content="Merch oficial de SCORE International. Fabricado por ÚNICO UNIFORMES, patrocinador oficial. Elige tu edición, arma tu carrito y paga seguro." />
+  <meta name="description" content="Merch oficial de SCORE International. Fabricado por ÚNICO UNIFORMES, patrocinador oficial. Elige edición, agrega al carrito y paga seguro." />
 
-  <!-- Verificación Meta (Facebook) — pega aquí el token real de verificación de dominio -->
-  <meta name="facebook-domain-verification" content="REPLACE_WITH_FACEBOOK_DOMAIN_VERIFICATION" />
+  <!-- Verificación Meta (Facebook) -->
+  <meta name="facebook-domain-verification" content="wuo7x5sxsjcer1t0epn1id5xgjp8su" />
 
   <!-- Open Graph -->
   <meta property="og:title" content="SCORE STORE — Merch oficial" />
@@ -17,17 +17,14 @@
   <meta property="og:image" content="/assets/hero.webp" />
   <meta property="og:type" content="website" />
 
+  <link rel="preload" href="/css/styles.css" as="style" />
   <link rel="stylesheet" href="/css/styles.css" />
 
-  <!-- Icons / PWA -->
   <link rel="icon" type="image/png" href="/assets/icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
 </head>
 
 <body>
-  <a class="skipLink" href="#editions">Saltar a catálogos</a>
-
   <header class="topbar">
     <div class="container nav">
       <a class="brand" href="#top" aria-label="Inicio">
@@ -35,14 +32,14 @@
         <span class="brandText">SCORE STORE</span>
       </a>
 
-      <nav class="navLinks" aria-label="Navegación">
+      <div class="navLinks">
         <a class="navLink" href="#editions">Catálogos</a>
         <a class="navLink" href="#partners">Partners</a>
 
         <button id="openCartBtn" class="btn btnPrimary" type="button">
-          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="9" cy="21" r="1"></circle>
-            <circle cx="20" cy="21" r="1"></circle>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle>
             <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"></path>
           </svg>
           Carrito <span id="cartCount" class="badge">0</span>
@@ -50,16 +47,15 @@
 
         <a class="btn btnGhost" href="https://linktr.ee/unicouniformes" target="_blank" rel="noreferrer">Contacto</a>
         <button id="openLegalBtn" class="btn btnGhost" type="button">Legal</button>
-      </nav>
+      </div>
     </div>
   </header>
 
-  <main id="top">
-    <!-- HERO -->
-    <section class="hero" aria-label="Hero">
-      <div class="heroBg" aria-hidden="true"></div>
+  <section class="hero" id="top">
+    <div class="heroBg" aria-hidden="true"></div>
 
-      <div class="container heroInner">
+    <div class="container heroInner">
+      <div class="heroGrid">
         <div class="heroCard">
           <div class="heroLogos">
             <img class="heroLogo desert" src="/assets/logo-world-desert.webp" alt="Desert" />
@@ -69,70 +65,91 @@
 
           <h1 class="heroTitle">Merch oficial de SCORE International</h1>
           <p class="heroSub"><strong>Fabricado por ÚNICO UNIFORMES</strong>, patrocinador oficial.</p>
-          <p class="heroMini">Elige tu edición, agrega al carrito y paga seguro. La entrega se selecciona dentro del carrito.</p>
 
           <div class="heroCtas">
-            <a class="btn btnPrimary" href="#editions">Ver catálogos</a>
-            <button id="heroOpenCart" class="btn btnOutline" type="button">Abrir carrito</button>
-            <button id="footerAiBtn" class="btn" type="button">Pregúntale a Score AI</button>
+            <a id="heroCtaCatalogos" class="btn btnPrimary" href="#editions">Ver catálogos</a>
+            <button id="heroCtaAi" class="btn" type="button">Pregúntale a Score AI</button>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- CATÁLOGOS -->
-    <section class="editionsSection" id="editions" aria-label="Catálogos">
-      <div class="container">
-        <div class="sectionHead">
-          <div>
-            <h2 class="sectionTitle">Catálogos por edición</h2>
-            <p class="sectionSub">Selecciona una carrera y descubre el merch disponible.</p>
-          </div>
-        </div>
-
-        <div id="editionGrid" class="editionsGrid" aria-live="polite"></div>
-
-        <section id="productsPanel" class="productsPanel hide" aria-label="Productos">
-          <div class="productsHead">
-            <div>
-              <h3 id="editionTitle" class="productsTitle">Edición</h3>
-              <p id="editionMeta" class="productsMeta">Selecciona un producto para ver detalles.</p>
-            </div>
-            <div class="productsHeadActions">
-              <button id="closeProductsBtn" class="btn btnGhost" type="button">Cerrar</button>
+          <div class="heroMeta">
+            <div class="heroBadges">
+              <span class="badgePill">Pago seguro</span>
+              <span class="badgePill">Envío desde carrito</span>
+              <span class="badgePill">Soporte por WhatsApp</span>
             </div>
           </div>
-
-          <div id="productsGrid" class="productGrid" aria-live="polite"></div>
-        </section>
-      </div>
-    </section>
-
-    <!-- PARTNERS -->
-    <section class="partnersSection" id="partners" aria-label="Partners">
-      <div class="container">
-        <div class="sectionHead">
-          <div>
-            <h2 class="sectionTitle">Partners</h2>
-            <p class="sectionSub">Colaboradores y marcas aliadas.</p>
-          </div>
         </div>
 
-        <div class="partnerGrid" aria-label="Logos de partners">
-          <img class="partnerLogo" src="/assets/logo-ford.webp" alt="Ford" loading="lazy" />
-          <img class="partnerLogo" src="/assets/logo-bfgodrich.webp" alt="BFGoodrich" loading="lazy" />
-          <img class="partnerLogo" src="/assets/logo-rzr.webp" alt="RZR" loading="lazy" />
+        <aside class="heroInfo">
+          <h3>Compra rápida. Sin confusiones.</h3>
+          <p>Agrega tus productos al carrito y ahí mismo eliges cómo recibir tu pedido:</p>
+          <ul>
+            <li><strong>Pickup:</strong> recoges directo en fábrica.</li>
+            <li><strong>Local TJ:</strong> Uber/Didi (solo Tijuana).</li>
+            <li><strong>México / USA:</strong> cotización y guía en tiempo real con Envia.com.</li>
+          </ul>
+          <p class="muted">¿Dudas de talla o stock? abre <strong>Score AI</strong>.</p>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="editionsSection" id="editions">
+    <div class="container">
+      <div class="sectionHead">
+        <div>
+          <h2 class="sectionTitle">Catálogos por edición</h2>
+          <p class="sectionSub">Selecciona una carrera y descubre el merch disponible.</p>
         </div>
       </div>
-    </section>
-  </main>
 
-  <!-- FOOTER -->
+      <div id="editionGrid" class="editionsGrid" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section id="productsView" class="productsSection hide">
+    <div class="container">
+      <div class="sectionHead">
+        <div>
+          <h2 id="editionTitle" class="sectionTitle">Edición</h2>
+          <p id="editionMeta" class="sectionSub">Selecciona un producto para ver detalles.</p>
+        </div>
+        <div id="chips"></div>
+      </div>
+
+      <div id="productsGrid" class="productGrid" aria-live="polite"></div>
+
+      <div style="margin-top:16px">
+        <a class="btn btnGhost" href="#editions">← Volver a catálogos</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="partnersSection" id="partners">
+    <div class="container">
+      <div class="sectionHead">
+        <div>
+          <h2 class="sectionTitle">Partners</h2>
+          <p class="sectionSub">Colaboradores y marcas aliadas.</p>
+        </div>
+      </div>
+
+      <div class="partnerGrid" aria-label="Logos de partners">
+        <img class="partnerLogo" src="/assets/logo-ford.webp" alt="Ford" />
+        <img class="partnerLogo" src="/assets/logo-bfgodrich.webp" alt="BFGoodrich" />
+        <img class="partnerLogo" src="/assets/logo-rzr.webp" alt="RZR" />
+      </div>
+    </div>
+  </section>
+
   <footer class="footer" id="footer">
     <div class="container footerGrid">
       <div>
         <strong>SCORE STORE</strong>
-        <p class="footerText">Merch oficial de SCORE International. Fabricado por ÚNICO UNIFORMES, patrocinador oficial.</p>
+        <div class="footerText" style="margin-top:10px">
+          Merch oficial de SCORE International.<br/>
+          Fabricado por <strong>ÚNICO UNIFORMES</strong>, patrocinador oficial.
+        </div>
 
         <div class="footerLinks">
           <a href="https://unicouniformes.com/" target="_blank" rel="noreferrer">Web</a>
@@ -145,19 +162,23 @@
       </div>
 
       <div>
-        <p class="footerText muted" style="margin-top:0">
-          Contacto: <a href="mailto:ventas.unicotextil@gmail.com">ventas.unicotextil@gmail.com</a><br />
+        <small class="footerText muted">
+          Contacto: <a href="mailto:ventas.unicotextil@gmail.com" style="color:#fff">ventas.unicotextil@gmail.com</a>
+          <br/>
           © <span id="year"></span> Único Uniformes. Todos los derechos reservados.
-        </p>
+        </small>
 
-        <button id="openAiBtn" class="btn btnOutline" type="button" style="margin-top:10px">Abrir Score AI</button>
+        <div style="margin-top:12px">
+          <button id="footerAiBtn" class="btn" type="button">Abrir Score AI</button>
+        </div>
       </div>
     </div>
   </footer>
 
-  <!-- Floating Score AI (FAB) -->
-  <button id="openAiBtnFab" class="aiFab" type="button" aria-label="Abrir Score AI">
-    <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Floating Score AI (fixed bottom-right) -->
+  <button id="openAiBtn" class="aiFab" type="button" aria-label="Abrir Score AI">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M12 8V4H8"></path>
       <path d="M8 4h8"></path>
       <path d="M16 4v4"></path>
@@ -168,47 +189,32 @@
     Score AI
   </button>
 
+  <!-- Overlay -->
   <div id="pageOverlay" class="overlay" aria-hidden="true"></div>
 
-  <!-- CART DRAWER -->
+  <!-- Cart Drawer -->
   <aside id="cartDrawer" class="drawer" aria-label="Carrito" aria-hidden="true">
     <div class="drawerHead">
       <h3 class="drawerTitle">Tu carrito</h3>
       <button id="closeCartBtn" class="iconBtn" type="button" aria-label="Cerrar">
-        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M18 6L6 18"></path>
           <path d="M6 6l12 12"></path>
         </svg>
       </button>
     </div>
-
     <div id="drawerBody" class="drawerBody"></div>
-
-    <div class="drawerFooter">
-      <div class="drawerTotals">
-        <div class="totRow"><span class="muted">Subtotal</span><span id="cartSubtotal">$0</span></div>
-        <div id="discountRow" class="totRow" style="display:none"><span class="muted">Descuento</span><span id="cartDiscount">-$0</span></div>
-        <div class="totRow"><span id="cartShipLabel" class="muted">Entrega</span><span id="cartShipping">$0</span></div>
-        <div class="totRow total"><span>Total</span><span id="cartTotal">$0</span></div>
-      </div>
-
-      <button id="checkoutBtn" class="btn btnPrimary" type="button" style="width:100%;justify-content:center;margin-top:12px">
-        Pagar seguro
-      </button>
-
-      <p class="muted" style="margin:10px 0 0;font-weight:750;line-height:1.35">
-        Para envíos con Envia.com, la guía se genera en tiempo real después del pago.
-      </p>
-    </div>
   </aside>
 
-  <!-- PRODUCT MODAL -->
+  <!-- Product Modal -->
   <section id="productModal" class="modal" aria-hidden="true">
     <div class="modalCard">
       <div class="modalHead">
         <h3 id="productTitle" class="modalTitle">Producto</h3>
         <button id="closeProductBtn" class="iconBtn" type="button" aria-label="Cerrar">
-          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M18 6L6 18"></path>
             <path d="M6 6l12 12"></path>
           </svg>
@@ -218,38 +224,40 @@
     </div>
   </section>
 
-  <!-- AI MODAL -->
+  <!-- AI Modal -->
   <section id="aiModal" class="modal" aria-hidden="true">
     <div class="modalCard">
       <div class="modalHead">
         <h3 class="modalTitle">Score AI</h3>
         <button id="closeAiBtn" class="iconBtn" type="button" aria-label="Cerrar">
-          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M18 6L6 18"></path>
             <path d="M6 6l12 12"></path>
           </svg>
         </button>
       </div>
       <div class="modalBody">
-        <div id="aiMessages" class="chatMessages"></div>
-        <div class="chatComposer">
-          <input id="aiInput" class="input" placeholder="Escribe tu pregunta…" />
+        <div id="aiMessages" style="display:flex;flex-direction:column;gap:10px"></div>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <input id="aiInput" class="input" placeholder="Escribe tu pregunta..." />
           <button id="aiSendBtn" class="btn btnPrimary" type="button">Enviar</button>
         </div>
-        <small class="muted" style="display:block;margin-top:8px;font-weight:750">
+        <small style="display:block;margin-top:8px;color:var(--muted);font-weight:650">
           Score AI ayuda con tallas, envíos, disponibilidad y dudas del catálogo.
         </small>
       </div>
     </div>
   </section>
 
-  <!-- LEGAL MODAL -->
+  <!-- Legal Modal -->
   <section id="legalModal" class="modal" aria-hidden="true">
     <div class="modalCard">
       <div class="modalHead">
         <h3 class="modalTitle">Legal</h3>
         <button id="closeLegalBtn" class="iconBtn" type="button" aria-label="Cerrar">
-          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M18 6L6 18"></path>
             <path d="M6 6l12 12"></path>
           </svg>
@@ -259,28 +267,28 @@
     </div>
   </section>
 
-  <!-- Cookie banner (consentimiento para Meta Pixel) -->
-  <div id="cookieBanner" class="cookieBanner" aria-hidden="true">
-    <div class="cookieCard">
-      <div>
-        <strong>Cookies</strong>
-        <div style="margin-top:4px">
-          <small class="muted" style="font-weight:750">Usamos cookies para medición (Meta Pixel). Puedes aceptar o rechazar.</small>
+  <!-- Cookie Banner (Pixel consentimiento) -->
+  <div id="cookieBanner" class="cookieBanner" aria-hidden="true"
+    style="position:fixed;left:18px;right:18px;bottom:88px;max-width:var(--container);margin:0 auto;display:none">
+    <div class="heroCard" style="padding:14px;border-radius:18px">
+      <div style="display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap">
+        <div>
+          <strong>Cookies</strong>
+          <div style="margin-top:4px">
+            <small style="color:var(--muted);font-weight:650">
+              Usamos cookies para medición (Meta Pixel). Puedes aceptar o rechazar.
+            </small>
+          </div>
         </div>
-      </div>
-      <div class="cookieActions">
-        <button id="cookieRejectBtn" class="btn" type="button">Rechazar</button>
-        <button id="cookieAcceptBtn" class="btn btnPrimary" type="button">Aceptar</button>
+        <div style="display:flex;gap:10px">
+          <button id="cookieRejectBtn" class="btn" type="button">Rechazar</button>
+          <button id="cookieAcceptBtn" class="btn btnPrimary" type="button">Aceptar</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Toast -->
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
   <script src="/js/main.js" defer></script>
 </body>
 </html>
