@@ -1,36 +1,34 @@
-// netlify/functions/chat.js
-// Score AI (Gemini)
+"use strict";
 
 const {
   jsonResponse,
   handleOptions,
   safeJsonParse,
-  mustEnv,
   geminiChat,
 } = require("./_shared");
 
-exports.handler = async (event) => {
-  const opt = handleOptions(event);
-  if (opt) return opt;
+const SYSTEM = `Eres SCORE AI: un asistente de tienda para SCORE Store (merch oficial fabricado por Unico Uniformes).
+Responde en espanol, breve y directo.
+Puedes ayudar con: tallas, envios, pagos, cambios, cuidado de prendas y recomendaciones.
+Si no sabes algo, dilo y sugiere contactar por WhatsApp/soporte.`;
 
+exports.handler = async (event) => {
   try {
-    const GEMINI_API_KEY = mustEnv("GEMINI_API_KEY");
+    if (event.httpMethod === "OPTIONS") return handleOptions();
+    if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
 
     const body = safeJsonParse(event.body);
-    const message = String(body?.message || "").trim();
-    if (!message) return jsonResponse(400, { ok: false, error: "Mensaje vacío." });
+    const message = String(body.message || body.text || "").trim();
+    if (!message) return jsonResponse(400, { ok: false, error: "Mensaje vacio" });
 
-    const system = `Eres Score AI, asistente de SCORE STORE (merch oficial de SCORE International, fabricado por Único Uniformes).
-Responde en español, directo, comercial y útil.
-Ayudas con: tallas, envíos (pickup / local TJ / Envia MX / Envia US), pagos (Stripe), dudas del catálogo.
-Si falta información, sugiere WhatsApp (Linktree) o correo ventas.unicotextil@gmail.com.`;
+    const r = await geminiChat({ message, systemInstruction: SYSTEM });
+    if (!r.ok) {
+      return jsonResponse(500, { ok: false, error: r.error || "AI error" });
+    }
 
-    const prompt = `${system}\n\nUsuario: ${message}\n\nRespuesta:`;
-    const reply = await geminiChat({ apiKey: GEMINI_API_KEY, prompt });
-
-    return jsonResponse(200, { ok: true, answer: reply, reply });
-  } catch (err) {
-    console.error(err);
-    return jsonResponse(500, { ok: false, error: err?.message || "Error en Score AI." });
+    const reply = String(r.text || "").trim() || "Listo.";
+    return jsonResponse(200, { ok: true, reply });
+  } catch (e) {
+    return jsonResponse(500, { ok: false, error: "Chat error", details: String(e?.message || e) });
   }
 };
