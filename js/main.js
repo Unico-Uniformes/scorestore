@@ -1,610 +1,650 @@
 /* =========================================================
-   SCORE STORE — MASTER JS PROD 2026 (UNIFIED + FIXED)
-   Version: 2026_PROD_UNIFIED_402
-   - Catalog normalization (baseMXN or price_cents)
-   - PWA stable cache
-   - Shipping quote + checkout integration
+   SCORE STORE — MASTER JS PROD 2026 (FIXED)
+   - Catalog render
+   - Cart + Drawer
+   - Shipping (pickup/local/envia MX/US)
+   - Promo
+   - Stripe Checkout (via /api/checkout)
+   - AI Chat (via /api/chat)
    ========================================================= */
 
-const VERSION = "2026_PROD_UNIFIED_402";
-
-const API = {
-  checkout: "/api/checkout",
-  quote: "/api/quote",
-  chat: "/api/chat"
+/* ---------- config ---------- */
+const CONFIG = {
+  storageKey: "score_cart_2026",
+  catalogUrl: "/data/catalog.json",
+  legalUrl: "/legal.html",
+  endpoints: {
+    checkout: "/api/checkout",
+    quote: "/api/quote",
+    ai: "/api/chat",
+  },
 };
 
-const STORAGE = {
-  cart: "score_cart_2026",
-  cookies: "score_cookie_ok"
-};
+const $ = (q, el = document) => el.querySelector(q);
+const $$ = (q, el = document) => Array.from(el.querySelectorAll(q));
 
-const CATALOG_URL = "/data/catalog.json";
-const PROMOS_URL = "/data/promos.json";
+const fmtMXN = (n) =>
+  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(
+    Number(n || 0)
+  );
 
-const $ = (q) => document.querySelector(q);
-const $$ = (q) => Array.from(document.querySelectorAll(q));
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+const safeUrl = (u) => String(u || "").replace(/[\n\r]/g, "");
 
-const fmtMoney = (cents, currency = "mxn") => {
-  try {
-    return new Intl.NumberFormat("es-MX", { style: "currency", currency: currency.toUpperCase() }).format((cents || 0) / 100);
-  } catch {
-    return `$${((cents || 0) / 100).toFixed(2)}`;
-  }
-};
-
-// Encode URLs safely (assets in this repo include some filenames with spaces)
-const safeUrl = (u) => (typeof u === "string" ? encodeURI(u) : u);
-
+/* ---------- state ---------- */
 const STATE = {
-  sections: [],
   products: [],
+  sections: [],
   currentSection: null,
-  cart: [],
-  promo: { code: "", discount_mxn: 0, label: "" },
-  shipping: { mode: "pickup", postal_code: "", quote_mxn: 0, provider: "" }
+
+  cart: JSON.parse(localStorage.getItem(CONFIG.storageKey) || "[]"),
+
+  shipping: {
+    mode: "pickup", // pickup | local_tj | envia_mx | envia_us
+    postal: "",
+    quote: null, // {amount_mxn, label, carrier, provider}
+    loading: false,
+  },
+
+  promo: {
+    code: "",
+    applied: null, // {code,type,value}
+    discount_mxn: 0,
+  },
+
+  ui: {
+    drawerOpen: false,
+  },
 };
 
-// ---------- Catalog normalization ----------
-function normalizeCatalog(raw) {
-  const out = { sections: [], products: [] };
-  if (!raw || typeof raw !== "object") return out;
-
-  // Sections
-  const sections = Array.isArray(raw.sections) ? raw.sections : [];
-  const sectionCoverMap = {
-    "BAJA_1000": "/assets/logo-baja1000.webp",
-    "BAJA_500": "/assets/logo-baja500.webp",
-    "BAJA_400": "/assets/logo-baja400.webp",
-    "SF_250": "/assets/logo-sf250.webp",
-    "EDICION_2025": "/assets/logo-score.webp",
-    "OTRAS_EDICIONES": "/assets/logo-score.webp",
-    "SCORE": "/assets/logo-score.webp"
-  };
-
-  out.sections = sections.map((s) => {
-    const id = String(s.id || s.sectionId || s.key || "").trim() || "SCORE";
-    const name = String(s.name || s.title || id).trim();
-    const subtitle = String(s.subtitle || s.tagline || "").trim();
-    const cover = String(s.cover || s.logo || sectionCoverMap[id] || "/assets/logo-score.webp").trim();
-    return { id, name, subtitle, cover };
-  });
-
-  // Products
-  const products = Array.isArray(raw.products) ? raw.products : [];
-  out.products = products.map((p) => {
-    const sku = String(p.sku || p.id || p.code || "").trim();
-    const id = String(p.id || sku).trim() || sku;
-
-    let price_cents = Number.isFinite(p.price_cents) ? Number(p.price_cents) : null;
-    if (price_cents == null) {
-      const mxn = Number(p.baseMXN ?? p.priceMXN ?? p.price ?? p.base ?? 0);
-      price_cents = Math.round((Number.isFinite(mxn) ? mxn : 0) * 100);
-    }
-    const currency = String(p.currency || "mxn").toLowerCase();
-
-    const sectionId = String(p.sectionId || p.section || "SCORE").toUpperCase();
-    const name = String(p.name || p.title || sku).trim();
-    const desc = String(p.desc || p.description || p.short || "").trim();
-
-    const sizes = Array.isArray(p.sizes) ? p.sizes : (typeof p.sizes === "string" ? [p.sizes] : []);
-    const normalizedSizes = (sizes.length ? sizes : ["Unitalla"]).map((s) => String(s).trim()).filter(Boolean);
-
-    const img = String(p.img || p.image || p.image_url || "").trim();
-    const images = Array.isArray(p.images) ? p.images : [];
-    const allImages = [img, ...images].filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim());
-
-    return {
-      id,
-      sku: sku || id,
-      name,
-      desc,
-      sectionId,
-      price_cents,
-      currency,
-      sizes: normalizedSizes,
-      img: allImages[0] || "/assets/logo-score.webp",
-      images: allImages.length ? allImages : ["/assets/logo-score.webp"]
-    };
-  });
-
-  if (!out.sections.length && out.products.length) {
-    const ids = Array.from(new Set(out.products.map((p) => p.sectionId))).filter(Boolean);
-    out.sections = ids.map((id) => ({
-      id,
-      name: id.replace(/_/g, " "),
-      subtitle: "",
-      cover: sectionCoverMap[id] || "/assets/logo-score.webp"
-    }));
-  }
-
-  return out;
-}
-
-// ---------- Storage ----------
-function loadCart() {
-  try {
-    const raw = localStorage.getItem(STORAGE.cart);
-    STATE.cart = raw ? JSON.parse(raw) : [];
-  } catch {
-    STATE.cart = [];
-  }
-  updateCartBadge();
-}
-
+/* ---------- storage ---------- */
 function saveCart() {
-  localStorage.setItem(STORAGE.cart, JSON.stringify(STATE.cart));
-  updateCartBadge();
-}
-
-function updateCartBadge() {
-  const qty = STATE.cart.reduce((a, it) => a + (Number(it.qty) || 0), 0);
+  localStorage.setItem(CONFIG.storageKey, JSON.stringify(STATE.cart));
+  const qty = STATE.cart.reduce((sum, it) => sum + (it.qty || 0), 0);
   $$(".cartCount").forEach((el) => (el.textContent = String(qty)));
 }
 
-// ---------- UI ----------
-function show(el) { if (el) el.classList.remove("hidden"); }
-function hide(el) { if (el) el.classList.add("hidden"); }
-
-function openCart() {
-  $("#cartDrawer")?.classList.add("open");
-  $("#overlay")?.classList.remove("hidden");
-  $("#overlay")?.classList.add("show");
-  renderCart();
-}
-function closeCart() {
-  $("#cartDrawer")?.classList.remove("open");
-  $("#overlay")?.classList.add("hidden");
-  $("#overlay")?.classList.remove("show");
-}
-window.openCart = openCart;
-window.closeCart = closeCart;
-
-window.scrollToCatalog = () => {
-  document.getElementById("catalogos")?.scrollIntoView({ behavior: "smooth" });
-};
-
-// ---------- Promos ----------
-async function fetchPromos() {
-  try {
-    const res = await fetch(PROMOS_URL, { cache: "no-store" });
-    if (!res.ok) return;
-    const promos = await res.json();
-
-    const banner = $("#promoBanner");
-    if (promos?.active && promos?.banner && banner) {
-      banner.textContent = promos.banner;
-      show(banner);
-    } else if (banner) {
-      hide(banner);
-    }
-
-    STATE._promos = promos;
-  } catch {}
+function normalizeCart() {
+  STATE.cart = (Array.isArray(STATE.cart) ? STATE.cart : [])
+    .map((it) => ({
+      sku: String(it.sku || it.id || "").trim(),
+      name: String(it.name || "Producto"),
+      img: safeUrl(it.img || ""),
+      price_mxn: Number(it.price_mxn || it.price || 0) || 0,
+      size: String(it.size || "Unitalla"),
+      qty: clamp(parseInt(it.qty || 1, 10) || 1, 1, 99),
+    }))
+    .filter((it) => it.sku && it.qty > 0);
+  saveCart();
 }
 
-function applyPromo() {
-  const input = $("#promoInput");
-  const hint = $("#promoHint");
-  const code = String(input?.value || "").trim().toUpperCase();
-  if (!code) {
-    STATE.promo = { code: "", discount_mxn: 0, label: "" };
-    if (hint) hint.textContent = "";
-    renderCart();
-    return;
-  }
+/* ---------- catalog ---------- */
+function normalizeCatalog(data) {
+  const sections = Array.isArray(data?.sections) ? data.sections : [];
+  const products = Array.isArray(data?.products) ? data.products : [];
 
-  const codes = Array.isArray(STATE._promos?.codes) ? STATE._promos.codes : [];
-  const found = codes.find((c) => String(c.code || "").toUpperCase() === code);
+  STATE.sections = sections.map((s) => ({
+    id: String(s.id || "").toUpperCase(),
+    name: String(s.name || ""),
+    badge: String(s.badge || ""),
+  }));
 
-  if (!found) {
-    STATE.promo = { code: "", discount_mxn: 0, label: "" };
-    if (hint) hint.textContent = "Código inválido.";
-  } else {
-    STATE.promo = {
-      code,
-      discount_mxn: Number(found.discount_mxn) || 0,
-      label: String(found.label || "")
-    };
-    if (hint) hint.textContent = `Aplicado: ${STATE.promo.label || code}`;
-  }
-
-  renderCart();
-}
-window.applyPromo = applyPromo;
-
-// ---------- Shipping ----------
-function readShipMode() {
-  const selected = document.querySelector('input[name="shipMode"]:checked');
-  return String(selected?.value || "pickup");
+  STATE.products = products.map((p) => ({
+    id: String(p.id || "").trim(),
+    sku: String(p.sku || p.id || "").trim(),
+    name: String(p.name || "Producto"),
+    sectionId: String(p.sectionId || "SCORE").toUpperCase(),
+    baseMXN: Number(p.baseMXN || p.price || 0) || 0,
+    sizes: Array.isArray(p.sizes) && p.sizes.length ? p.sizes : ["Unitalla"],
+    img: safeUrl(p.img || ""),
+    images: Array.isArray(p.images) ? p.images.map(safeUrl) : [],
+    desc: String(p.desc || ""),
+  }));
 }
 
-function setShipMode(mode) {
-  STATE.shipping.mode = mode;
-  const wrap = $("#shipPostalWrap");
-  const hint = $("#shipQuoteHint");
+/* ---------- render: sections ---------- */
+function renderSections() {
+  const wrap = $("#category-view");
+  if (!wrap) return;
+  wrap.innerHTML = "";
 
-  if (mode === "envia_mx" || mode === "envia_us") {
-    show(wrap);
-    if (hint) hint.textContent = "Ingresa tu CP y cotiza.";
-  } else {
-    hide(wrap);
-    if (hint) hint.textContent = "";
-    STATE.shipping.postal_code = "";
-    STATE.shipping.quote_mxn = mode === "local_tj" ? 200 : 0;
-    STATE.shipping.provider = mode === "local_tj" ? "local" : "pickup";
-  }
+  const logos = {
+    BAJA_1000: "/assets/logo-baja1000.webp",
+    BAJA_500: "/assets/logo-baja500.webp",
+    BAJA_400: "/assets/logo-baja400.webp",
+    SF_250: "/assets/logo-sf250.webp",
+    SCORE: "/assets/logo-score.webp",
+  };
 
-  renderCart();
-}
+  const list = STATE.sections.length
+    ? STATE.sections
+    : [
+        { id: "BAJA_1000", name: "Baja 1000" },
+        { id: "BAJA_500", name: "Baja 500" },
+        { id: "BAJA_400", name: "Baja 400" },
+        { id: "SF_250", name: "San Felipe 250" },
+        { id: "SCORE", name: "SCORE" },
+      ];
 
-async function quoteShipping() {
-  const mode = readShipMode();
-  const postal = String($("#shipPostal")?.value || "").trim();
+  list.forEach((sec) => {
+    const card = document.createElement("button");
+    card.className = "cat-card";
+    card.type = "button";
 
-  STATE.shipping.mode = mode;
-  STATE.shipping.postal_code = postal;
+    const imgUrl = logos[sec.id] || logos.SCORE;
 
-  const hint = $("#shipQuoteHint");
-  if (hint) hint.textContent = "Cotizando...";
-
-  try {
-    const items_qty = STATE.cart.reduce((a, it) => a + (Number(it.qty) || 0), 0) || 1;
-
-    const res = await fetch(API.quote, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        mode,
-        postal_code: postal,
-        items_qty,
-        country_code: mode === "envia_us" ? "US" : "MX"
-      })
-    });
-
-    const data = await res.json();
-    if (!data?.ok) {
-      STATE.shipping.quote_mxn = 0;
-      STATE.shipping.provider = "error";
-      if (hint) hint.textContent = "No se pudo cotizar. Revisa el CP.";
-    } else {
-      STATE.shipping.quote_mxn = Number(data.cost) || 0;
-      STATE.shipping.provider = data.provider || "envia";
-      if (hint) hint.textContent = `Envío: $${STATE.shipping.quote_mxn} MXN (${STATE.shipping.provider})`;
-    }
-  } catch (e) {
-    STATE.shipping.quote_mxn = 350;
-    STATE.shipping.provider = "manual_fallback";
-    if (hint) hint.textContent = "Fallback: $350 MXN (temporal)";
-  }
-
-  renderCart();
-}
-window.quoteShipping = quoteShipping;
-
-// ---------- Catalog UI ----------
-function setTopHeroFromCatalog(catalog) {
-  const title = $("#heroTitle");
-  const subtitle = $("#heroSubtitle");
-
-  if (catalog?.hero?.title && title) title.textContent = catalog.hero.title;
-  if (catalog?.hero?.subtitle && subtitle) subtitle.textContent = catalog.hero.subtitle;
-}
-
-function renderEditions() {
-  const grid = $("#editionGrid");
-  if (!grid) return;
-
-  grid.innerHTML = "";
-
-  STATE.sections.forEach((sec) => {
-    const card = document.createElement("div");
-    card.className = "editionCard";
     card.innerHTML = `
-      <div class="editionMedia">
-        <img src="${safeUrl(sec.cover)}" alt="${sec.name}">
-      </div>
-      <div class="editionBody">
-        <div class="editionTitle">${sec.name}</div>
-        <div class="editionSub">${sec.subtitle || ""}</div>
-      </div>
+      <img class="cat-logo" src="${imgUrl}" alt="${sec.name}">
+      <div class="cat-title">${sec.name}</div>
+      ${sec.badge ? `<div class="cat-badge">${sec.badge}</div>` : ""}
     `;
-    card.onclick = () => openSection(sec.id);
-    grid.appendChild(card);
+    card.addEventListener("click", () => showProducts(sec.id));
+    wrap.appendChild(card);
   });
 }
 
-function openSection(sectionId) {
-  STATE.currentSection = sectionId;
-  $("#currentEditionTitle").textContent = (STATE.sections.find(s => s.id === sectionId)?.name) || sectionId.replace(/_/g, " ");
-  $("#currentEditionSubtitle").textContent = (STATE.sections.find(s => s.id === sectionId)?.subtitle) || "";
+/* ---------- render: products ---------- */
+function showProducts(sectionId) {
+  STATE.currentSection = String(sectionId || "").toUpperCase();
 
-  hide($("#catalogos"));
-  show($("#productos"));
-  renderProducts();
-}
-window.backToEditions = () => {
-  STATE.currentSection = null;
-  show($("#catalogos"));
-  hide($("#productos"));
-};
+  $("#category-view")?.classList.add("hidden");
+  $("#product-view")?.classList.remove("hidden");
 
-function renderProducts() {
+  const title = $("#current-category-title");
+  if (title) title.textContent = STATE.currentSection.replace(/_/g, " ");
+
   const grid = $("#productsGrid");
   if (!grid) return;
   grid.innerHTML = "";
 
-  const list = STATE.products.filter((p) => p.sectionId === STATE.currentSection);
-  list.forEach((p) => {
+  const filtered = STATE.products.filter((p) => p.sectionId === STATE.currentSection);
+
+  filtered.forEach((p) => {
+    const safeId = p.id.replace(/[^a-z0-9]/gi, "");
+    const back = p.images && p.images.length > 1 ? p.images[1] : "";
+
     const card = document.createElement("div");
-    card.className = "productCard";
+    card.className = "product-card";
     card.innerHTML = `
-      <div class="productMedia">
-        <img src="${safeUrl(p.img)}" alt="${p.name}">
+      <div class="p-media">
+        <img src="${p.img}" alt="${p.name}">
+        ${back ? `<img src="${back}" alt="${p.name}" class="img-back">` : ""}
       </div>
-      <div class="productBody">
-        <div class="productName">${p.name}</div>
-        <div class="productDesc">${p.desc || ""}</div>
-        <div class="productBottom">
-          <div class="priceTag">${fmtMoney(p.price_cents, p.currency)}</div>
-          <button class="addBtn" data-sku="${p.sku}">Ver</button>
-        </div>
+      <div class="p-body">
+        <h3 class="p-name">${p.name}</h3>
+        <div class="p-desc">${p.desc || ""}</div>
+        <span class="p-price">${fmtMXN(p.baseMXN)}</span>
+        <select id="size-${safeId}" class="p-size-sel">
+          ${p.sizes.map((s) => `<option value="${s}">${s}</option>`).join("")}
+        </select>
+        <button class="p-btn-add" type="button" data-sku="${p.sku}" data-safeid="${safeId}">
+          AGREGAR AL CARRITO
+        </button>
       </div>
     `;
-    card.querySelector(".addBtn").onclick = () => openProduct(p.sku);
+
+    card.querySelector(".p-btn-add")?.addEventListener("click", () => {
+      const size = $(`#size-${safeId}`)?.value || "Unitalla";
+      addToCart(p.sku, size);
+    });
+
     grid.appendChild(card);
   });
 }
 
-function openProduct(sku) {
-  const p = STATE.products.find((x) => x.sku === sku);
-  if (!p) return;
-
-  $("#modalName").textContent = p.name;
-  $("#modalDesc").textContent = p.desc || "";
-  $("#modalPrice").textContent = fmtMoney(p.price_cents, p.currency);
-
-  const mainImg = $("#modalMainImg");
-  const thumbs = $("#modalThumbs");
-  if (mainImg) mainImg.src = safeUrl(p.images?.[0] || p.img);
-
-  if (thumbs) {
-    thumbs.innerHTML = "";
-    (p.images || [p.img]).forEach((img) => {
-      const t = document.createElement("img");
-      t.src = safeUrl(img);
-      t.onclick = () => (mainImg.src = safeUrl(img));
-      thumbs.appendChild(t);
-    });
-  }
-
-  const sel = $("#modalSize");
-  if (sel) {
-    sel.innerHTML = "";
-    (p.sizes || ["Unitalla"]).forEach((s) => {
-      const o = document.createElement("option");
-      o.value = s;
-      o.textContent = s;
-      sel.appendChild(o);
-    });
-  }
-
-  const btn = $("#modalAddBtn");
-  if (btn) {
-    btn.onclick = () => {
-      addToCart(p.sku, $("#modalSize")?.value || "Unitalla");
-      closeProduct();
-      openCart();
-    };
-  }
-
-  show($("#productModal"));
+function showCategories() {
+  $("#product-view")?.classList.add("hidden");
+  $("#category-view")?.classList.remove("hidden");
+  STATE.currentSection = null;
 }
-function closeProduct() {
-  hide($("#productModal"));
-}
-window.closeProduct = closeProduct;
 
-// ---------- Cart ----------
+/* ---------- cart ops ---------- */
 function addToCart(sku, size) {
-  const p = STATE.products.find((x) => x.sku === sku);
+  const p = STATE.products.find((x) => x.sku === sku || x.id === sku);
   if (!p) return;
 
-  const key = `${sku}::${String(size || "Unitalla")}`;
-  const existing = STATE.cart.find((it) => it.key === key);
+  const key = `${p.sku}__${String(size || "Unitalla")}`;
+  const ex = STATE.cart.find((i) => `${i.sku}__${i.size}` === key);
 
-  if (existing) existing.qty += 1;
+  if (ex) ex.qty = clamp((ex.qty || 1) + 1, 1, 99);
   else {
     STATE.cart.push({
-      key,
-      sku,
-      id: p.id,
+      sku: p.sku,
       name: p.name,
-      price_cents: p.price_cents,
-      currency: p.currency,
       img: p.img,
+      price_mxn: p.baseMXN,
       size: String(size || "Unitalla"),
-      qty: 1
+      qty: 1,
     });
   }
 
   saveCart();
+  openDrawer();
+  renderDrawer();
 }
 
-function changeQty(key, delta) {
-  const it = STATE.cart.find((x) => x.key === key);
+function removeFromCart(index) {
+  STATE.cart.splice(index, 1);
+  normalizeCart();
+  renderDrawer();
+}
+
+function setQty(index, qty) {
+  const it = STATE.cart[index];
   if (!it) return;
-  it.qty = Math.max(1, (Number(it.qty) || 1) + delta);
-  saveCart();
-  renderCart();
+  it.qty = clamp(parseInt(qty, 10) || 1, 1, 99);
+  normalizeCart();
+  renderDrawer();
 }
 
-function removeItem(key) {
-  STATE.cart = STATE.cart.filter((x) => x.key !== key);
-  saveCart();
-  renderCart();
+/* ---------- totals ---------- */
+function calcSubtotal() {
+  return STATE.cart.reduce((sum, it) => sum + (Number(it.price_mxn) || 0) * (it.qty || 1), 0);
 }
 
-function computeTotals() {
-  const subtotal = STATE.cart.reduce((a, it) => a + (Number(it.price_cents) || 0) * (Number(it.qty) || 0), 0);
-
-  const mode = readShipMode();
-  let shipping_mxn = 0;
-  if (mode === "pickup") shipping_mxn = 0;
-  if (mode === "local_tj") shipping_mxn = 200;
-  if (mode === "envia_mx" || mode === "envia_us") shipping_mxn = Number(STATE.shipping.quote_mxn) || 0;
-
-  const shipping_cents = Math.round(shipping_mxn * 100);
-
-  const discount_cents = Math.round((Number(STATE.promo.discount_mxn) || 0) * 100);
-
-  const total = Math.max(0, subtotal + shipping_cents - discount_cents);
-
-  return { subtotal, shipping_cents, discount_cents, total, shipping_mxn, mode };
+function calcShipping() {
+  if (STATE.shipping.mode === "pickup") return 0;
+  if (STATE.shipping.mode === "local_tj") return 0; // can be billed later or flat in backend
+  if (STATE.shipping.quote && Number.isFinite(STATE.shipping.quote.amount_mxn)) {
+    return Number(STATE.shipping.quote.amount_mxn) || 0;
+  }
+  return 0;
 }
 
-function renderCart() {
+function calcDiscount() {
+  return Number(STATE.promo.discount_mxn || 0) || 0;
+}
+
+function calcTotal() {
+  return Math.max(0, calcSubtotal() + calcShipping() - calcDiscount());
+}
+
+/* ---------- drawer ui ---------- */
+function openDrawer() {
+  STATE.ui.drawerOpen = true;
+  $("#cartDrawer")?.classList.add("open");
+  $("#pageOverlay")?.classList.add("show");
+  document.body.classList.add("no-scroll");
+}
+
+function closeDrawer() {
+  STATE.ui.drawerOpen = false;
+  $("#cartDrawer")?.classList.remove("open");
+  $("#pageOverlay")?.classList.remove("show");
+  document.body.classList.remove("no-scroll");
+}
+
+function renderDrawer() {
   const itemsWrap = $("#cartItems");
   if (!itemsWrap) return;
 
   if (!STATE.cart.length) {
-    itemsWrap.innerHTML = `<p class="muted" style="text-align:center;padding:18px">Tu carrito está vacío</p>`;
+    itemsWrap.innerHTML = `<p style="text-align:center;padding:20px;opacity:0.6;">Tu carrito está vacío</p>`;
   } else {
     itemsWrap.innerHTML = "";
-
-    STATE.cart.forEach((it) => {
+    STATE.cart.forEach((it, idx) => {
       const row = document.createElement("div");
       row.className = "cartRow";
       row.innerHTML = `
-        <img src="${safeUrl(it.img)}" alt="${it.name}">
-        <div>
-          <div class="cartName">${it.name}</div>
-          <div class="cartMeta">${fmtMoney(it.price_cents, it.currency)} · Talla: ${it.size}</div>
-          <div class="qtyRow">
-            <button class="qtyBtn" data-act="dec">−</button>
-            <div><strong>${it.qty}</strong></div>
-            <button class="qtyBtn" data-act="inc">+</button>
+        <div class="cartThumb"><img src="${it.img}" alt=""></div>
+        <div class="cartInfo">
+          <div class="name">${it.name}</div>
+          <div class="price">${fmtMXN(it.price_mxn)} x ${it.qty}</div>
+          <div class="meta">Talla: ${it.size}</div>
+
+          <div class="qtyLine">
+            <button type="button" class="qtyBtn" data-d="-1">–</button>
+            <input class="qtyInp" value="${it.qty}" inputmode="numeric">
+            <button type="button" class="qtyBtn" data-d="1">+</button>
           </div>
         </div>
-        <button class="removeBtn" title="Eliminar">✕</button>
+        <button class="rmBtn" type="button" aria-label="Quitar">✕</button>
       `;
 
-      row.querySelector('[data-act="dec"]').onclick = () => changeQty(it.key, -1);
-      row.querySelector('[data-act="inc"]').onclick = () => changeQty(it.key, +1);
-      row.querySelector(".removeBtn").onclick = () => removeItem(it.key);
+      row.querySelector(".rmBtn")?.addEventListener("click", () => removeFromCart(idx));
+
+      const inp = row.querySelector(".qtyInp");
+      row.querySelectorAll(".qtyBtn").forEach((b) => {
+        b.addEventListener("click", () => {
+          const d = parseInt(b.getAttribute("data-d") || "0", 10);
+          setQty(idx, (STATE.cart[idx]?.qty || 1) + d);
+        });
+      });
+
+      inp?.addEventListener("change", () => setQty(idx, inp.value));
 
       itemsWrap.appendChild(row);
     });
   }
 
-  const totals = computeTotals();
+  // shipping UI
+  const shipMode = $("#shipMode");
+  if (shipMode) shipMode.value = STATE.shipping.mode;
 
-  $("#cartSubtotal").textContent = fmtMoney(totals.subtotal, "mxn");
-  $("#cartShipping").textContent = totals.shipping_cents ? fmtMoney(totals.shipping_cents, "mxn") : "Gratis";
-  $("#cartDiscount").textContent = totals.discount_cents ? `- ${fmtMoney(totals.discount_cents, "mxn")}` : "$0";
-  $("#cartTotal").textContent = fmtMoney(totals.total, "mxn");
+  const postalWrap = $("#postalWrap");
+  if (postalWrap) {
+    postalWrap.classList.toggle("hidden", !(STATE.shipping.mode === "envia_mx" || STATE.shipping.mode === "envia_us"));
+  }
+
+  const postalInp = $("#postalCode");
+  if (postalInp) postalInp.value = STATE.shipping.postal || "";
+
+  const shipLine = $("#shippingLine");
+  if (shipLine) {
+    if (STATE.shipping.mode === "pickup") shipLine.textContent = "Gratis (Pickup)";
+    else if (STATE.shipping.mode === "local_tj") shipLine.textContent = "A coordinar (TJ)";
+    else if (STATE.shipping.loading) shipLine.textContent = "Cotizando…";
+    else if (STATE.shipping.quote) shipLine.textContent = `${fmtMXN(STATE.shipping.quote.amount_mxn)} (${STATE.shipping.quote.label || "Envia"})`;
+    else shipLine.textContent = "Pendiente";
+  }
+
+  // promo
+  const promoInp = $("#promoCodeInput");
+  if (promoInp) promoInp.value = STATE.promo.code || "";
+  const promoMsg = $("#promoMessage");
+  if (promoMsg) {
+    promoMsg.textContent = STATE.promo.applied
+      ? `Aplicado: ${STATE.promo.applied.code}`
+      : (STATE.promo.code ? "Código no aplicado" : "");
+    promoMsg.className = `promo-msg ${STATE.promo.applied ? "promo-success" : (STATE.promo.code ? "promo-error" : "")}`;
+  }
+
+  // totals
+  $("#cartSubtotal") && ($("#cartSubtotal").textContent = fmtMXN(calcSubtotal()));
+  $("#cartShipping") && ($("#cartShipping").textContent = fmtMXN(calcShipping()));
+  $("#cartDiscount") && ($("#cartDiscount").textContent = calcDiscount() ? `- ${fmtMXN(calcDiscount())}` : fmtMXN(0));
+  $("#cartTotal") && ($("#cartTotal").textContent = fmtMXN(calcTotal()));
+
+  // bind drawer buttons (idempotent by replacing DOM often)
+  $("#closeDrawerBtn")?.addEventListener("click", closeDrawer);
+  $("#pageOverlay")?.addEventListener("click", closeDrawer);
+
+  $("#shipMode")?.addEventListener("change", (e) => {
+    const r = e.target;
+    STATE.shipping.mode = String(r.value);
+    STATE.shipping.quote = null;
+    renderDrawer();
+    if ((STATE.shipping.mode === "envia_mx" || STATE.shipping.mode === "envia_us") && String(STATE.shipping.postal || "").trim()) {
+      setTimeout(() => { quoteShipping(); }, 50);
+    }
+  });
+
+  $("#postalCode")?.addEventListener("input", (e) => {
+    STATE.shipping.postal = String(e.target.value || "").trim();
+  });
+
+  $("#quoteBtn")?.addEventListener("click", quoteShipping);
+
+  $("#applyPromoBtn")?.addEventListener("click", applyPromo);
+
+  $("#checkoutBtn")?.addEventListener("click", doCheckout);
+
+  // legal modal
+  $("#openLegal")?.addEventListener("click", openLegal);
 }
 
-// ---------- Checkout ----------
-async function checkout() {
-  if (!STATE.cart.length) return alert("Tu carrito está vacío.");
+/* ---------- shipping quote ---------- */
+async function quoteShipping() {
+  if (!(STATE.shipping.mode === "envia_mx" || STATE.shipping.mode === "envia_us")) return;
 
-  const btn = $("#checkoutBtn");
-  btn.disabled = true;
-  const original = btn.textContent;
-  btn.textContent = "Procesando...";
+  const postal = String(STATE.shipping.postal || "").trim();
+  if (postal.length < 4) {
+    alert("Ingresa un código postal válido.");
+    return;
+  }
 
-  const totals = computeTotals();
+  STATE.shipping.loading = true;
+  renderDrawer();
 
   try {
-    const postal = String($("#shipPostal")?.value || "").trim();
-    const payload = {
-      cart: STATE.cart.map((it) => ({ sku: it.sku, qty: it.qty, size: it.size })),
-      shipping_mode: totals.mode,
-      shipping_cost_mxn: totals.shipping_mxn,
-      shipping_postal_code: (totals.mode === "envia_mx" || totals.mode === "envia_us") ? postal : "",
-      promo_code: STATE.promo.code || "",
-      discount_mxn: Number(STATE.promo.discount_mxn) || 0
-    };
-
-    const res = await fetch(API.checkout, {
+    const res = await fetch(CONFIG.endpoints.quote, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        shipping_mode: STATE.shipping.mode,
+        postal_code: postal,
+        items_qty: STATE.cart.reduce((sum, it) => sum + (it.qty || 1), 0),
+        items: STATE.cart.map((it) => ({ sku: it.sku, qty: it.qty })),
+      }),
     });
 
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || "No se pudo cotizar.");
+
+    STATE.shipping.quote = {
+      amount_mxn: Number(data.amount_mxn || 0) || 0,
+      label: data.label || "Standard",
+      carrier: data.carrier || "",
+      provider: data.provider || "envia",
+    };
+  } catch (err) {
+    console.error(err);
+    alert("No se pudo cotizar el envío. Se usará una tarifa estimada.");
+    STATE.shipping.quote = { amount_mxn: 350, label: "Estimado", carrier: "", provider: "fallback" };
+  } finally {
+    STATE.shipping.loading = false;
+    renderDrawer();
+  }
+}
+
+/* ---------- promo ---------- */
+async function applyPromo() {
+  const code = String($("#promoCodeInput")?.value || "").trim().toUpperCase();
+  STATE.promo.code = code;
+  STATE.promo.applied = null;
+  STATE.promo.discount_mxn = 0;
+
+  if (!code) {
+    renderDrawer();
+    return;
+  }
+
+  try {
+    const res = await fetch("/data/promos.json", { cache: "no-store" });
     const data = await res.json();
-    if (!data?.url) throw new Error("No se pudo iniciar el checkout.");
+    const rules = Array.isArray(data?.rules) ? data.rules : [];
+    const rule = rules.find((r) => String(r.code || "").toUpperCase() === code && r.active);
+
+    if (!rule) throw new Error("Código inválido.");
+
+    const subtotal = calcSubtotal();
+
+    if (rule.type === "percent") {
+      const pct = Number(rule.value || 0);
+      STATE.promo.discount_mxn = Math.round(subtotal * pct);
+    } else if (rule.type === "fixed_mxn") {
+      STATE.promo.discount_mxn = Math.min(subtotal, Number(rule.value || 0));
+    } else if (rule.type === "free_shipping") {
+      // handled in backend; show as info
+      STATE.promo.discount_mxn = 0;
+    }
+
+    STATE.promo.applied = { code, ...rule };
+  } catch (err) {
+    console.error(err);
+    STATE.promo.applied = null;
+    STATE.promo.discount_mxn = 0;
+  } finally {
+    renderDrawer();
+  }
+}
+
+/* ---------- checkout ---------- */
+async function doCheckout() {
+  if (!STATE.cart.length) return;
+
+  const btn = $("#checkoutBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "PROCESANDO…";
+  }
+
+  try {
+    // Validate required for Envia
+    if ((STATE.shipping.mode === "envia_mx" || STATE.shipping.mode === "envia_us") && String(STATE.shipping.postal || "").trim().length < 4) {
+      alert("Ingresa tu código postal para el envío.");
+      return;
+    }
+
+    const payload = {
+      items: STATE.cart.map((it) => ({
+        sku: it.sku,
+        qty: it.qty,
+        size: it.size,
+      })),
+      shipping_mode: STATE.shipping.mode,
+      postal_code: STATE.shipping.postal,
+      promo_code: STATE.promo.applied ? STATE.promo.applied.code : "",
+    };
+
+    const res = await fetch(CONFIG.endpoints.checkout, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok || !data.url) throw new Error(data.error || "Checkout error");
 
     window.location.href = data.url;
-  } catch (e) {
-    alert(e?.message || "Error de checkout.");
+  } catch (err) {
+    console.error(err);
+    alert("No se pudo iniciar el pago. Intenta de nuevo.");
   } finally {
-    btn.disabled = false;
-    btn.textContent = original;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "PAGAR AHORA";
+    }
   }
 }
-window.checkout = checkout;
 
-// ---------- Cookies ----------
-function maybeShowCookieBanner() {
-  const ok = localStorage.getItem(STORAGE.cookies) === "1";
-  if (!ok) show($("#cookieBanner"));
+/* ---------- legal modal ---------- */
+function openModal(sel) {
+  const el = $(sel);
+  if (!el) return;
+  el.classList.add("open");
+  $("#pageOverlayModal")?.classList.add("show");
+  document.body.classList.add("no-scroll");
 }
-function acceptCookies() {
-  localStorage.setItem(STORAGE.cookies, "1");
-  hide($("#cookieBanner"));
-}
-window.acceptCookies = acceptCookies;
 
-// ---------- Init ----------
-async function loadCatalogAndPromos() {
+function closeModal(sel) {
+  const el = $(sel);
+  if (!el) return;
+  el.classList.remove("open");
+  $("#pageOverlayModal")?.classList.remove("show");
+  document.body.classList.remove("no-scroll");
+}
+
+window.closeLegal = () => closeModal("#legalModal");
+
+// ---------- legal ----------
+async function openLegal() {
   try {
-    const resCat = await fetch(CATALOG_URL, { cache: "no-store" });
-    if (!resCat.ok) throw new Error(`Catalog fetch failed: ${resCat.status}`);
-    const catalogJson = await resCat.json();
-    setTopHeroFromCatalog(catalogJson);
+    const res = await fetch(CONFIG.legalUrl, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const html = await res.text();
 
-    const normalized = normalizeCatalog(catalogJson);
-    STATE.sections = normalized.sections;
-    STATE.products = normalized.products;
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const main = doc.querySelector("main");
+    const content = main
+      ? main.innerHTML
+      : "<div class=\"muted\">Legal no disponible.</div>";
 
-    renderEditions();
-  } catch (e) {
-    console.error("Error loading catalog", e);
+    const body = document.querySelector("#legalBody");
+    if (body) body.innerHTML = content;
+    openModal("#legalModal");
+  } catch (err) {
+    console.error(err);
+    const body = document.querySelector("#legalBody");
+    if (body) body.innerHTML = "<div class=\"muted\">No se pudo cargar Legal.</div>";
+    openModal("#legalModal");
   }
-
-  await fetchPromos();
 }
 
-function initShippingUI() {
-  $$('input[name="shipMode"]').forEach((r) => {
-    r.addEventListener("change", () => setShipMode(readShipMode()));
+// ---------- init ----------
+async function init() {
+  normalizeCart();
+
+  // load catalog
+  try {
+    const res = await fetch(CONFIG.catalogUrl, { cache: "no-store" });
+    const data = await res.json();
+    normalizeCatalog(data);
+    renderSections();
+  } catch (err) {
+    console.error("Error loading catalog", err);
+    renderSections(); // fallback sections
+  }
+
+  // UI binds
+  $$(".openCart").forEach((b) => b.addEventListener("click", () => {
+    openDrawer();
+    renderDrawer();
+  }));
+
+  $("#backToCategories")?.addEventListener("click", showCategories);
+
+  $("#scrollToCatalog")?.addEventListener("click", () => {
+    $("#catalog-section")?.scrollIntoView({ behavior: "smooth" });
   });
-  setShipMode(readShipMode());
-}
 
-function initSplash() {
+  // splash
   const splash = $("#splash");
-  if (!splash) return;
-  setTimeout(() => {
-    splash.style.opacity = "0";
-    setTimeout(() => splash.remove(), 460);
-  }, 1200);
-}
+  if (splash) {
+    setTimeout(() => {
+      splash.style.opacity = "0";
+      setTimeout(() => (splash.style.display = "none"), 450);
+    }, 1200);
+  }
 
-function initPWA() {
+  // register SW
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register(`/sw.js?v=${VERSION}`).catch(() => null);
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    });
   }
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-  window.__SCORE_VERSION = VERSION;
-  loadCart();
-  initSplash();
-  initPWA();
-  maybeShowCookieBanner();
-  initShippingUI();
-  await loadCatalogAndPromos();
+document.addEventListener("DOMContentLoaded", init);
+
+/* ---------- AI chat (optional UI) ---------- */
+window.openAi = () => openModal("#aiModal");
+window.closeAi = () => closeModal("#aiModal");
+
+async function sendAi() {
+  const inp = $("#aiInput");
+  const out = $("#aiOutput");
+  if (!inp || !out) return;
+  const text = String(inp.value || "").trim();
+  if (!text) return;
+
+  out.innerHTML += `<div class="aiMsg user">${escapeHtml(text)}</div>`;
+  inp.value = "";
+
+  try {
+    const res = await fetch(CONFIG.endpoints.ai, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message: text }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || "AI error");
+    out.innerHTML += `<div class="aiMsg bot">${escapeHtml(data.reply || "…")}</div>`;
+    out.scrollTop = out.scrollHeight;
+  } catch (err) {
+    console.error(err);
+    out.innerHTML += `<div class="aiMsg bot">No pude responder ahorita.</div>`;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+$("#aiSendBtn")?.addEventListener("click", sendAi);
+$("#aiInput")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendAi();
 });
