@@ -27,10 +27,9 @@ export const handler = withCORS(async (event) => {
 
     if (ev.type === "checkout.session.completed") {
       const session = ev.data.object;
-
       const org_id = session?.metadata?.org_id || null;
 
-      // Update order paid (UPSERT by stripe_session_id)
+      // UPSERT order (idempotente)
       await db.from("orders").upsert(
         {
           org_id: org_id || null,
@@ -53,22 +52,23 @@ export const handler = withCORS(async (event) => {
         { onConflict: "stripe_session_id" }
       );
 
-      // (Optional) If you generate label on paid, you can store it.
-      // If you already generate it elsewhere, this stays safe due to UPSERT.
-      // Example label object expected in session.metadata or elsewhere:
+      // Si traes label en metadata (opcional): UPSERT idempotente
       const label = session?.metadata?.label ? safeJson(session.metadata.label) : null;
-
       if (label) {
-        await db.from("shipping_labels").upsert({
-                org_id: org_id || null,
-                stripe_session_id: session.id,
-                provider: "envia",
-                created_at: new Date().toISOString(),
-                carrier: label.carrier || null,
-                tracking_number: label.tracking_number || null,
-                label_url: label.label_url || null,
-                raw: label.raw || null,
-              }, { onConflict: "stripe_session_id,provider" });
+        await db.from("shipping_labels").upsert(
+          {
+            org_id: org_id || null,
+            stripe_session_id: session.id,
+            provider: "envia",
+            carrier: label.carrier || null,
+            service: label.service || null,
+            tracking_number: label.tracking_number || null,
+            label_url: label.label_url || null,
+            status: label.status || null,
+            raw: label.raw || label || null,
+          },
+          { onConflict: "stripe_session_id,provider" }
+        );
       }
     }
 
