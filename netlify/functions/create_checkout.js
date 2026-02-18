@@ -1,287 +1,169 @@
-"use strict";
+import Stripe from "stripe";
+import fs from "node:fs/promises";
+import { json, readJsonBody, withCORS, getSupabaseAdmin } from "./_shared.js";
 
-const Stripe = require("stripe");
-
-const {
-  jsonResponse,
-  handleOptions,
-  safeJsonParse,
-  validateZip,
-  normalizeQty,
-  itemsQtyFromAny,
-  getEnviaQuote,
-  getFallbackShipping,
-  getOrgIdFromEvent,
-  isSupabaseConfigured,
-  supabase,
-  supabaseAdmin,
-  readJson,
-  baseUrl,
-  encodeUrl,
-} = require("./_shared");
-
-function normCode(code) {
-  return String(code || "")
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9_-]/g, "")
-    .slice(0, 32);
+let CATALOG_CACHE = null;
+async function getCatalog() {
+  if (CATALOG_CACHE) return CATALOG_CACHE;
+  const raw = await fs.readFile(new URL("../data/catalog.json", import.meta.url), "utf8");
+  CATALOG_CACHE = JSON.parse(raw);
+  return CATALOG_CACHE;
 }
 
-function toCentsFromCatalog(p) {
-  if (Number.isFinite(p?.price_cents)) return Math.round(Number(p.price_cents));
-  if (Number.isFinite(p?.baseMXN)) return Math.round(Number(p.baseMXN) * 100);
-  return 0;
-}
-
-function clampSize(s) {
-  const t = String(s || "").trim().slice(0, 12);
-  return t || "M";
-}
-
-async function getOrCreateCoupon(stripe, promo) {
-  const code = normCode(promo?.code);
-  if (!code) return null;
-
-  const cid = `PROMO_${code}`.slice(0, 50);
+export const handler = withCORS(async (event) => {
+  if (event.httpMethod !== "POST") return json(405, { error: "Method not allowed" });
 
   try {
-    const existing = await stripe.coupons.retrieve(cid);
-    if (existing && !existing.deleted) return existing.id;
-  } catch {
-    // ignore
-  }
+    const stripeSecret = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecret) return json(500, { error: "STRIPE_SECRET_KEY missing" });
 
-  const params = {
-    id: cid,
-    name: code,
-    duration: "once",
-    metadata: { source: "scorestore", promo_code: code },
-  };
+    const stripe = new Stripe(stripeSecret, { apiVersion: "2024-06-20" });
 
-  if (promo.type === "percent") {
-    const raw = Number(promo.value || 0);
-    const percent = raw <= 1 ? raw * 100 : raw;
-    params.percent_off = Math.max(1, Math.min(100, Math.round(percent)));
-  } else if (promo.type === "fixed_mxn") {
-    params.amount_off = Math.max(1, Math.round(Number(promo.value || 0) * 100));
-    params.currency = "mxn";
-  } else {
-    return null;
-  }
+    const siteBase =
+      process.env.PUBLIC_SITE_URL ||
+      (event.headers["x-forwarded-proto"]
+        ? `${event.headers["x-forwarded-proto"]}://${event.headers.host}`
+        : `https://${event.headers.host}`);
 
-  const created = await stripe.coupons.create(params);
-  return created.id;
-}
+    const body = await readJsonBody(event);
+    const items = Array.isArray(body?.items) ? body.items : [];
+    const shipping = body?.shipping || {};
+    const org_id = body?.org_id || null;
+    const promo = body?.promo?.code || null;
 
-exports.handler = async (event) => {
-  try {
-    if (event.httpMethod === "OPTIONS") return handleOptions();
-    if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
+    if (!items.length) return json(400, { error: "Cart empty" });
 
-    const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
-    if (!STRIPE_SECRET_KEY) {
-      return jsonResponse(500, { ok: false, error: "STRIPE_SECRET_KEY no configurada" });
-    }
+    const catalog = await getCatalog();
+    const products = catalog?.products || [];
 
-    const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
+    const byId = new Map(products.map((p) => [String(p.id || p.sku || ""), p]));
 
-    const body = safeJsonParse(event.body);
-    const itemsIn = Array.isArray(body.items) ? body.items : [];
-    if (!itemsIn.length) return jsonResponse(400, { ok: false, error: "Carrito vacio" });
+    const cacheExists = new Map(); // url -> boolean
 
-    const shipping_mode = String(body.shipping_mode || "pickup").toLowerCase();
-    const postal_code = String(body.postal_code || "").trim();
-    const promo_code = normCode(body.promo_code || "");
-
-    const org_id = getOrgIdFromEvent(event);
-
-    // Load catalog
-    const catalog = readJson("data/catalog.json");
-    const prods = Array.isArray(catalog?.products) ? catalog.products : [];
-
-    const skuMap = new Map(
-      prods.map((p) => {
-        const sku = String(p.sku || p.id || "").trim();
-        return [sku, { ...p, sku, price_cents: toCentsFromCatalog(p) }];
-      })
-    );
-
-    const siteBase = baseUrl(event);
-
-    // Build line items
     const line_items = [];
-    for (const it of itemsIn) {
-      const sku = String(it?.sku || "").trim();
-      const qty = normalizeQty(it?.qty);
-      const size = clampSize(it?.size);
+    for (const it of items) {
+      const key = String(it.id || it.sku || "").trim();
+      const qty = Math.max(1, Math.min(99, Number(it.qty || 1)));
+      const size = String(it.size || "").trim();
 
-      const p = skuMap.get(sku);
-      if (!p) return jsonResponse(400, { ok: false, error: `SKU invalido: ${sku}` });
-      if (!p.price_cents) return jsonResponse(400, { ok: false, error: `Producto sin precio: ${sku}` });
+      const p = byId.get(key) || products.find((x) => String(x.sku || "") === key);
+      if (!p) return json(400, { error: `Product not found: ${key}` });
+
+      const price_cents = Number(p.price_cents || 0);
+      if (!price_cents) return json(400, { error: `Product missing price: ${key}` });
+
+      // Imagen: NO placeholder. Solo si parece imagen y existe (HEAD/GET corto)
+      const imgPath = (p.img && !looksLikePlaceholder(p.img)) ? p.img : "";
+      const imgUrl = imgPath ? encodeUrl(siteBase, imgPath) : "";
+      let images = undefined;
+
+      if (imgUrl && looksLikeImage(imgUrl)) {
+        const ok = await urlExistsCached(imgUrl, cacheExists);
+        if (ok) images = [imgUrl];
+      }
 
       line_items.push({
         quantity: qty,
         price_data: {
-          currency: "mxn",
-          unit_amount: p.price_cents,
+          currency: String(p.currency || "mxn").toLowerCase(),
+          unit_amount: price_cents,
           product_data: {
-            name: String(p.name || "Producto").slice(0, 250),
-            description: size ? `Talla: ${size}` : undefined,
-            images: p.img ? [encodeUrl(siteBase, p.img)] : undefined,
+            name: size ? `${p.name} — ${size}` : p.name,
+            images,
             metadata: {
-              sku: p.sku,
-              product_id: String(p.id || ""),
-              size,
-              section: String(p.sectionId || ""),
+              sku: p.sku || p.id || key,
+              size: size || "",
             },
           },
         },
       });
     }
 
-    const items_qty = itemsQtyFromAny(itemsIn);
+    const success_url = `${siteBase}/?success=1&session_id={CHECKOUT_SESSION_ID}`;
+    const cancel_url = `${siteBase}/?canceled=1`;
 
-    // Shipping
-    let shippingAmountCents = 0;
-    let shippingLabel = "";
-    let shippingCountry = "MX";
-
-    if (shipping_mode === "envia_mx" || shipping_mode === "envia_us") {
-      if (!validateZip(postal_code)) return jsonResponse(400, { ok: false, error: "Codigo postal invalido" });
-      shippingCountry = shipping_mode === "envia_us" ? "US" : "MX";
-
-      let quote = await getEnviaQuote({ zip: postal_code, country: shippingCountry, items_qty });
-      if (!quote?.ok || !(Number(quote?.amount_mxn) > 0)) {
-        quote = getFallbackShipping(shippingCountry, items_qty);
-      }
-
-      const mxn = Number(quote?.amount_mxn || 0) || 0;
-      shippingAmountCents = Math.max(0, Math.round(mxn * 100));
-      shippingLabel = String(quote?.label || "Standard");
-    }
-
-    if (shipping_mode === "pickup") {
-      shippingAmountCents = 0;
-      shippingCountry = "MX";
-      shippingLabel = "Pickup";
-    }
-
-    if (shipping_mode === "local_tj") {
-      // Uber/Didi / mensajeria local (se coordina). Si quieres cobrar fijo: define LOCAL_TJ_FLAT_MXN.
-      const flat = Number(process.env.LOCAL_TJ_FLAT_MXN || 0) || 0;
-      shippingAmountCents = Math.max(0, Math.round(flat * 100));
-      shippingCountry = "MX";
-      shippingLabel = "Local TJ";
-    }
-
-    // Promo
-    let couponId = null;
-    if (promo_code) {
-      const promosDb = readJson("data/promos.json");
-      const rules = Array.isArray(promosDb?.rules)
-        ? promosDb.rules
-        : Array.isArray(promosDb?.promos)
-        ? promosDb.promos
-        : [];
-
-      const promo = rules.find(
-        (p) => normCode(p?.code) === promo_code && (p?.active === true || p?.active === 1)
-      );
-
-      if (!promo) return jsonResponse(400, { ok: false, error: "Codigo promocional invalido" });
-
-      const subtotalMxn = line_items.reduce((sum, li) => sum + (li.price_data.unit_amount * li.quantity) / 100, 0);
-      const min = Number(promo?.min_subtotal_mxn || 0) || 0;
-      if (min > 0 && subtotalMxn < min) {
-        return jsonResponse(400, { ok: false, error: `Minimo ${min} MXN para aplicar` });
-      }
-
-      if (promo.type === "free_shipping") {
-        shippingAmountCents = 0;
-      } else if (promo.type === "percent" || promo.type === "fixed_mxn") {
-        couponId = await getOrCreateCoupon(stripe, promo);
-      }
-    }
-
-    // Session params
-    const params = {
+    const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      locale: "es",
-      payment_method_types: ["card", "oxxo"],
       line_items,
-      success_url: `${siteBase}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteBase}/cancel.html`,
-      phone_number_collection: { enabled: true },
-      customer_creation: "if_required",
+      success_url,
+      cancel_url,
+      allow_promotion_codes: false,
       metadata: {
-        source: "scorestore",
-        org_id,
-        shipping_mode,
-        postal_code: postal_code || "",
-        promo_code: promo_code || "",
-        items_qty: String(items_qty),
-        shipping_label: shippingLabel || "",
+        org_id: org_id || "",
+        promo_code: promo || "",
+        shipping_mode: shipping?.mode || "",
+        postal_code: shipping?.postal_code || "",
       },
-    };
+    });
 
-    if (couponId) params.discounts = [{ coupon: couponId }];
+    // UPSERT order (idempotente)
+    const db = getSupabaseAdmin();
+    await db.from("orders").upsert(
+      {
+        org_id: org_id || null,
+        stripe_session_id: session.id,
+        status: "checkout_created",
+        shipping_mode: shipping?.mode || null,
+        postal_code: shipping?.postal_code || null,
+        promo_code: promo || null,
+        items: items,
+        items_qty: items.reduce((a, x) => a + Number(x.qty || 0), 0),
+        raw_stripe: session,
+      },
+      { onConflict: "stripe_session_id" }
+    );
 
-    // Shipping UI in Stripe (only when user expects shipping)
-    if (shipping_mode !== "pickup") {
-      params.shipping_address_collection = {
-        allowed_countries:
-          shipping_mode === "envia_us" ? ["US"] : shipping_mode === "envia_mx" ? ["MX"] : ["MX"],
-      };
-
-      // Show shipping rate in Stripe if > 0
-      if (shippingAmountCents > 0) {
-        params.shipping_options = [
-          {
-            shipping_rate_data: {
-              type: "fixed_amount",
-              fixed_amount: { amount: shippingAmountCents, currency: "mxn" },
-              display_name:
-                shipping_mode === "envia_us"
-                  ? `Envio USA (Envia${shippingLabel ? " - " + shippingLabel : ""})`
-                  : shipping_mode === "envia_mx"
-                  ? `Envio Nacional (Envia${shippingLabel ? " - " + shippingLabel : ""})`
-                  : `Local TJ (${shippingLabel || "a coordinar"})`,
-              metadata: {
-                shipping_mode,
-                postal_code: postal_code || "",
-                provider: shipping_mode.startsWith("envia") ? "envia" : "local",
-              },
-            },
-          },
-        ];
-      }
-    }
-
-    const session = await stripe.checkout.sessions.create(params);
-
-    // Supabase optional insert
-    try {
-      if (isSupabaseConfigured() && (supabaseAdmin || supabase)) {
-        const db = supabaseAdmin || supabase;
-        await db.from("orders").insert({
-          org_id,
-          created_at: new Date().toISOString(),
-          stripe_session_id: session.id,
-          status: "checkout_created",
-          shipping_mode,
-          postal_code: postal_code || null,
-          promo_code: promo_code || null,
-          items: itemsIn,
-        });
-      }
-    } catch (e) {
-      // Do not block checkout if DB insert fails
-      console.warn("[orders insert]", e?.message || e);
-    }
-
-    return jsonResponse(200, { ok: true, url: session.url, session_id: session.id });
-  } catch (e) {
-    return jsonResponse(500, { ok: false, error: "Error creando checkout", details: String(e?.message || e) });
+    return json(200, { id: session.id, url: session.url });
+  } catch (err) {
+    console.error(err);
+    return json(500, { error: err?.message || "Server error" });
   }
-};
+});
+
+function encodeUrl(base, path) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${encodeURI(p)}`; // soporta espacios si existen
+}
+
+function looksLikePlaceholder(s) {
+  const u = String(s || "").toLowerCase();
+  return u.includes("placeholder") || u.includes("imagen-pendiente");
+}
+
+function looksLikeImage(url) {
+  return /\.(png|jpe?g|webp|gif)$/i.test(String(url || ""));
+}
+
+async function urlExistsCached(url, cache) {
+  if (cache.has(url)) return cache.get(url);
+  const ok = await urlExists(url);
+  cache.set(url, ok);
+  return ok;
+}
+
+async function urlExists(url) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 2500);
+
+  try {
+    // 1) HEAD
+    let res = await fetch(url, { method: "HEAD", signal: controller.signal });
+    if (res.ok) return true;
+
+    // 2) fallback GET mini (algunos hosts bloquean HEAD)
+    if (res.status === 405 || res.status === 403) {
+      res = await fetch(url, {
+        method: "GET",
+        headers: { Range: "bytes=0-0" },
+        signal: controller.signal,
+      });
+      return res.ok;
+    }
+
+    return false;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(t);
+  }
+}
