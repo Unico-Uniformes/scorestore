@@ -1,51 +1,31 @@
-"use strict";
-const { jsonResponse, handleOptions, safeJsonParse, supabaseAdmin } = require("./_shared");
+import { getSupabaseAdmin, json, readJsonBody, withCORS } from "./_shared.js";
 
-exports.handler = async (event) => {
-  const opt = handleOptions(event);
-  if (opt) return opt;
-  if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
+export const handler = withCORS(async (event) => {
+  if (event.httpMethod !== "POST") return json(405, { error: "Method not allowed" });
 
   try {
-    const body = safeJsonParse(event.body);
+    const body = await readJsonBody(event);
 
-    // Envia webhook schema varies by account/setup. We store raw payload + status if we can find it.
-    const status =
-      body?.status ||
-      body?.event?.status ||
-      body?.data?.status ||
-      body?.shipment?.status ||
-      body?.tracking?.status ||
-      "unknown";
+    const tracking = body?.tracking_number || body?.tracking || body?.data?.tracking || null;
+    const status = body?.status || body?.data?.status || "unknown";
+    const stripe_session_id = body?.stripe_session_id || body?.data?.stripe_session_id || null;
 
-    const tracking =
-      body?.tracking_number ||
-      body?.trackingNumber ||
-      body?.event?.tracking_number ||
-      body?.data?.tracking_number ||
-      body?.shipment?.tracking_number ||
-      null;
+    const supabaseAdmin = getSupabaseAdmin();
 
-    const stripe_session_id =
-      body?.reference ||
-      body?.order_reference ||
-      body?.data?.order_reference ||
-      body?.metadata?.stripe_session_id ||
-      null;
-
-    if (supabaseAdmin) {
-      await supabaseAdmin.from("shipping_webhooks").insert({
+    // Idempotente: dedupe por provider + raw_hash (raw_hash es GENERATED)
+    await supabaseAdmin.from("shipping_webhooks").upsert({
         created_at: new Date().toISOString(),
         provider: "envia",
+        event_type: body?.event_type || body?.event || body?.type || null,
         status: String(status),
         tracking_number: tracking,
         stripe_session_id,
         raw: body,
-      });
-    }
+      }, { onConflict: "provider,raw_hash", ignoreDuplicates: true });
 
-    return jsonResponse(200, { ok: true, received: true });
-  } catch (e) {
-    return jsonResponse(500, { ok: false, error: "envia webhook error", details: String(e?.message || e) });
+    return json(200, { ok: true });
+  } catch (err) {
+    console.error(err);
+    return json(500, { error: err?.message || "Server error" });
   }
-};
+});
