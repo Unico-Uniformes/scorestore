@@ -1,25 +1,9 @@
 {
   "categories": [
-    {
-      "id": "BAJA_1000",
-      "name": "BAJA 1000",
-      "pill": "Edición 2025"
-    },
-    {
-      "id": "BAJA_500",
-      "name": "BAJA 500",
-      "pill": "Desert Line"
-    },
-    {
-      "id": "BAJA_400",
-      "name": "BAJA 400",
-      "pill": "Coffee Drop"
-    },
-    {
-      "id": "SF250",
-      "name": "SAN FELIPE 250",
-      "pill": "Heat Series"
-    }
+    { "id": "BAJA_1000", "name": "BAJA 1000", "pill": "Edición 2025" },
+    { "id": "BAJA_500", "name": "BAJA 500", "pill": "Desert Line" },
+    { "id": "BAJA_400", "name": "BAJA 400", "pill": "Coffee Drop" },
+    { "id": "SF250", "name": "SAN FELIPE 250", "pill": "Heat Series" }
   ],
   "products": [
     {
@@ -29,17 +13,9 @@
       "price_cents": 89900,
       "currency": "mxn",
       "sectionId": "BAJA_1000",
-      "sizes": [
-        "S",
-        "M",
-        "L",
-        "XL",
-        "2XL"
-      ],
-      "img": "/assets/placeholder-product.svg",
-      "images": [
-        "/assets/placeholder-product.svg"
-      ],
+      "sizes": ["S", "M", "L", "XL", "2XL"],
+      "img": "/assets/EDICION_2025/b1k-tee-white.webp",
+      "images": ["/assets/EDICION_2025/b1k-tee-white.webp"],
       "desc": "Edición 2025. Tela premium, impresión durable."
     },
     {
@@ -49,13 +25,7 @@
       "price_cents": 89900,
       "currency": "mxn",
       "sectionId": "BAJA_1000",
-      "sizes": [
-        "S",
-        "M",
-        "L",
-        "XL",
-        "2XL"
-      ],
+      "sizes": ["S", "M", "L", "XL", "2XL"],
       "img": "/assets/EDICION_2025/camisa-gris-pits-baja1000.jpg.webp",
       "images": [
         "/assets/EDICION_2025/camisa-gris-pits-baja1000.jpg.webp",
@@ -70,13 +40,9 @@
       "price_cents": 79900,
       "currency": "mxn",
       "sectionId": "BAJA_500",
-      "sizes": [
-        "OS"
-      ],
+      "sizes": ["OS"],
       "img": "/assets/BAJA500/gorra-negra-baja500.webp",
-      "images": [
-        "/assets/BAJA500/gorra-negra-baja500.webp"
-      ],
+      "images": ["/assets/BAJA500/gorra-negra-baja500.webp"],
       "desc": "Gorra estructurada, bordado premium."
     },
     {
@@ -86,17 +52,9 @@
       "price_cents": 89900,
       "currency": "mxn",
       "sectionId": "BAJA_500",
-      "sizes": [
-        "S",
-        "M",
-        "L",
-        "XL",
-        "2XL"
-      ],
+      "sizes": ["S", "M", "L", "XL", "2XL"],
       "img": "/assets/BAJA500/camiseta-negra-baja500.webp",
-      "images": [
-        "/assets/BAJA500/camiseta-negra-baja500.webp"
-      ],
+      "images": ["/assets/BAJA500/camiseta-negra-baja500.webp"],
       "desc": "Tela premium, caída brutal, print durable."
     },
     {
@@ -106,17 +64,9 @@
       "price_cents": 149900,
       "currency": "mxn",
       "sectionId": "BAJA_500",
-      "sizes": [
-        "S",
-        "M",
-        "L",
-        "XL",
-        "2XL"
-      ],
+      "sizes": ["S", "M", "L", "XL", "2XL"],
       "img": "/assets/BAJA500/hoodie-negro-baja500.webp",
-      "images": [
-        "/assets/BAJA500/hoodie-negro-baja500.webp"
-      ],
+      "images": ["/assets/BAJA500/hoodie-negro-baja500.webp"],
       "desc": "Hoodie pesado, suave por dentro, print resistente."
     },
     {
@@ -126,13 +76,7 @@
       "price_cents": 89900,
       "currency": "mxn",
       "sectionId": "BAJA_400",
-      "sizes": [
-        "S",
-        "M",
-        "L",
-        "XL",
-        "2XL"
-      ],
+      "sizes": ["S", "M", "L", "XL", "2XL"],
       "img": "/assets/BAJA400/camiseta-cafe-oscuro-baja400.webp",
       "images": [
         "/assets/BAJA400/camiseta-cafe-oscuro-baja400.webp",
@@ -148,13 +92,9 @@
       "price_cents": 79900,
       "currency": "mxn",
       "sectionId": "BAJA_400",
-      "sizes": [
-        "OS"
-      ],
+      "sizes": ["OS"],
       "img": "/assets/BAJA400/gorra-cafe-baja400.webp",
-      "images": [
-        "/assets/BAJA400/gorra-cafe-baja400.webp"
-      ],
+      "images": ["/assets/BAJA400/gorra-cafe-baja400.webp"],
       "desc": "Gorra café, bordado premium."
     },
     {
@@ -164,13 +104,7 @@
       "price_cents": 89900,
       "currency": "mxn",
       "sectionId": "SF250",
-      "sizes": [
-        "S",
-        "M",
-        "L",
-        "XL",
-        "2XL"
-      ],
+      "sizes": ["S", "M", "L", "XL", "2XL"],
       "img": "/assets/SF250/camiseta-negra-sinmangas-SF250.webp",
       "images": [
         "/assets/SF250/camiseta-negra-sinmangas-SF250.webp",
@@ -186,13 +120,9 @@
       "price_cents": 79900,
       "currency": "mxn",
       "sectionId": "SF250",
-      "sizes": [
-        "OS"
-      ],
+      "sizes": ["OS"],
       "img": "/assets/SF250/gorra-negra-SF250.webp",
-      "images": [
-        "/assets/SF250/gorra-negra-SF250.webp"
-      ],
+      "images": ["/assets/SF250/gorra-negra-SF250.webp"],
       "desc": "Gorra negra, bordado premium."
     }
   ]
