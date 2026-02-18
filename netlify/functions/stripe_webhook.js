@@ -1,170 +1,84 @@
-"use strict";
+import Stripe from "stripe";
+import { getSupabaseAdmin, json, withCORS, rawBody } from "./_shared.js";
 
-const Stripe = require("stripe");
+export const handler = withCORS(async (event) => {
+  if (event.httpMethod !== "POST") return json(405, { error: "Method not allowed" });
 
-const {
-  jsonResponse,
-  handleOptions,
-  readRawBody,
-  createEnviaLabel,
-  isEnviaConfigured,
-  isSupabaseConfigured,
-  supabase,
-  supabaseAdmin,
-  sendTelegram,
-} = require("./_shared");
-
-function pick(v, fb = "") {
-  return String(v || fb || "");
-}
-
-function buildDestinationFromSession(session) {
-  const ship = session?.shipping_details || {};
-  const cust = session?.customer_details || {};
-
-  const addr = ship?.address || cust?.address || {};
-
-  return {
-    name: pick(ship?.name || cust?.name, "Customer"),
-    email: pick(cust?.email, ""),
-    phone: pick(cust?.phone, ""),
-    street: pick(addr?.line1, ""),
-    number: "",
-    district: pick(addr?.line2, ""),
-    city: pick(addr?.city, ""),
-    state: pick(addr?.state, ""),
-    postal_code: pick(addr?.postal_code, ""),
-    country_code: pick(addr?.country, "MX").toUpperCase(),
-    reference: "",
-  };
-}
-
-async function upsertOrder(db, payload) {
-  // Best effort. Your schema may differ; this should not break webhooks.
   try {
-    if (!db) return;
+    const stripeSecret = process.env.STRIPE_SECRET_KEY;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-    // Prefer upsert if possible
-    if (db?.from) {
-      const { error } = await db
-        .from("orders")
-        .upsert(payload, { onConflict: "stripe_session_id" });
-      if (!error) return;
+    if (!stripeSecret) return json(500, { error: "STRIPE_SECRET_KEY missing" });
+    if (!webhookSecret) return json(500, { error: "STRIPE_WEBHOOK_SECRET missing" });
 
-      // Fallback: update then insert
-      await db.from("orders").update(payload).eq("stripe_session_id", payload.stripe_session_id);
-      await db.from("orders").insert(payload);
-    }
-  } catch (e) {
-    console.warn("[orders upsert]", e?.message || e);
-  }
-}
+    const stripe = new Stripe(stripeSecret, { apiVersion: "2024-06-20" });
 
-exports.handler = async (event) => {
-  try {
-    if (event.httpMethod === "OPTIONS") return handleOptions();
-    if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
+    const sig = event.headers["stripe-signature"];
+    const payload = rawBody(event);
 
-    const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
-    const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
-    if (!STRIPE_SECRET_KEY || !STRIPE_WEBHOOK_SECRET) {
-      return jsonResponse(500, { ok: false, error: "Stripe webhook no configurado" });
-    }
-
-    const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
-
-    const sig = event.headers["stripe-signature"] || event.headers["Stripe-Signature"] || "";
-    const raw = await readRawBody(event);
-
-    let evt;
+    let ev;
     try {
-      evt = stripe.webhooks.constructEvent(raw, sig, STRIPE_WEBHOOK_SECRET);
+      ev = stripe.webhooks.constructEvent(payload, sig, webhookSecret);
     } catch (e) {
-      return jsonResponse(400, { ok: false, error: "Invalid signature", details: e?.message || String(e) });
+      return json(400, { error: `Webhook signature failed: ${e.message}` });
     }
 
-    const type = evt?.type || "";
+    const db = getSupabaseAdmin();
 
-    if (type === "checkout.session.completed") {
-      const session = evt.data.object;
-      const meta = session?.metadata || {};
+    if (ev.type === "checkout.session.completed") {
+      const session = ev.data.object;
 
-      const shipping_mode = String(meta.shipping_mode || "").toLowerCase();
-      const postal_code = String(meta.postal_code || "");
-      const promo_code = String(meta.promo_code || "");
-      const org_id = String(meta.org_id || "");
-      const items_qty = Number(meta.items_qty || 1) || 1;
+      const org_id = session?.metadata?.org_id || null;
 
-      const dest = buildDestinationFromSession(session);
-
-      // Save / update order
-      const db = supabaseAdmin || supabase;
-      if (isSupabaseConfigured() && db) {
-        await upsertOrder(db, {
+      // Update order paid (UPSERT by stripe_session_id)
+      await db.from("orders").upsert(
+        {
           org_id: org_id || null,
           stripe_session_id: session.id,
+          stripe_payment_intent_id: session.payment_intent || null,
           status: "paid",
-          paid_at: new Date().toISOString(),
-          currency: session.currency || "mxn",
+          currency: session.currency || null,
           amount_total_cents: session.amount_total || null,
           amount_subtotal_cents: session.amount_subtotal || null,
-          shipping_mode: shipping_mode || null,
-          postal_code: postal_code || null,
-          promo_code: promo_code || null,
+          shipping_mode: session?.metadata?.shipping_mode || null,
+          postal_code: session?.metadata?.postal_code || null,
+          promo_code: session?.metadata?.promo_code || null,
           customer_email: session.customer_details?.email || null,
           customer_phone: session.customer_details?.phone || null,
-          shipping_address: session.shipping_details?.address || session.customer_details?.address || null,
-          shipping_name: session.shipping_details?.name || session.customer_details?.name || null,
-        });
-      }
+          shipping_name: session.shipping_details?.name || null,
+          shipping_address: session.shipping_details?.address || null,
+          paid_at: new Date().toISOString(),
+          raw_stripe: session,
+        },
+        { onConflict: "stripe_session_id" }
+      );
 
-      // Envia label only if needed
-      let label = null;
-      if (shipping_mode === "envia_mx" || shipping_mode === "envia_us") {
-        if (isEnviaConfigured()) {
-          label = await createEnviaLabel({
-            stripe_session_id: session.id,
-            destination: dest,
-            meta: { items_qty },
-          });
+      // (Optional) If you generate label on paid, you can store it.
+      // If you already generate it elsewhere, this stays safe due to UPSERT.
+      // Example label object expected in session.metadata or elsewhere:
+      const label = session?.metadata?.label ? safeJson(session.metadata.label) : null;
 
-          // Persist label (best effort)
-          try {
-            if (isSupabaseConfigured() && db && label?.ok) {
-              await db.from("shipping_labels").insert({
+      if (label) {
+        await db.from("shipping_labels").upsert({
                 org_id: org_id || null,
                 stripe_session_id: session.id,
+                provider: "envia",
                 created_at: new Date().toISOString(),
                 carrier: label.carrier || null,
                 tracking_number: label.tracking_number || null,
                 label_url: label.label_url || null,
                 raw: label.raw || null,
-              });
-            }
-          } catch (e) {
-            console.warn("[label insert]", e?.message || e);
-          }
-        } else {
-          label = { ok: false, skipped: true, error: "ENVIA_API_KEY missing" };
-        }
+              }, { onConflict: "stripe_session_id,provider" });
       }
-
-      // Notify
-      const msg =
-        `✅ Pago confirmado\n` +
-        `Session: ${session.id}\n` +
-        `Total: ${(session.amount_total || 0) / 100} ${(session.currency || "MXN").toUpperCase()}\n` +
-        `Entrega: ${shipping_mode || "pickup"} ${postal_code ? "(" + postal_code + ")" : ""}\n` +
-        (label?.ok ? `📦 Label OK: ${label.tracking_number || ""}` : label ? `⚠️ Label: ${label.error || "skip"}` : "");
-
-      await sendTelegram({ text: msg });
-
-      return jsonResponse(200, { ok: true, received: true });
     }
 
-    // Other events: accept
-    return jsonResponse(200, { ok: true, received: true, type });
-  } catch (e) {
-    return jsonResponse(500, { ok: false, error: "Webhook error", details: String(e?.message || e) });
+    return json(200, { received: true });
+  } catch (err) {
+    console.error(err);
+    return json(500, { error: err?.message || "Server error" });
   }
-};
+});
+
+function safeJson(s) {
+  try { return JSON.parse(s); } catch { return null; }
+}
