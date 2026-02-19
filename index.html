@@ -8,13 +8,11 @@
 
   <title>SCORE STORE — Merch Oficial</title>
 
-  <!-- PWA -->
   <link rel="manifest" href="site.webmanifest" />
   <link rel="icon" href="assets/icons/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
-  <!-- Version (cache bust / SW) -->
   <script>
     window.__APP_VERSION__ = "2026.02.19.1";
   </script>
@@ -24,7 +22,6 @@
 </head>
 
 <body>
-  <!-- SPLASH -->
   <div id="splash" class="splash" aria-hidden="true">
     <div class="splash__inner">
       <img class="splash__logo" src="assets/logo-score.webp" alt="SCORE" />
@@ -37,7 +34,6 @@
 
   <a class="skip" href="#catalog">Saltar al catálogo</a>
 
-  <!-- TOPBAR -->
   <header class="topbar" role="banner">
     <div class="wrap topbar__inner">
       <button id="openMenuBtn" class="iconbtn" type="button" aria-label="Abrir menú">
@@ -70,7 +66,6 @@
     </div>
   </header>
 
-  <!-- HERO -->
   <section class="hero" aria-label="Intro">
     <div class="hero__bg" aria-hidden="true"></div>
 
@@ -94,7 +89,6 @@
     </div>
   </section>
 
-  <!-- PARTNERS -->
   <section class="partners" aria-label="Partners">
     <div class="wrap partners__inner">
       <div class="partners__title">OFFICIAL PARTNERS</div>
@@ -107,9 +101,7 @@
     </div>
   </section>
 
-  <!-- MAIN -->
   <main id="main" class="main" role="main">
-    <!-- CATEGORIES -->
     <section class="wrap section" aria-label="Catálogos">
       <div class="section__head">
         <h2 id="categories">Catálogos</h2>
@@ -122,7 +114,6 @@
       <div id="categoryHint" class="hint" hidden>Selecciona un catálogo para filtrar el catálogo de productos.</div>
     </section>
 
-    <!-- CATALOG -->
     <section id="catalog" class="wrap section" aria-label="Catálogo">
       <div class="section__head">
         <h2>Productos</h2>
@@ -146,7 +137,6 @@
     </section>
   </main>
 
-  <!-- FOOTER -->
   <footer class="footer" role="contentinfo">
     <div class="wrap footer__inner">
       <div class="footer__left">
@@ -160,10 +150,8 @@
     </div>
   </footer>
 
-  <!-- OVERLAY -->
   <div id="overlay" class="overlay" hidden></div>
 
-  <!-- SIDE MENU -->
   <aside id="sideMenu" class="drawer" aria-label="Menú" hidden>
     <div class="drawer__head">
       <div class="drawer__title">Menú</div>
@@ -182,7 +170,6 @@
     </div>
   </aside>
 
-  <!-- CART DRAWER -->
   <aside id="cartDrawer" class="drawer drawer--right" aria-label="Carrito" hidden>
     <div class="drawer__head">
       <div class="drawer__title">Carrito</div>
@@ -204,7 +191,6 @@
             <span class="muted" id="shipHint">Selecciona modo</span>
           </div>
 
-          <!-- IMPORTANT: values deben coincidir con backend (create_checkout.js) -->
           <div class="seg" role="group" aria-label="Modo de entrega">
             <label class="seg__opt">
               <input type="radio" name="shipMode" value="pickup" checked />
@@ -247,7 +233,6 @@
     </div>
   </aside>
 
-  <!-- PRODUCT MODAL -->
   <section id="productModal" class="modal" role="dialog" aria-modal="true" aria-label="Producto" hidden>
     <div class="modal__panel">
       <div class="modal__head">
@@ -280,7 +265,6 @@
     </div>
   </section>
 
-  <!-- AI MODAL -->
   <section id="aiModal" class="modal" role="dialog" aria-modal="true" aria-label="SCORE AI" hidden>
     <div class="modal__panel modal__panel--tall">
       <div class="modal__head">
@@ -299,7 +283,6 @@
     </div>
   </section>
 
-  <!-- LEGAL MODAL -->
   <section id="legalModal" class="modal" role="dialog" aria-modal="true" aria-label="Legal" hidden>
     <div class="modal__panel">
       <div class="modal__head">
@@ -312,7 +295,6 @@
     </div>
   </section>
 
-  <!-- COOKIE / TRACKING GATE -->
   <section id="cookieBanner" class="cookie" role="dialog" aria-label="Cookies" hidden>
     <div class="cookie__text">
       Usamos cookies para mejorar la experiencia. Puedes aceptar para habilitar medición o continuar sin tracking.
@@ -323,7 +305,6 @@
     </div>
   </section>
 
-  <!-- TOAST -->
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script defer src="js/main.js"></script>
