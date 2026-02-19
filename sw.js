@@ -1,5 +1,5 @@
 /* SCORE STORE — Service Worker (Light) */
-const CACHE_VERSION = "scorestore-v2026.02.19.1";
+const CACHE_VERSION = "scorestore-v2026.02.19.2";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -15,7 +15,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_VERSION);
-      await cache.addAll(CORE_ASSETS.map((u) => u));
+      await cache.addAll(CORE_ASSETS);
       self.skipWaiting();
     })()
   );
@@ -38,21 +38,21 @@ self.addEventListener("fetch", (event) => {
   // Nunca caches API
   if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) return;
 
-  // Solo GET
+  // Solo procesar peticiones GET
   if (req.method !== "GET") return;
 
-  // Navegación: network-first con fallback cache
+  // Navegación: network-first con fallback a index.html
   if (req.mode === "navigate") {
     event.respondWith(
       (async () => {
         try {
           const fresh = await fetch(req);
           const cache = await caches.open(CACHE_VERSION);
-          cache.put("/index.html", fresh.clone());
+          cache.put(req, fresh.clone()); // Guardado corregido con req
           return fresh;
         } catch {
           const cached = await caches.match("/index.html");
-          return cached || new Response("Offline", { status: 200 });
+          return cached || new Response("Offline - No hay conexión a Internet", { status: 200, headers: { 'Content-Type': 'text/html' }});
         }
       })()
     );
