@@ -1,45 +1,33 @@
-import { getSupabaseAdmin, json, readJsonBody, withCORS } from "./_shared.js";
+"use strict";
 
-export const handler = withCORS(async (event) => {
-  if (event.httpMethod !== "POST") return json(405, { error: "Method not allowed" });
+const { jsonResponse, handleOptions, safeJsonParse, isSupabaseConfigured, supabaseAdmin } = require("./_shared");
+
+exports.handler = async (event) => {
+  const origin = event?.headers?.origin;
 
   try {
-    const body = await readJsonBody(event);
+    if (event.httpMethod === "OPTIONS") return handleOptions(event);
+    if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
 
-    const tracking =
-      body?.tracking_number ||
-      body?.tracking ||
-      body?.data?.tracking ||
-      body?.data?.tracking_number ||
-      null;
+    const payload = safeJsonParse(event.body) || {};
 
-    const status = body?.status || body?.data?.status || "unknown";
-    const stripe_session_id = body?.stripe_session_id || body?.data?.stripe_session_id || null;
-    const event_type = body?.event_type || body?.event || body?.type || null;
-
-    const db = getSupabaseAdmin();
-
-    // Dedupe idempotente por provider + raw_hash (raw_hash es GENERATED en SQL)
-    await db.from("shipping_webhooks").upsert(
-      {
-        provider: "envia",
-        event_type,
-        status: String(status),
-        tracking_number: tracking,
-        stripe_session_id,
-        raw: body,
-      },
-      { onConflict: "provider,raw_hash" }
-    );
-
-    // Opcional: actualiza estado del label por tracking
-    if (tracking) {
-      await db.from("shipping_labels").update({ status: String(status) }).eq("tracking_number", tracking);
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      if (sb) {
+        try {
+          await sb.from("shipping_webhooks").insert({
+            provider: "envia",
+            payload,
+            created_at: new Date().toISOString(),
+          });
+        } catch (e) {
+          console.log("[shipping_webhooks] warn insert:", e?.message || e);
+        }
+      }
     }
 
-    return json(200, { ok: true });
-  } catch (err) {
-    console.error(err);
-    return json(500, { error: err?.message || "Server error" });
+    return jsonResponse(200, { ok: true }, origin);
+  } catch (e) {
+    return jsonResponse(200, { ok: true, warning: String(e?.message || e) }, origin);
   }
-});
+};
