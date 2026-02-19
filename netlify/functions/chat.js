@@ -4,7 +4,7 @@ const { jsonResponse, handleOptions, safeJsonParse } = require("./_shared");
 const axios = require("axios");
 
 exports.handler = async (event) => {
-  const origin = event?.headers?.origin;
+  const origin = event?.headers?.origin || event?.headers?.Origin;
 
   try {
     if (event.httpMethod === "OPTIONS") return handleOptions(event);
@@ -16,7 +16,6 @@ exports.handler = async (event) => {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      // Deja que el frontend haga fallback sin romper catálogo
       return jsonResponse(200, { ok: false, error: "GEMINI_API_KEY no configurada" }, origin);
     }
 
