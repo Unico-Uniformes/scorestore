@@ -1,119 +1,45 @@
-exports.handler = async (event) => {
+import { getSupabaseAdmin, json, readJsonBody, withCORS } from "./_shared.js";
+
+export const handler = withCORS(async (event) => {
+  if (event.httpMethod !== "POST") return json(405, { error: "Method not allowed" });
+
   try {
-    if (event.httpMethod !== "POST") {
-      return json(405, { ok:false, error:"Method not allowed" });
-    }
+    const body = await readJsonBody(event);
 
-    const body = JSON.parse(event.body || "{}");
-    const destination = body.destination || {};
-    const items = Array.isArray(body.items) ? body.items : [];
+    const tracking =
+      body?.tracking_number ||
+      body?.tracking ||
+      body?.data?.tracking ||
+      body?.data?.tracking_number ||
+      null;
 
-    const cp = String(destination.postal_code || "").trim();
-    const city = String(destination.city || "").trim();
-    const state = String(destination.state || "").trim();
+    const status = body?.status || body?.data?.status || "unknown";
+    const stripe_session_id = body?.stripe_session_id || body?.data?.stripe_session_id || null;
+    const event_type = body?.event_type || body?.event || body?.type || null;
 
-    if (!/^\d{5}$/.test(cp) || !city || !state) {
-      return json(400, { ok:false, error:"destination inválido. Requiere postal_code(5), city, state." });
-    }
+    const db = getSupabaseAdmin();
 
-    const apiKey = process.env.ENVIA_API_KEY;
-    if (!apiKey) {
-      return json(503, { ok:false, error:"ENVIA_API_KEY no configurada" });
-    }
-
-    // ORIGEN (Único Uniformes / Score Store) — AJUSTA EN ENV VARS
-    const origin = {
-      postal_code: String(process.env.ENVIA_ORIGIN_POSTAL || "22000"),
-      city: String(process.env.ENVIA_ORIGIN_CITY || "Tijuana"),
-      state: String(process.env.ENVIA_ORIGIN_STATE || "Baja California"),
-      country_code: String(process.env.ENVIA_ORIGIN_COUNTRY || "MX")
-    };
-
-    // Paquete base (merch). Para PRO: ajusta peso/dimensiones por SKU en tu admin app.
-    const pkg = {
-      content: "Score Store Merch",
-      amount: Math.max(1, items.reduce((a,i)=>a + Number(i.qty||0), 0)),
-      type: "box",
-      dimensions: {
-        length: Number(process.env.ENVIA_PKG_L || 32),
-        width: Number(process.env.ENVIA_PKG_W || 24),
-        height: Number(process.env.ENVIA_PKG_H || 8)
+    // Dedupe idempotente por provider + raw_hash (raw_hash es GENERATED en SQL)
+    await db.from("shipping_webhooks").upsert(
+      {
+        provider: "envia",
+        event_type,
+        status: String(status),
+        tracking_number: tracking,
+        stripe_session_id,
+        raw: body,
       },
-      weight: Number(process.env.ENVIA_PKG_WEIGHT || 1.0)
-    };
+      { onConflict: "provider,raw_hash" }
+    );
 
-    const payload = {
-      origin,
-      destination: {
-        postal_code: cp,
-        city,
-        state,
-        country_code: "MX"
-      },
-      packages: [pkg]
-    };
-
-    // Endpoint típico de Envía (puede variar por cuenta/región)
-    const endpoint = String(process.env.ENVIA_RATE_ENDPOINT || "https://api.envia.com/ship/rate/");
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await resp.json().catch(() => null);
-    if (!resp.ok || !data) {
-      return json(502, { ok:false, error:"Envía.com rate failed", details: data || null });
+    // Opcional: actualiza estado del label por tracking
+    if (tracking) {
+      await db.from("shipping_labels").update({ status: String(status) }).eq("tracking_number", tracking);
     }
 
-    // Normalización: escoge el más barato disponible
-    const rates = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
-    if (!rates.length) {
-      return json(404, { ok:false, error:"Sin cotizaciones disponibles", details: data });
-    }
-
-    const sorted = rates
-      .map(r => ({
-        carrier: r.carrier || r.carrier_name || "Carrier",
-        service: r.service || r.service_name || "Servicio",
-        total: Number(r.total || r.total_amount || r.price || 0)
-      }))
-      .filter(r => Number.isFinite(r.total) && r.total > 0)
-      .sort((a,b)=>a.total-b.total);
-
-    if (!sorted.length) {
-      return json(404, { ok:false, error:"Cotizaciones inválidas", details: data });
-    }
-
-    const best = sorted[0];
-    const total_cents = Math.round(best.total * 100);
-
-    return json(200, {
-      ok: true,
-      quote: {
-        carrier: best.carrier,
-        service: best.service,
-        total_cents
-      }
-    });
-
-  } catch (e) {
-    return json(500, { ok:false, error:"Server error", message: String(e && e.message ? e.message : e) });
+    return json(200, { ok: true });
+  } catch (err) {
+    console.error(err);
+    return json(500, { error: err?.message || "Server error" });
   }
-};
-
-function json(statusCode, body) {
-  return {
-    statusCode,
-    headers: {
-      "content-type": "application/json",
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "POST, OPTIONS",
-      "access-control-allow-headers": "content-type"
-    },
-    body: JSON.stringify(body)
-  };
-}
+});
