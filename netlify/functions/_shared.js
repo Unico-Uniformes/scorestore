@@ -4,15 +4,11 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 
-// Optional deps (no truena si faltan, pero para prod deben existir)
 let Stripe = null;
 try { Stripe = require("stripe"); } catch {}
 let createClient = null;
 try { ({ createClient } = require("@supabase/supabase-js")); } catch {}
 
-/* =========================
-   CORS + RESPONSES
-========================= */
 const corsHeaders = (origin) => ({
   "access-control-allow-origin": origin || "*",
   "access-control-allow-headers": "content-type, stripe-signature, x-org-id",
@@ -64,9 +60,6 @@ const normalizeQty = (items) => {
 const itemsQtyFromAny = (items) =>
   normalizeQty(items).reduce((sum, it) => sum + Number(it.qty || 0), 0);
 
-/* =========================
-   URL BASE (Netlify)
-========================= */
 const getBaseUrl = (event) => {
   const headers = event?.headers || {};
   const proto = headers["x-forwarded-proto"] || "https";
@@ -76,9 +69,6 @@ const getBaseUrl = (event) => {
   return `${proto}://${host}`;
 };
 
-/* =========================
-   FILE READ (catalog)
-========================= */
 const readJsonFile = (relPath) => {
   const p = path.join(process.cwd(), relPath);
   const raw = fs.readFileSync(p, "utf8");
@@ -97,28 +87,20 @@ const getCatalogIndex = () => {
   return { catalog: cat, index: idx };
 };
 
-/* =========================
-   VALIDACIÓN ZIP/CP
-========================= */
 const validateZip = (zip, country) => {
   const z = String(zip || "").trim();
   const c = String(country || "").toUpperCase().trim();
 
   if (c === "US") {
-    // 5 o 5-4
     if (!/^\d{5}(-\d{4})?$/.test(z)) return null;
     return z;
   }
 
-  // MX (y general): mínimo 4 chars (hay países que usan alfanum)
   if (z.length < 4 || z.length > 10) return null;
   if (!/^[a-zA-Z0-9\- ]+$/.test(z)) return null;
   return z;
 };
 
-/* =========================
-   SUPABASE (ADMIN)
-========================= */
 const isSupabaseConfigured = () =>
   Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY && createClient);
 
@@ -135,9 +117,6 @@ const supabaseAdmin = (() => {
   };
 })();
 
-/* =========================
-   TELEGRAM (OPCIONAL)
-========================= */
 const sendTelegram = async (text) => {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -155,9 +134,6 @@ const sendTelegram = async (text) => {
   }
 };
 
-/* =========================
-   ENVÍA.COM
-========================= */
 const ENVIA_API_URL = (process.env.ENVIA_API_URL || "https://api.envia.com").replace(/\/+$/, "");
 const ENVIA_GEOCODES_URL = (process.env.ENVIA_GEOCODES_URL || "https://geocodes.envia.com").replace(/\/+$/, "");
 
@@ -191,7 +167,6 @@ const getOriginByCountry = (country) => {
     };
   }
 
-  // MX
   return {
     name: process.env.ORIGIN_MX_NAME || "Score Store MX",
     company: process.env.ORIGIN_MX_COMPANY || "Único Uniformes",
@@ -213,7 +188,6 @@ const getPackageSpecs = (country, items_qty) => {
   const qty = clampInt(items_qty || 1, 1, 99);
   const c = String(country || "MX").toUpperCase();
 
-  // Puedes ajustar por env vars si quieres precisión
   if (c === "US") {
     const weightLb = Number(process.env.PACK_WEIGHT_LB || 1) * qty;
     return {
@@ -250,8 +224,6 @@ const getPackageSpecs = (country, items_qty) => {
 };
 
 const getZipDetails = async (country, zip) => {
-  // Endpoint oficial: geocodes.envia.com/zipcode/{country}/{zipcode}
-  // Si falla, regresamos null y usamos fallback.
   const c = String(country || "MX").toUpperCase();
   const z = validateZip(zip, c);
   if (!z) return null;
@@ -261,8 +233,6 @@ const getZipDetails = async (country, zip) => {
     const res = await axios.get(url, { headers: { authorization: `Bearer ${requireEnviaKey()}` } });
     const data = res?.data;
 
-    // Respuesta real puede variar; intentamos mapear lo típico
-    // (city/state/state_code)
     const city =
       data?.city ||
       data?.locality ||
@@ -293,7 +263,6 @@ const getZipDetails = async (country, zip) => {
 
 const pickBestRate = (rates) => {
   const arr = Array.isArray(rates) ? rates : [];
-  // Envia suele regresar basePrice o totalPrice (depende carrier). Elegimos el menor precio disponible.
   let best = null;
 
   for (const r of arr) {
@@ -344,12 +313,11 @@ const getEnviaQuote = async ({ zip, country, items_qty }) => {
     destination,
     packages: [pkg],
     shipment: {
-      // carrier puede ir vacío para multi-carrier quote
       carrier: c === "US" ? (process.env.ENVIA_US_DEFAULT_CARRIER || "usps") : (process.env.ENVIA_MX_DEFAULT_CARRIER || "dhl"),
       type: 1,
     },
     settings: {
-      currency: "MXN", // tienda MXN (Stripe)
+      currency: "MXN",
     },
   };
 
@@ -362,7 +330,6 @@ const getEnviaQuote = async ({ zip, country, items_qty }) => {
     throw new Error("No se encontró tarifa (envía) para ese CP/ZIP");
   }
 
-  // Envia regresa precio en currency solicitada (MXN). Si algún carrier manda USD, fuerza conversión por env var:
   let priceMXN = Number(best.price);
   if (!Number.isFinite(priceMXN) || priceMXN <= 0) throw new Error("Tarifa inválida");
   const fx = Number(process.env.FX_USD_TO_MXN || 18);
@@ -404,9 +371,6 @@ const getFallbackShipping = (country, items_qty) => {
   };
 };
 
-/* =========================
-   STRIPE (INIT)
-========================= */
 const initStripe = () => {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("STRIPE_SECRET_KEY no configurada");
@@ -420,9 +384,6 @@ const readRawBody = (event) => {
   return Buffer.from(body, "utf8");
 };
 
-/* =========================
-   ENVÍA LABEL (SHIP/GENERATE)
-========================= */
 const stripeShippingToEnviaDestination = (shipping_details) => {
   const sd = shipping_details || {};
   const addr = sd.address || {};
@@ -434,7 +395,7 @@ const stripeShippingToEnviaDestination = (shipping_details) => {
     email: "",
     phone: "",
     street: addr.line1 || "",
-    number: addr.line2 || "", // stripe no separa número; si tu UX lo mete aquí, perfecto
+    number: addr.line2 || "",
     district: addr.line2 ? "Other" : "Other",
     city: addr.city || "",
     state: addr.state || "",
@@ -476,7 +437,6 @@ const createEnviaLabel = async ({ shipping_country, stripe_session, items_qty })
   const url = `${ENVIA_API_URL}/ship/generate/`;
   const res = await axios.post(url, payload, { headers: enviaHeaders(), timeout: 25000 });
 
-  // Envia suele devolver data con trackingNumber/label/base64 etc (varía por carrier)
   const data = res?.data?.data || res?.data;
   return data;
 };
