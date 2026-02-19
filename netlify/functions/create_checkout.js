@@ -19,7 +19,7 @@ const {
 } = require("./_shared");
 
 exports.handler = async (event) => {
-  const origin = event?.headers?.origin;
+  const origin = event?.headers?.origin || event?.headers?.Origin;
 
   try {
     if (event.httpMethod === "OPTIONS") return handleOptions(event);
@@ -68,7 +68,7 @@ exports.handler = async (event) => {
 
       if (!priceCents || priceCents < 0) return jsonResponse(400, { ok: false, error: `Precio inválido para ${it.sku}` }, origin);
 
-      // Aplicar descuento de porcentaje si aplica
+      // Aplicar descuento de porcentaje asegurando que sea un número cerrado
       if (discountPercent > 0) {
         priceCents = Math.round(priceCents * (1 - discountPercent));
       }
