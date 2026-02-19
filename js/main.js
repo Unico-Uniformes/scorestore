@@ -446,7 +446,6 @@
     }
 
     if (fromUserAction) {
-      // reduce chance de "parece que no pasó nada" por scroll
       dom.productGrid.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }
@@ -490,7 +489,6 @@
     next.setAttribute("aria-label", "Siguiente");
     next.innerHTML = "›";
 
-    // Nav state
     const setNavState = () => {
       const idx = getActiveIndex(track);
       const dotEls = $$(".dot", dots);
@@ -499,7 +497,6 @@
       next.disabled = idx >= imgs.length - 1;
     };
 
-    // Scroll handlers
     track.addEventListener("scroll", debounce(setNavState, 80), { passive: true });
 
     prev.addEventListener("click", () => {
@@ -514,7 +511,6 @@
       setNavState();
     });
 
-    // First state
     setNavState();
 
     wrap.appendChild(track);
@@ -570,7 +566,6 @@
 
     dom.pmQty.value = "1";
 
-    // Media carousel
     dom.pmCarousel.innerHTML = "";
     dom.pmCarousel.appendChild(buildCarousel(images, title));
 
@@ -774,7 +769,6 @@
       const data = await r.json().catch(() => null);
       if (!r.ok || !data?.url) throw new Error(data?.error || "Checkout failed");
 
-      // Redirige a Stripe Checkout
       window.location.href = data.url;
     } catch (e) {
       dom.checkoutMsg.hidden = false;
@@ -837,11 +831,9 @@
   }
 
   function enableTracking() {
-    // Meta Pixel optional. Si no hay ID, no hace nada.
     const id = CONFIG.metaPixelId;
     if (!id) return;
 
-    // minimal meta pixel loader
     /* eslint-disable */
     !(function(f,b,e,v,n,t,s){
       if(f.fbq)return; n=f.fbq=function(){ n.callMethod ?
@@ -888,7 +880,6 @@
   function bindEvents() {
     dom.appVersionLabel.textContent = APP_VERSION;
 
-    // overlay closes drawers/modals
     dom.overlay.addEventListener("click", () => {
       [dom.sideMenu, dom.cartDrawer, dom.productModal, dom.aiModal, dom.legalModal].forEach(el => {
         if (el && !el.hidden) el.hidden = true;
@@ -1035,6 +1026,12 @@
     bindEvents();
     renderCart();
     maybeShowCookieBanner();
+
+    // ✅ REGISTRO DEL SERVICE WORKER (BLOQUE 2)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+
     await loadCatalog();
   }
 
