@@ -1,204 +1,147 @@
-const fs = require("fs");
-const path = require("path");
-const Stripe = require("stripe");
+"use strict";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2024-06-20"
-});
+const {
+  jsonResponse,
+  handleOptions,
+  safeJsonParse,
+  clampInt,
+  normalizeQty,
+  itemsQtyFromAny,
+  getBaseUrl,
+  validateZip,
+  getCatalogIndex,
+  getEnviaQuote,
+  getFallbackShipping,
+  initStripe,
+  isSupabaseConfigured,
+  supabaseAdmin,
+} = require("./_shared");
 
 exports.handler = async (event) => {
+  const origin = event?.headers?.origin;
+
   try {
-    if (event.httpMethod !== "POST") {
-      return json(405, { error: "Method not allowed" });
-    }
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return json(500, { error: "STRIPE_SECRET_KEY no configurada" });
-    }
+    if (event.httpMethod === "OPTIONS") return handleOptions(event);
+    if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
 
-    const origin = getOrigin(event);
-    const body = JSON.parse(event.body || "{}");
+    const stripe = initStripe();
+    const baseUrl = getBaseUrl(event);
 
-    const items = Array.isArray(body.items) ? body.items : [];
-    const shipping_mode = body.shipping_mode === "delivery" ? "delivery" : "pickup";
-    const destination = body.destination || null;
+    const body = safeJsonParse(event.body) || {};
+    const items = normalizeQty(body.items);
+    const shipping_mode = String(body.shipping_mode || "pickup").trim(); // pickup | envia_mx | envia_us
+    const postal_code = String(body.postal_code || "").trim();
+    const promo_code = String(body.promo_code || "").trim();
 
-    if (!items.length) return json(400, { error: "Carrito vacío" });
+    if (!items.length) return jsonResponse(400, { ok: false, error: "Carrito vacío" }, origin);
 
-    const catalog = readCatalog();
-    const products = Array.isArray(catalog.products) ? catalog.products : [];
+    // Cargar catálogo real (server-side) para evitar manipulación de precios
+    const { index } = getCatalogIndex();
 
-    // valida items contra catálogo
     const line_items = [];
     for (const it of items) {
-      const sku = String(it.sku || "").trim();
-      const qty = Math.max(1, Math.min(99, Number(it.qty || 1)));
-      if (!sku) return json(400, { error: "Item sin SKU" });
+      const p = index.get(it.sku);
+      if (!p) return jsonResponse(400, { ok: false, error: `SKU inválido: ${it.sku}` }, origin);
 
-      const p = products.find(x => String(x.sku || x.id) === sku);
-      if (!p) return json(400, { error: `SKU no encontrado: ${sku}` });
+      const title = String(p?.title || p?.name || "Producto").trim();
+      const priceCents = Number.isFinite(Number(p?.price_cents))
+        ? Math.round(Number(p.price_cents))
+        : 0;
 
-      const unit_amount = Number(p.price_cents || 0);
-      if (!unit_amount || unit_amount < 100) return json(400, { error: `Precio inválido para: ${sku}` });
+      if (!priceCents || priceCents < 0) return jsonResponse(400, { ok: false, error: `Precio inválido para ${it.sku}` }, origin);
+
+      const desc = it.size ? `${title} · Talla ${it.size}` : title;
 
       line_items.push({
-        quantity: qty,
+        quantity: clampInt(it.qty, 1, 99),
         price_data: {
           currency: "mxn",
-          unit_amount: Math.round(unit_amount),
+          unit_amount: priceCents,
           product_data: {
-            name: p.title || "Producto",
-            description: (p.description || "").slice(0, 500)
-          }
-        }
+            name: desc,
+          },
+        },
       });
     }
 
-    // envío real (si delivery): cotiza server-side para cobrar envío real
-    let shipping_cents = 0;
-    let ship_meta = null;
+    const items_qty = itemsQtyFromAny(items);
+    let shipping = { ok: true, provider: "pickup", label: "Recoger en fábrica (Tijuana)", country: "MX", amount_cents: 0, amount_mxn: 0 };
 
-    if (shipping_mode === "delivery") {
-      if (!destination) return json(400, { error: "destination requerido para envío" });
+    if (shipping_mode === "envia_mx" || shipping_mode === "envia_us") {
+      const country = shipping_mode === "envia_us" ? "US" : "MX";
+      const zip = validateZip(postal_code, country);
+      if (!zip) return jsonResponse(400, { ok: false, error: "CP/ZIP inválido" }, origin);
 
-      const cp = String(destination.postal_code || "").trim();
-      const city = String(destination.city || "").trim();
-      const state = String(destination.state || "").trim();
-
-      if (!/^\d{5}$/.test(cp) || !city || !state) {
-        return json(400, { error: "destination inválido (postal_code/city/state)" });
+      try {
+        shipping = await getEnviaQuote({ zip, country, items_qty });
+      } catch (e) {
+        shipping = { ...getFallbackShipping(country, items_qty), warning: String(e?.message || e) };
       }
-
-      const q = await quoteEnvia({ postal_code: cp, city, state }, items);
-      shipping_cents = q.total_cents;
-      ship_meta = q.meta;
-
-      // Agrega envío como line item
-      line_items.push({
-        quantity: 1,
-        price_data: {
-          currency: "mxn",
-          unit_amount: shipping_cents,
-          product_data: { name: "Envío (Envía.com)", description: ship_meta?.service ? `Servicio: ${ship_meta.service}` : "Cotización Envía.com" }
-        }
-      });
     }
 
-    const session = await stripe.checkout.sessions.create({
+    // Stripe Checkout Session
+    const sessionPayload = {
       mode: "payment",
       payment_method_types: ["card", "oxxo"],
       line_items,
-
-      success_url: `${origin}/?success=1`,
-      cancel_url: `${origin}/?canceled=1`,
-
-      // Stripe puede pedir datos para OXXO
-      customer_creation: "if_required",
-
+      success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/index.html#catalog`,
       metadata: {
         shipping_mode,
-        envia_service: ship_meta?.service || "",
-        envia_carrier: ship_meta?.carrier || ""
+        postal_code: postal_code || "",
+        promo_code: promo_code || "",
+        items_qty: String(items_qty || 0),
+        items: JSON.stringify(items).slice(0, 4500),
+        shipping_label: String(shipping.label || ""),
+        shipping_provider: String(shipping.provider || ""),
+        shipping_country: String(shipping.country || ""),
+        shipping_amount_cents: String(shipping.amount_cents || 0),
       },
+    };
 
-      // Para delivery: deja que Stripe capture dirección (MX)
-      shipping_address_collection: shipping_mode === "delivery"
-        ? { allowed_countries: ["MX"] }
-        : undefined
-    });
+    // Si es envío, Stripe debe pedir dirección (y el webhook la usa para generar guía)
+    if (shipping_mode === "envia_mx") {
+      sessionPayload.shipping_address_collection = { allowed_countries: ["MX"] };
+    } else if (shipping_mode === "envia_us") {
+      sessionPayload.shipping_address_collection = { allowed_countries: ["US"] };
+    }
 
-    return json(200, { url: session.url });
+    // Mostrar costo de envío dentro de Stripe
+    if ((shipping_mode === "envia_mx" || shipping_mode === "envia_us") && Number(shipping.amount_cents || 0) > 0) {
+      sessionPayload.shipping_options = [
+        {
+          shipping_rate_data: {
+            display_name: shipping.label || (shipping_mode === "envia_us" ? "Envío USA" : "Envío México"),
+            fixed_amount: { amount: Number(shipping.amount_cents), currency: "mxn" },
+            type: "fixed_amount",
+          },
+        },
+      ];
+    }
 
+    const session = await stripe.checkout.sessions.create(sessionPayload);
+
+    // (Opcional) guardar “pre-order” como pending (no rompe si no hay tabla)
+    if (isSupabaseConfigured()) {
+      const sb = supabaseAdmin();
+      if (sb) {
+        try {
+          await sb.from("orders").insert({
+            stripe_session_id: session.id,
+            status: "pending",
+            shipping_mode,
+            postal_code: postal_code || null,
+            shipping_amount_cents: Number(shipping.amount_cents || 0),
+            items,
+          });
+        } catch (e) {
+          console.log("[orders] warn insert pending:", e?.message || e);
+        }
+      }
+    }
+
+    return jsonResponse(200, { ok: true, url: session.url, id: session.id }, origin);
   } catch (e) {
-    return json(500, { error: "Server error", message: String(e && e.message ? e.message : e) });
+    return jsonResponse(500, { ok: false, error: String(e?.message || e) }, origin);
   }
 };
-
-function getOrigin(event) {
-  const h = event.headers || {};
-  const proto = h["x-forwarded-proto"] || "https";
-  const host = h["x-forwarded-host"] || h["host"];
-  return `${proto}://${host}`;
-}
-
-function readCatalog() {
-  const p = path.join(process.cwd(), "data", "catalog.json");
-  const raw = fs.readFileSync(p, "utf8");
-  return JSON.parse(raw);
-}
-
-async function quoteEnvia(destination, items) {
-  const apiKey = process.env.ENVIA_API_KEY;
-  if (!apiKey) {
-    // sin key: no rompe, pero no cobramos envío real
-    return { total_cents: 0, meta: null };
-  }
-
-  const origin = {
-    postal_code: String(process.env.ENVIA_ORIGIN_POSTAL || "22000"),
-    city: String(process.env.ENVIA_ORIGIN_CITY || "Tijuana"),
-    state: String(process.env.ENVIA_ORIGIN_STATE || "Baja California"),
-    country_code: String(process.env.ENVIA_ORIGIN_COUNTRY || "MX")
-  };
-
-  const pkg = {
-    content: "Score Store Merch",
-    amount: Math.max(1, items.reduce((a,i)=>a + Number(i.qty||0), 0)),
-    type: "box",
-    dimensions: {
-      length: Number(process.env.ENVIA_PKG_L || 32),
-      width: Number(process.env.ENVIA_PKG_W || 24),
-      height: Number(process.env.ENVIA_PKG_H || 8)
-    },
-    weight: Number(process.env.ENVIA_PKG_WEIGHT || 1.0)
-  };
-
-  const payload = {
-    origin,
-    destination: { ...destination, country_code: "MX" },
-    packages: [pkg]
-  };
-
-  const endpoint = String(process.env.ENVIA_RATE_ENDPOINT || "https://api.envia.com/ship/rate/");
-  const resp = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "authorization": `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(payload)
-  });
-
-  const data = await resp.json().catch(() => null);
-  if (!resp.ok || !data) return { total_cents: 0, meta: null };
-
-  const rates = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
-  const sorted = rates
-    .map(r => ({
-      carrier: r.carrier || r.carrier_name || "Carrier",
-      service: r.service || r.service_name || "Servicio",
-      total: Number(r.total || r.total_amount || r.price || 0)
-    }))
-    .filter(r => Number.isFinite(r.total) && r.total > 0)
-    .sort((a,b)=>a.total-b.total);
-
-  if (!sorted.length) return { total_cents: 0, meta: null };
-
-  const best = sorted[0];
-  return {
-    total_cents: Math.round(best.total * 100),
-    meta: { carrier: best.carrier, service: best.service }
-  };
-}
-
-function json(statusCode, body) {
-  return {
-    statusCode,
-    headers: {
-      "content-type": "application/json",
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "POST, OPTIONS",
-      "access-control-allow-headers": "content-type"
-    },
-    body: JSON.stringify(body)
-  };
-}
