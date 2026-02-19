@@ -2,119 +2,132 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0b0b0d" />
-  <meta name="description" content="Score Store — Merch oficial. Pago con Stripe + OXXO. Envío con Envía.com o pickup." />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="description" content="Merch Oficial de Score International. Fabricado por UNICO UNIFORMES, patrocinador oficial. Pago seguro con Stripe + OXXO." />
 
-  <title>Score Store</title>
+  <title>SCORE STORE — Merch Oficial</title>
 
-  <link rel="manifest" href="/site.webmanifest" />
-  <link rel="icon" href="/assets/favicon.png" />
-  <link rel="preload" href="/css/styles.css" as="style" />
-  <link rel="stylesheet" href="/css/styles.css" />
+  <!-- PWA -->
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
+  <!-- Version (cache bust / SW) -->
   <script>
-    // Versiona para evitar “cache fantasma” cuando actualices
-    window.__APP_VERSION__ = "2026.02.19.PROD";
+    window.__APP_VERSION__ = "2026.02.19.1";
   </script>
+
+  <link rel="preload" href="css/styles.css" as="style" />
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 
 <body>
-  <!-- INTRO -->
-  <div id="intro" class="intro" aria-hidden="true">
-    <div class="intro__inner">
-      <img class="intro__logo" src="/assets/logo-desert.png" alt="Score Desert" />
-      <div class="intro__bar"><span></span></div>
-      <div class="intro__txt">Cargando Score Store…</div>
+  <!-- SPLASH -->
+  <div id="splash" class="splash" aria-hidden="true">
+    <div class="splash__inner">
+      <img class="splash__logo" src="assets/logo-score.webp" alt="SCORE" />
+      <div class="splash__bar" role="progressbar" aria-label="Cargando">
+        <div class="splash__barFill"></div>
+      </div>
+      <div class="splash__text">CARGANDO CATÁLOGOS…</div>
     </div>
   </div>
 
-  <!-- TOPBAR -->
-  <header class="topbar">
-    <div class="wrap topbar__inner">
-      <button id="btnMenu" class="iconbtn" type="button" aria-label="Abrir menú">☰</button>
+  <a class="skip" href="#catalog">Saltar al catálogo</a>
 
-      <a class="brand" href="/" aria-label="Score Store">
-        <span class="brand__title">SCORE</span>
-        <span class="brand__sub">STORE</span>
+  <!-- TOPBAR -->
+  <header class="topbar" role="banner">
+    <div class="wrap topbar__inner">
+      <button id="openMenuBtn" class="iconbtn" type="button" aria-label="Abrir menú">
+        <span class="icon">≡</span>
+      </button>
+
+      <a class="brand" href="#" aria-label="Score Store">
+        <img class="brand__logo" src="assets/logo-score.webp" alt="SCORE STORE" />
+        <div class="brand__text">
+          <div class="brand__title">SCORE STORE</div>
+          <div class="brand__sub">Merch Oficial</div>
+        </div>
       </a>
 
       <div class="topbar__actions">
         <div class="search">
-          <span class="search__icon">⌕</span>
-          <input id="searchInput" class="search__input" type="search" placeholder="Buscar merch (hoodie, gorra…)" />
+          <span class="search__icon" aria-hidden="true">⌕</span>
+          <input id="searchInput" class="search__input" type="search" placeholder="Buscar (hoodie, gorra, jersey…)" autocomplete="off" />
         </div>
 
-        <button id="btnCart" class="iconbtn iconbtn--accent" type="button" aria-label="Carrito">
-          🛒 <span id="cartCount" class="badge">0</span>
+        <button id="openAiBtn" class="iconbtn" type="button" aria-label="Abrir asistente" title="SCORE AI">
+          <span class="icon">✦</span>
+        </button>
+
+        <button id="openCartBtn" class="iconbtn iconbtn--accent" type="button" aria-label="Abrir carrito" title="Carrito">
+          <span class="icon">🛒</span>
+          <span id="cartCount" class="badge" aria-label="Artículos en carrito">0</span>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- MENU -->
-  <div id="overlay" class="overlay" hidden></div>
-  <aside id="drawerMenu" class="drawer" hidden>
-    <div class="drawer__head">
-      <div class="drawer__title">Menú</div>
-      <button id="btnCloseMenu" class="iconbtn" type="button" aria-label="Cerrar">✕</button>
-    </div>
-    <div class="drawer__body">
-      <button class="navitem" data-scroll="#catalogos" type="button">Catálogos</button>
-      <button class="navitem" data-scroll="#productos" type="button">Productos</button>
-      <button class="navitem" data-scroll="#partners" type="button">Partners</button>
-      <button class="navitem" id="btnOpenCartFromMenu" type="button">Abrir carrito</button>
-    </div>
-    <div class="drawer__foot">
-      <div class="muted">v<span id="appVersionLabel">—</span></div>
-    </div>
-  </aside>
-
   <!-- HERO -->
-  <section class="hero" aria-label="Hero">
-    <div class="hero__bg" role="img" aria-label="Hero background"></div>
+  <section class="hero" aria-label="Intro">
+    <div class="hero__bg" aria-hidden="true"></div>
 
     <div class="wrap hero__inner">
       <div class="hero__center">
-        <img class="hero__logo" src="/assets/logo-desert.png" alt="Score Desert Logo" />
-        <h1 class="hero__h1">Merch Oficial de Score International</h1>
-        <p class="hero__h2">Fabricado por <b>UNICO UNIFORMES</b>, patrocinador oficial.</p>
+        <img class="hero__desert" src="assets/logo-world-desert.webp" alt="World Desert Championship" />
+        <h1 class="hero__title">Merch Oficial de <span class="accent">Score International</span></h1>
+        <p class="hero__hook">Fabricado por <b>UNICO UNIFORMES</b>, patrocinador oficial.</p>
 
         <div class="hero__cta">
-          <button id="btnGoCatalogos" class="btn btn--primary" type="button">Ver catálogos</button>
-          <button id="btnGoProductos" class="btn btn--ghost" type="button">Ver productos</button>
+          <button id="scrollToCategoriesBtn" class="btn btn--primary" type="button">Ver catálogos</button>
+          <button id="scrollToCatalogBtn" class="btn btn--ghost" type="button">Ver productos</button>
         </div>
 
-        <div class="hero__chips">
+        <div class="hero__meta">
           <span class="chip">Stripe Checkout</span>
           <span class="chip">OXXO</span>
-          <span class="chip">MXN</span>
           <span class="chip">Envía.com</span>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- CATÁLOGOS -->
-  <main class="main">
-    <section id="catalogos" class="wrap section">
+  <!-- PARTNERS -->
+  <section class="partners" aria-label="Partners">
+    <div class="wrap partners__inner">
+      <div class="partners__title">OFFICIAL PARTNERS</div>
+      <div class="partners__row">
+        <img src="assets/logo-ford.webp" alt="Ford" />
+        <img src="assets/logo-rzr.webp" alt="RZR" />
+        <img src="assets/logo-unico.webp" alt="Único Uniformes" />
+        <img src="assets/logo-bfgodrich.webp" alt="BFGoodrich" />
+      </div>
+    </div>
+  </section>
+
+  <!-- MAIN -->
+  <main id="main" class="main" role="main">
+    <!-- CATEGORIES -->
+    <section class="wrap section" aria-label="Catálogos">
       <div class="section__head">
-        <h2>Catálogos</h2>
+        <h2 id="categories">Catálogos</h2>
         <div class="section__tools">
-          <button id="btnAllCatalogs" class="btn btn--tiny" type="button">Ver todo</button>
+          <button id="clearCategoryBtn" class="btn btn--tiny" type="button" title="Ver todo">Ver todo</button>
         </div>
       </div>
 
-      <div id="catalogGrid" class="catalogGrid" aria-live="polite"></div>
-      <div class="hint">Tip: toca un catálogo para filtrar productos.</div>
+      <div id="categoryGrid" class="catgrid" aria-live="polite"></div>
+      <div id="categoryHint" class="hint" hidden>Selecciona un catálogo para filtrar el catálogo de productos.</div>
     </section>
 
-    <!-- PRODUCTOS -->
-    <section id="productos" class="wrap section">
+    <!-- CATALOG -->
+    <section id="catalog" class="wrap section" aria-label="Catálogo">
       <div class="section__head">
         <h2>Productos</h2>
         <div class="section__tools">
-          <select id="sortSelect" class="select" aria-label="Ordenar">
+          <select id="sortSelect" class="select" aria-label="Ordenar productos">
             <option value="featured">Destacados</option>
             <option value="price_asc">Precio: menor a mayor</option>
             <option value="price_desc">Precio: mayor a menor</option>
@@ -125,48 +138,55 @@
 
       <div id="activeFilterRow" class="filterrow" hidden>
         <span id="activeFilterLabel" class="filterrow__label"></span>
-        <button id="btnClearFilter" class="btn btn--tiny" type="button">Quitar filtro</button>
+        <button id="clearFilterBtn" class="btn btn--tiny" type="button">Quitar filtro</button>
       </div>
 
       <div id="statusRow" class="status" aria-live="polite"></div>
       <div id="productGrid" class="grid" aria-live="polite"></div>
     </section>
-
-    <!-- PARTNERS -->
-    <section id="partners" class="wrap section">
-      <div class="section__head">
-        <h2>Partners</h2>
-      </div>
-
-      <div class="partners">
-        <img src="/assets/logo-ford.png" alt="Ford" loading="lazy" />
-        <img src="/assets/logo-rzr.png" alt="RZR" loading="lazy" />
-        <img src="/assets/logo-unico.png" alt="Único Uniformes" loading="lazy" />
-        <img src="/assets/logo-goodrich.png" alt="BFGoodrich" loading="lazy" />
-      </div>
-    </section>
   </main>
 
   <!-- FOOTER -->
-  <footer class="footer">
+  <footer class="footer" role="contentinfo">
     <div class="wrap footer__inner">
-      <div>
+      <div class="footer__left">
         <div class="footer__brand">SCORE STORE</div>
         <div class="footer__sub">Pago seguro con Stripe · OXXO disponible · Envíos con Envía.com</div>
       </div>
-
-      <div class="footer__links">
-        <button id="btnOpenTerms" class="linkbtn" type="button">Términos</button>
-        <button id="btnOpenPrivacy" class="linkbtn" type="button">Privacidad</button>
+      <div class="footer__right">
+        <button id="openLegalBtn" class="linkbtn" type="button">Términos</button>
+        <button id="openPrivacyBtn" class="linkbtn" type="button">Privacidad</button>
       </div>
     </div>
   </footer>
 
+  <!-- OVERLAY -->
+  <div id="overlay" class="overlay" hidden></div>
+
+  <!-- SIDE MENU -->
+  <aside id="sideMenu" class="drawer" aria-label="Menú" hidden>
+    <div class="drawer__head">
+      <div class="drawer__title">Menú</div>
+      <button id="closeMenuBtn" class="iconbtn" aria-label="Cerrar" type="button">✕</button>
+    </div>
+
+    <div class="drawer__body">
+      <button class="navitem" type="button" data-scroll="#categories">Catálogos</button>
+      <button class="navitem" type="button" data-scroll="#catalog">Productos</button>
+      <button class="navitem" type="button" id="navOpenCart">Carrito</button>
+      <button class="navitem" type="button" id="navOpenAi">SCORE AI</button>
+    </div>
+
+    <div class="drawer__foot">
+      <div class="muted">v<span id="appVersionLabel">—</span></div>
+    </div>
+  </aside>
+
   <!-- CART DRAWER -->
-  <aside id="drawerCart" class="drawer drawer--right" hidden aria-label="Carrito">
+  <aside id="cartDrawer" class="drawer drawer--right" aria-label="Carrito" hidden>
     <div class="drawer__head">
       <div class="drawer__title">Carrito</div>
-      <button id="btnCloseCart" class="iconbtn" type="button" aria-label="Cerrar">✕</button>
+      <button id="closeCartBtn" class="iconbtn" aria-label="Cerrar" type="button">✕</button>
     </div>
 
     <div class="drawer__body">
@@ -181,26 +201,28 @@
         <div class="cartrow cartrow--stack">
           <div class="cartrow__line">
             <span>Entrega</span>
-            <span id="shipHint" class="muted">Pickup seleccionado</span>
+            <span class="muted" id="shipHint">Selecciona modo</span>
           </div>
 
-          <div class="seg" role="group" aria-label="Modo entrega">
+          <!-- IMPORTANT: values deben coincidir con backend (create_checkout.js) -->
+          <div class="seg" role="group" aria-label="Modo de entrega">
             <label class="seg__opt">
               <input type="radio" name="shipMode" value="pickup" checked />
-              <span>Pickup</span>
+              <span>Recoger en fábrica</span>
             </label>
             <label class="seg__opt">
-              <input type="radio" name="shipMode" value="delivery" />
-              <span>Envío</span>
+              <input type="radio" name="shipMode" value="envia_mx" />
+              <span>Envío México</span>
+            </label>
+            <label class="seg__opt">
+              <input type="radio" name="shipMode" value="envia_us" />
+              <span>Envío USA</span>
             </label>
           </div>
 
-          <div id="shipForm" class="shipform" hidden>
-            <input id="shipCP" class="input" inputmode="numeric" maxlength="5" placeholder="Código postal (5 dígitos)" />
-            <input id="shipCity" class="input" placeholder="Ciudad (ej. Tijuana)" />
-            <input id="shipState" class="input" placeholder="Estado (ej. Baja California)" />
-            <button id="btnQuote" class="btn btn--tiny" type="button">Cotizar</button>
-            <div id="quoteMsg" class="hint" hidden></div>
+          <div id="postalWrap" class="postal" hidden>
+            <input id="postalCode" class="input" inputmode="numeric" maxlength="10" placeholder="Código postal / ZIP" />
+            <button id="quoteBtn" class="btn btn--tiny" type="button">Cotizar</button>
           </div>
 
           <div class="cartrow">
@@ -214,29 +236,32 @@
           <b id="cartTotal">$0</b>
         </div>
 
-        <button id="btnCheckout" class="btn btn--primary btn--block" type="button">
-          Pagar (Stripe + OXXO)
-        </button>
+        <div class="cartrow cartrow--stack">
+          <label class="muted" for="promoCode">Cupón (opcional)</label>
+          <input id="promoCode" class="input" placeholder="PROMO10" />
+        </div>
 
+        <button id="checkoutBtn" class="btn btn--primary btn--block" type="button">Pagar (Stripe + OXXO)</button>
         <div id="checkoutMsg" class="hint" hidden></div>
       </div>
     </div>
   </aside>
 
   <!-- PRODUCT MODAL -->
-  <section id="productModal" class="modal" hidden aria-label="Producto" role="dialog" aria-modal="true">
+  <section id="productModal" class="modal" role="dialog" aria-modal="true" aria-label="Producto" hidden>
     <div class="modal__panel">
       <div class="modal__head">
-        <div id="pmTitle" class="modal__title">Producto</div>
-        <button id="pmClose" class="iconbtn" type="button" aria-label="Cerrar">✕</button>
+        <div class="modal__title" id="pmTitle">Producto</div>
+        <button id="pmClose" class="iconbtn" aria-label="Cerrar" type="button">✕</button>
       </div>
 
       <div class="modal__body">
         <div id="pmCarousel" class="pm__media"></div>
 
         <div class="pm__info">
-          <div id="pmPrice" class="pm__price">$0</div>
-          <div id="pmDesc" class="pm__desc">—</div>
+          <div class="pm__chips" id="pmChips"></div>
+          <div class="pm__price" id="pmPrice">$0</div>
+          <div class="pm__desc" id="pmDesc"></div>
 
           <div class="pm__row">
             <div class="pm__col">
@@ -255,12 +280,31 @@
     </div>
   </section>
 
+  <!-- AI MODAL -->
+  <section id="aiModal" class="modal" role="dialog" aria-modal="true" aria-label="SCORE AI" hidden>
+    <div class="modal__panel modal__panel--tall">
+      <div class="modal__head">
+        <div class="modal__title">SCORE AI</div>
+        <button id="aiClose" class="iconbtn" aria-label="Cerrar" type="button">✕</button>
+      </div>
+
+      <div class="modal__body">
+        <div id="aiOutput" class="chat"></div>
+        <div class="chatbar">
+          <input id="aiInput" class="input" placeholder="Pregúntame por tallas, envíos, cambios, productos…" />
+          <button id="aiSendBtn" class="btn btn--primary" type="button">Enviar</button>
+        </div>
+        <div class="hint">Si la API de IA no tiene key, no rompe el catálogo.</div>
+      </div>
+    </div>
+  </section>
+
   <!-- LEGAL MODAL -->
-  <section id="legalModal" class="modal" hidden aria-label="Legal" role="dialog" aria-modal="true">
+  <section id="legalModal" class="modal" role="dialog" aria-modal="true" aria-label="Legal" hidden>
     <div class="modal__panel">
       <div class="modal__head">
-        <div id="legalTitle" class="modal__title">Legal</div>
-        <button id="legalClose" class="iconbtn" type="button" aria-label="Cerrar">✕</button>
+        <div class="modal__title" id="legalTitle">Legal</div>
+        <button id="legalClose" class="iconbtn" aria-label="Cerrar" type="button">✕</button>
       </div>
       <div class="modal__body">
         <div id="legalBody" class="legal"></div>
@@ -268,9 +312,20 @@
     </div>
   </section>
 
-  <!-- TOAST -->
-  <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+  <!-- COOKIE / TRACKING GATE -->
+  <section id="cookieBanner" class="cookie" role="dialog" aria-label="Cookies" hidden>
+    <div class="cookie__text">
+      Usamos cookies para mejorar la experiencia. Puedes aceptar para habilitar medición o continuar sin tracking.
+    </div>
+    <div class="cookie__actions">
+      <button id="cookieReject" class="btn btn--ghost" type="button">Sin tracking</button>
+      <button id="cookieAccept" class="btn btn--primary" type="button">Aceptar</button>
+    </div>
+  </section>
 
-  <script defer src="/js/main.js"></script>
+  <!-- TOAST -->
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script defer src="js/main.js"></script>
 </body>
 </html>
