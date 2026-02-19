@@ -27,7 +27,7 @@ const jsonResponse = (statusCode, data, origin) => ({
 
 const handleOptions = (event) => ({
   statusCode: 204,
-  headers: corsHeaders(event?.headers?.origin),
+  headers: corsHeaders(event?.headers?.origin || event?.headers?.Origin),
   body: "",
 });
 
@@ -332,7 +332,7 @@ const getEnviaQuote = async ({ zip, country, items_qty }) => {
 
   let priceMXN = Number(best.price);
   if (!Number.isFinite(priceMXN) || priceMXN <= 0) throw new Error("Tarifa inválida");
-  const fx = Number(process.env.FX_USD_TO_MXN || 18);
+  const fx = Number(process.env.FX_USD_TO_MXN) || 18; 
   if (String(c) === "US" && String(process.env.ENVIA_FORCE_USD_TO_MXN || "0") === "1") {
     if (Number.isFinite(fx) && fx > 0) priceMXN = priceMXN * fx;
   }
@@ -396,7 +396,7 @@ const stripeShippingToEnviaDestination = (shipping_details) => {
     phone: "",
     street: addr.line1 || "",
     number: addr.line2 || "",
-    district: addr.line2 ? "Other" : "Other",
+    district: addr.line2 || "Centro", // Removida la redundancia lógica
     city: addr.city || "",
     state: addr.state || "",
     country: country || "MX",
