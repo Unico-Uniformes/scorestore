@@ -1,84 +1,124 @@
-import Stripe from "stripe";
-import { getSupabaseAdmin, json, withCORS, rawBody } from "./_shared.js";
+"use strict";
 
-export const handler = withCORS(async (event) => {
-  if (event.httpMethod !== "POST") return json(405, { error: "Method not allowed" });
+const {
+  jsonResponse,
+  readRawBody,
+  initStripe,
+  isSupabaseConfigured,
+  supabaseAdmin,
+  createEnviaLabel,
+  sendTelegram,
+} = require("./_shared");
 
+exports.handler = async (event) => {
+  // Stripe no necesita CORS; pero respondemos JSON por consistencia
   try {
-    const stripeSecret = process.env.STRIPE_SECRET_KEY;
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" });
 
-    if (!stripeSecret) return json(500, { error: "STRIPE_SECRET_KEY missing" });
-    if (!webhookSecret) return json(500, { error: "STRIPE_WEBHOOK_SECRET missing" });
-
-    const stripe = new Stripe(stripeSecret, { apiVersion: "2024-06-20" });
-
+    const stripe = initStripe();
     const sig = event.headers["stripe-signature"];
-    const payload = rawBody(event);
+    const whSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-    let ev;
-    try {
-      ev = stripe.webhooks.constructEvent(payload, sig, webhookSecret);
-    } catch (e) {
-      return json(400, { error: `Webhook signature failed: ${e.message}` });
+    if (!sig || !whSecret) {
+      // Ojo: respondemos 200 para que Stripe no reintente infinito si aún no configuraste el secret
+      console.log("[stripe_webhook] missing signature or STRIPE_WEBHOOK_SECRET");
+      return jsonResponse(200, { received: true, warning: "Webhook secret/signature missing" });
     }
 
-    const db = getSupabaseAdmin();
+    const buf = readRawBody(event);
 
-    if (ev.type === "checkout.session.completed") {
-      const session = ev.data.object;
-      const org_id = session?.metadata?.org_id || null;
+    let evt;
+    try {
+      evt = stripe.webhooks.constructEvent(buf, sig, whSecret);
+    } catch (err) {
+      console.log("[stripe_webhook] signature invalid:", err?.message || err);
+      return jsonResponse(400, { received: false, error: "Invalid signature" });
+    }
 
-      // UPSERT order (idempotente)
-      await db.from("orders").upsert(
-        {
-          org_id: org_id || null,
-          stripe_session_id: session.id,
-          stripe_payment_intent_id: session.payment_intent || null,
-          status: "paid",
-          currency: session.currency || null,
-          amount_total_cents: session.amount_total || null,
-          amount_subtotal_cents: session.amount_subtotal || null,
-          shipping_mode: session?.metadata?.shipping_mode || null,
-          postal_code: session?.metadata?.postal_code || null,
-          promo_code: session?.metadata?.promo_code || null,
-          customer_email: session.customer_details?.email || null,
-          customer_phone: session.customer_details?.phone || null,
-          shipping_name: session.shipping_details?.name || null,
-          shipping_address: session.shipping_details?.address || null,
-          paid_at: new Date().toISOString(),
-          raw_stripe: session,
-        },
-        { onConflict: "stripe_session_id" }
-      );
+    // Procesar eventos clave
+    if (evt.type === "checkout.session.completed") {
+      const session = evt.data.object || {};
+      const meta = session.metadata || {};
+      const shipping_mode = String(meta.shipping_mode || "pickup");
+      const shipping_country = String(meta.shipping_country || session?.shipping_details?.address?.country || (shipping_mode === "envia_us" ? "US" : "MX")).toUpperCase();
 
-      // Si traes label en metadata (opcional): UPSERT idempotente
-      const label = session?.metadata?.label ? safeJson(session.metadata.label) : null;
-      if (label) {
-        await db.from("shipping_labels").upsert(
-          {
-            org_id: org_id || null,
-            stripe_session_id: session.id,
-            provider: "envia",
-            carrier: label.carrier || null,
-            service: label.service || null,
-            tracking_number: label.tracking_number || null,
-            label_url: label.label_url || null,
-            status: label.status || null,
-            raw: label.raw || label || null,
-          },
-          { onConflict: "stripe_session_id,provider" }
-        );
+      const items_qty = Number(meta.items_qty || 0) || 0;
+      const shipping_amount_cents = Number(meta.shipping_amount_cents || 0) || 0;
+
+      // 1) Guardar orden en Supabase (si hay config). Si no, NO truena.
+      if (isSupabaseConfigured()) {
+        const sb = supabaseAdmin();
+        if (sb) {
+          try {
+            // Upsert por stripe_session_id
+            const row = {
+              stripe_session_id: session.id,
+              stripe_payment_intent: session.payment_intent || null,
+              customer_email: session.customer_details?.email || null,
+              amount_total_cents: Number(session.amount_total || 0),
+              currency: session.currency || "mxn",
+              status: "paid",
+              shipping_mode,
+              postal_code: meta.postal_code || null,
+              shipping_amount_cents,
+              shipping_address: session.shipping_details?.address || null,
+              raw: session,
+            };
+
+            await sb.from("orders").upsert(row, { onConflict: "stripe_session_id" });
+          } catch (e) {
+            console.log("[orders] warn upsert:", e?.message || e);
+          }
+        }
+      }
+
+      // 2) Generar guía Envía (solo si es envío)
+      if (shipping_mode === "envia_mx" || shipping_mode === "envia_us") {
+        try {
+          const labelData = await createEnviaLabel({
+            shipping_country,
+            stripe_session: session,
+            items_qty,
+          });
+
+          // Guardar guía (si Supabase existe)
+          if (isSupabaseConfigured()) {
+            const sb = supabaseAdmin();
+            if (sb) {
+              try {
+                await sb.from("shipping_labels").insert({
+                  stripe_session_id: session.id,
+                  provider: "envia",
+                  country: shipping_country,
+                  payload: labelData,
+                  created_at: new Date().toISOString(),
+                });
+              } catch (e) {
+                console.log("[shipping_labels] warn insert:", e?.message || e);
+              }
+            }
+          }
+
+          // Telegram notify
+          await sendTelegram(
+            `✅ <b>Pago confirmado</b>\nSession: <code>${session.id}</code>\nModo: <b>${shipping_mode}</b>\nPaís: <b>${shipping_country}</b>\nGuía generada (envía).`
+          );
+        } catch (e) {
+          console.log("[envia] label error:", e?.response?.data || e?.message || e);
+          await sendTelegram(
+            `⚠️ <b>Pago confirmado</b> pero <b>falló guía Envía</b>\nSession: <code>${session.id}</code>\nError: <code>${String(e?.message || e).slice(0, 500)}</code>`
+          );
+        }
+      } else {
+        await sendTelegram(`✅ <b>Pago confirmado</b>\nSession: <code>${session.id}</code>\nModo: <b>pickup</b> (Recoger en fábrica)`);
       }
     }
 
-    return json(200, { received: true });
-  } catch (err) {
-    console.error(err);
-    return json(500, { error: err?.message || "Server error" });
+    // Responder 200 SIEMPRE si el evento llegó y firma es válida
+    return jsonResponse(200, { received: true });
+  } catch (e) {
+    console.log("[stripe_webhook] fatal:", e?.message || e);
+    // Igual 200 para evitar retries infinitos si algo raro pasa (pero queda log)
+    return jsonResponse(200, { received: true, warning: String(e?.message || e) });
   }
-});
-
-function safeJson(s) {
-  try { return JSON.parse(s); } catch { return null; }
-}
+};
