@@ -2,51 +2,50 @@
   publish = "."
   functions = "netlify/functions"
 
-# ---------- API routes (proxy to Netlify Functions) ----------
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# ========= API -> Netlify Functions =========
+# /api/checkout -> /.netlify/functions/checkout (create_checkout.js)
+# /api/quote    -> /.netlify/functions/quote   (quote_shipping.js)
+# /api/chat     -> /.netlify/functions/chat    (chat.js)
+# /api/stripe-webhook -> /.netlify/functions/stripe_webhook
+# /api/envia-webhook  -> /.netlify/functions/envia_webhook
 [[redirects]]
-  from = "/api/checkout"
-  to = "/.netlify/functions/create_checkout"
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
   status = 200
   force = true
 
+# ========= SPA fallback =========
 [[redirects]]
-  from = "/api/quote"
-  to = "/.netlify/functions/quote_shipping"
+  from = "/*"
+  to = "/index.html"
   status = 200
-  force = true
 
-[[redirects]]
-  from = "/api/chat"
-  to = "/.netlify/functions/chat"
-  status = 200
-  force = true
-
-# Stripe webhook endpoint (optional)
-[[redirects]]
-  from = "/api/stripe-webhook"
-  to = "/.netlify/functions/stripe_webhook"
-  status = 200
-  force = true
-
-# Envia webhook endpoint (optional)
-[[redirects]]
-  from = "/api/envia-webhook"
-  to = "/.netlify/functions/envia_webhook"
-  status = 200
-  force = true
-
-# ---------- caching ----------
+# ========= Headers (básicos, no rompen) =========
 [[headers]]
-  for = "/*.webp"
+  for = "/*"
   [headers.values]
-    Cache-Control = "public, max-age=2592000, immutable"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
 
+# Cache agresivo para assets (si cambias assets, renombra archivo o usa querystring)
 [[headers]]
   for = "/assets/*"
   [headers.values]
-    Cache-Control = "public, max-age=2592000, immutable"
+    Cache-Control = "public, max-age=31536000, immutable"
 
+# Evita cachear el catálogo (para que siempre respete cambios)
 [[headers]]
-  for = "/data/*.json"
+  for = "/data/catalog.json"
   [headers.values]
-    Cache-Control = "public, max-age=60"
+    Cache-Control = "no-store"
+
+# Content-Type para manifest
+[[headers]]
+  for = "/*.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json; charset=utf-8"
