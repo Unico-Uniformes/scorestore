@@ -306,8 +306,8 @@ const getEnviaQuote = async ({ zip, country, items_qty }) => {
   const destination = {
     name: "Cliente",
     company: "",
-    email: "contacto.hocker@gmail.com", // CORRECCIÓN: Evita error 400 por campos vacíos
-    phone: "0000000000", // CORRECCIÓN: Envía exige teléfono de destino
+    email: "contacto.hocker@gmail.com", 
+    phone: "0000000000", 
     street: "Stripe Temp",
     number: "1",
     district: "Other",
@@ -334,11 +334,24 @@ const getEnviaQuote = async ({ zip, country, items_qty }) => {
   };
 
   const url = `${ENVIA_API_URL}/ship/rate/`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: enviaHeaders(),
-    body: JSON.stringify(payload)
-  });
+  
+  // CORRECCIÓN HOCKER: Manejo seguro de fetch por si Envía.com se cae
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: enviaHeaders(),
+      body: JSON.stringify(payload)
+    });
+  } catch (fetchErr) {
+    throw new Error("No se pudo conectar con los servidores de paquetería.");
+  }
+
+  // CORRECCIÓN HOCKER: Evitar crash si Envía responde con HTML (Ej. Cloudflare 502)
+  const contentType = res.headers.get("content-type");
+  if (!contentType || !contentType.includes("application/json")) {
+    throw new Error(`Respuesta inválida del servidor de envíos (${res.status}).`);
+  }
 
   const data = await res.json();
   const rates = data?.data || data?.rates || data || [];
@@ -407,15 +420,15 @@ const stripeShippingToEnviaDestination = (shipping_details) => {
   const addr = sd.address || {};
   const country = String(addr.country || "").toUpperCase();
   
-  // Extraer calle inteligentemente (Stripe suele enviar calle + numero en line1)
+  // Extraer calle inteligentemente
   let calle = addr.line1 || "Domicilio Conocido";
   let num = addr.line2 || "S/N";
 
   return {
     name: sd.name || "Cliente Final",
     company: "",
-    email: "cliente@scorestore.com", // Evita 400 Bad Request en Envia
-    phone: sd.phone || "0000000000", // Obligatorio en Envia API
+    email: "cliente@scorestore.com", 
+    phone: sd.phone || "0000000000", 
     street: calle,
     number: num,
     district: addr.line2 || "Centro",
@@ -457,14 +470,27 @@ const createEnviaLabel = async ({ shipping_country, stripe_session, items_qty })
   };
 
   const url = `${ENVIA_API_URL}/ship/generate/`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: enviaHeaders(),
-    body: JSON.stringify(payload)
-  });
+  
+  // CORRECCIÓN HOCKER: Try/Catch seguro para que no rompa el Webhook
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: enviaHeaders(),
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    throw new Error("Conexión fallida al servidor de Envía para generar la guía.");
+  }
+
+  // CORRECCIÓN HOCKER: Manejo seguro de JSON.
+  const contentType = res.headers.get("content-type");
+  if (!contentType || !contentType.includes("application/json")) {
+    throw new Error(`Respuesta no-JSON de Envía al generar guía (${res.status})`);
+  }
 
   const data = await res.json();
-  if (data?.error) throw new Error(data.error.message || "Error al crear la guía");
+  if (data?.error) throw new Error(data.error.message || "Error al crear la guía en Envía.com");
   return data?.data || data;
 };
 
