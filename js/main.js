@@ -226,11 +226,11 @@
       card.className = "catcard";
       card.setAttribute("data-cat", cat.uiId);
 
-      // NUEVO DISEÑO: Sin textos, logo centrado, textura visible, botón hover
+      // NUEVO DISEÑO: Sin textos, logo centrado (con dimensiones explícitas), textura visible, botón hover
       card.innerHTML = `
         <div class="catcard__bg"></div>
         <div class="catcard__inner">
-          <img class="catcard__logo" src="${safeUrl(cat.logo)}" alt="${escapeHtml(cat.name)}">
+          <img class="catcard__logo" src="${safeUrl(cat.logo)}" alt="${escapeHtml(cat.name)}" width="200" height="150" loading="lazy">
           <div class="catcard__btn">VER CATÁLOGO</div>
         </div>
       `;
