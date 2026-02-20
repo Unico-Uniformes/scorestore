@@ -1,7 +1,7 @@
 /* =========================================================
    SCORE STORE — Frontend (PRO) v2026.02.19 (FULL)
-   - Lógica para insertar Logos en vez de texto en UI
-   - Decodificación robusta para rutas de imágenes
+   - Lógica de UI / UX / Carrusel FB Style
+   - Stripe + Envia Checkout Integrations
    ========================================================= */
 
 (() => {
@@ -108,9 +108,9 @@
   let activeCategory = null; 
   let searchQuery = "";
   let sortMode = "featured";
-
   let cart = [];
   let shipping = { mode: "pickup", postal_code: "", quote: null };
+  let currentProduct = null;
 
   // ---------- UTILS ----------
   const escapeHtml = (s) => String(s || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -121,17 +121,8 @@
     catch { return `$${n.toFixed(2)}`; }
   };
 
-  const safeUrl = (p) => {
-    try {
-      return encodeURI(String(p || "").trim());
-    } catch { return String(p || ""); }
-  };
-
-  const clampInt = (v, min, max) => {
-    const n = Math.floor(Number(v || 0));
-    if (!Number.isFinite(n)) return min;
-    return Math.max(min, Math.min(max, n));
-  };
+  const safeUrl = (p) => { try { return encodeURI(String(p || "").trim()); } catch { return String(p || ""); } };
+  const clampInt = (v, min, max) => { const n = Math.floor(Number(v || 0)); if (!Number.isFinite(n)) return min; return Math.max(min, Math.min(max, n)); };
 
   const debounce = (fn, ms = 180) => {
     let t = null;
@@ -151,6 +142,7 @@
   const openSet = new Set(); 
   const lockScrollIfNeeded = () => { document.body.style.overflow = openSet.size > 0 ? "hidden" : ""; };
   const refreshOverlay = () => { if (overlay) overlay.hidden = openSet.size === 0; lockScrollIfNeeded(); };
+  
   const openLayer = (el) => {
     if (!el) return;
     el.hidden = false;
@@ -158,6 +150,7 @@
     refreshOverlay();
     if(el.classList.contains('drawer')) { el.style.transform = 'none'; }
   };
+  
   const closeLayer = (el) => {
     if (!el) return;
     openSet.delete(el);
@@ -169,9 +162,8 @@
       el.hidden = true;
     }
   };
-  const closeAll = () => {
-    [sideMenu, cartDrawer, productModal, aiModal].forEach(el => closeLayer(el));
-  };
+  
+  const closeAll = () => { [sideMenu, cartDrawer, productModal, aiModal].forEach(el => closeLayer(el)); };
   const scrollToEl = (sel) => { const el = $(sel); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); };
 
   const normalizeSectionIdToUi = (sectionId) => {
@@ -206,7 +198,6 @@
     const uiSection = normalizeSectionIdToUi(rawSection) || "BAJA1000";
     const collection = inferCollection(p);
     const rank = Number.isFinite(Number(p?.rank)) ? Number(p.rank) : 999;
-
     return { sku, id: sku, title, description: desc, priceCents, images: images.map(safeUrl), img, sizes: sizes.map((s) => String(s || "").trim()).filter(Boolean), rawSection, uiSection, collection, rank };
   };
 
@@ -214,8 +205,7 @@
     const url = `data/catalog.json?cv=${encodeURIComponent(APP_VERSION)}`;
     const res = await fetch(url, { headers: { "cache-control": "no-store" } });
     if (!res.ok) throw new Error(`Catálogo HTTP ${res.status}`);
-    const data = await res.json();
-    return data;
+    return await res.json();
   };
 
   const renderCategories = () => {
@@ -232,7 +222,7 @@
         <div class="catcard__bg"></div>
         <div class="catcard__inner">
           <img class="catcard__logo" src="${safeUrl(cat.logo)}" alt="${escapeHtml(cat.name)}" width="200" height="150" loading="lazy">
-          <div class="catcard__btn">VER CATÁLOGO</div>
+          <div class="catcard__btn">Ver Colección</div>
         </div>
       `;
 
@@ -242,7 +232,7 @@
 
         activeCategory = cat.uiId;
         if (categoryHint) categoryHint.hidden = true;
-        if (carouselTitle) carouselTitle.textContent = `Colección: ${cat.name}`;
+        if (carouselTitle) carouselTitle.innerHTML = `<img src="${safeUrl(cat.logo)}" alt="${escapeHtml(cat.name)}" style="height:25px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">`;
         
         updateFilterUI();
         renderProducts();
@@ -261,17 +251,17 @@
     const pieces = [];
     if (activeCategory) {
       const c = CATEGORY_CONFIG.find((x) => x.uiId === activeCategory);
-      if (c) pieces.push(`Catálogo: ${c.name}`);
+      if (c) pieces.push(`<img src="${safeUrl(c.logo)}" style="height: 18px;" alt="Logo">`);
     }
-    if (searchQuery) pieces.push(`Búsqueda: “${searchQuery}”`);
+    if (searchQuery) pieces.push(`“${searchQuery}”`);
 
     if (activeFilterRow && activeFilterLabel) {
       if (pieces.length) {
         activeFilterRow.hidden = false;
-        activeFilterLabel.textContent = pieces.join(" · ");
+        activeFilterLabel.innerHTML = pieces.join(" · ");
       } else {
         activeFilterRow.hidden = true;
-        activeFilterLabel.textContent = "";
+        activeFilterLabel.innerHTML = "";
       }
     }
   };
@@ -302,7 +292,7 @@
     productGrid.innerHTML = "";
 
     if (!list.length) {
-      productGrid.innerHTML = `<div class="hint" style="padding: 20px;">Sin resultados en esta categoría.</div>`;
+      productGrid.innerHTML = `<div class="hint" style="padding: 20px;">Sin resultados en esta búsqueda.</div>`;
       catalogCarouselSection.hidden = false;
       return;
     }
@@ -315,9 +305,8 @@
       card.className = "card";
       card.setAttribute("data-sku", p.sku);
 
-      // Integración de Logo según la instrucción
       const logoUrl = getLogoForSection(p.uiSection);
-      const logoPill = `<span class="pill pill--logo"><img src="${safeUrl(logoUrl)}" alt="${escapeHtml(p.uiSection)}"></span>`;
+      const logoPill = `<span class="pill pill--logo"><img src="${safeUrl(logoUrl)}" alt="Logo"></span>`;
       const collectionPill = p.collection ? `<span class="pill pill--red">${escapeHtml(p.collection)}</span>` : "";
 
       card.innerHTML = `
@@ -342,8 +331,6 @@
     catalogCarouselSection.hidden = false;
   };
 
-  let currentProduct = null;
-
   const openProduct = (sku) => {
     const p = products.find((x) => x.sku === sku);
     if (!p) return;
@@ -356,7 +343,7 @@
     if (pmChips) {
       pmChips.innerHTML = "";
       const logoUrl = getLogoForSection(p.uiSection);
-      pmChips.innerHTML += `<span class="pill pill--logo"><img src="${safeUrl(logoUrl)}" alt="${escapeHtml(p.uiSection)}"></span>`;
+      pmChips.innerHTML += `<span class="pill pill--logo"><img src="${safeUrl(logoUrl)}" alt="Logo"></span>`;
       if (p.collection) pmChips.innerHTML += `<span class="pill pill--red">${escapeHtml(p.collection)}</span>`;
     }
 
@@ -369,9 +356,29 @@
     }
     if (pmQty) pmQty.value = "1";
 
+    // CARRUSEL ESTILO INSTAGRAM / FACEBOOK EN MODAL
     if (pmCarousel) {
       const imgs = p.images && p.images.length ? p.images : (p.img ? [p.img] : []);
-      pmCarousel.innerHTML = `<div class="pm__track">${imgs.map((src) => `<img src="${safeUrl(src)}" alt="${escapeHtml(p.title)}" loading="lazy">`).join("")}</div>`;
+      let trackHtml = imgs.map((src) => `<img src="${safeUrl(src)}" alt="${escapeHtml(p.title)}" loading="lazy">`).join("");
+      let dotsHtml = imgs.length > 1 ? `<div class="pm__dots">${imgs.map((_,i)=>`<span class="pm__dot ${i===0?'active':''}" data-idx="${i}"></span>`).join('')}</div>` : '';
+      
+      pmCarousel.innerHTML = `<div class="pm__track" id="pmTrack">${trackHtml}</div>${dotsHtml}`;
+      
+      const track = pmCarousel.querySelector('#pmTrack');
+      const dots = pmCarousel.querySelectorAll('.pm__dot');
+      
+      if(track && dots.length > 0) {
+        track.addEventListener('scroll', debounce(() => {
+          let idx = Math.round(track.scrollLeft / track.clientWidth);
+          dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+        }, 50));
+        
+        dots.forEach((d, i) => {
+          d.addEventListener('click', () => {
+            track.scrollTo({ left: track.clientWidth * i, behavior: 'smooth' });
+          });
+        });
+      }
     }
     openLayer(productModal);
   };
@@ -382,9 +389,7 @@
       const raw = localStorage.getItem(STORAGE_KEYS.cart);
       if (raw) { 
         const parsed = JSON.parse(raw); 
-        if (Array.isArray(parsed)) {
-            cart = parsed.filter(it => it && it.sku && typeof it.qty === 'number'); 
-        }
+        if (Array.isArray(parsed)) cart = parsed.filter(it => it && it.sku && typeof it.qty === 'number'); 
       }
     } catch {}
   };
@@ -497,9 +502,9 @@
 
       shipping.mode = mode; shipping.postal_code = postal_code;
       shipping.quote = { amount_cents: Number(data.amount_cents || 0), amount_mxn: Number(data.amount_mxn || 0), label: String(data.label || "Standard"), country: String(data.country || body.country), provider: String(data.provider || "envia") };
-      saveShipping(); renderCart(); showToast(`Envío: ${money(shipping.quote.amount_cents)}`);
+      saveShipping(); renderCart(); showToast(`Envío calculado`);
     } catch (e) {
-      shipping.quote = null; saveShipping(); renderCart(); showToast(`Error: ${String(e?.message || e)}`);
+      shipping.quote = null; saveShipping(); renderCart(); showToast(`Error en cotización, intenta de nuevo.`);
     } finally {
       if (quoteBtn) { quoteBtn.disabled = false; quoteBtn.textContent = "Cotizar"; }
     }
@@ -527,7 +532,7 @@
       const payload = { items: cart.map((it) => ({ sku: it.sku, qty: it.qty, size: it.size })), shipping_mode, postal_code: needsZip ? postal_code : "", promo_code };
       const res = await fetch("/.netlify/functions/create_checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.ok || !data?.url) throw new Error(data?.error || "Error al iniciar pago. Intenta de nuevo.");
+      if (!res.ok || !data?.ok || !data?.url) throw new Error(data?.error || "Error al iniciar pago seguro.");
       
       window.location.assign(data.url);
     } catch (e) {
@@ -558,17 +563,16 @@
       if (!res.ok || !data?.ok) throw new Error(data?.error || "AI error");
       addChatMsg("ai", String(data.reply || "Listo."));
     } catch (e) {
-      addChatMsg("ai", "Lo siento, mis sistemas están ocupados o no disponibles. Intenta de nuevo más tarde.");
+      addChatMsg("ai", "Sistemas de AI ocupados, intenta más tarde.");
     } finally {
       if (aiSendBtn) { aiSendBtn.disabled = false; aiSendBtn.textContent = "Enviar"; }
     }
   };
 
   const openAiChat = () => {
-    closeLayer(sideMenu);
-    openLayer(aiModal);
+    closeLayer(sideMenu); openLayer(aiModal);
     setTimeout(() => aiInput?.focus(), 50);
-    if (!aiOutput?.children?.length) addChatMsg("ai", "¡Hola! Soy SCORE AI. ¿Te ayudo a buscar tallas o resolver dudas sobre tu pedido?");
+    if (!aiOutput?.children?.length) addChatMsg("ai", "¡Hola! Soy SCORE AI. ¿Te ayudo con tallas o pedidos?");
   };
 
   const init = async () => {
@@ -603,9 +607,7 @@
 
     searchInput?.addEventListener("input", debounce(() => {
       searchQuery = String(searchInput?.value || "").trim();
-      if(searchQuery !== "") {
-          catalogCarouselSection.hidden = false;
-      }
+      if(searchQuery !== "") catalogCarouselSection.hidden = false;
       updateFilterUI(); renderProducts();
     }, 200));
 
@@ -619,7 +621,6 @@
       closeLayer(productModal); openLayer(cartDrawer); refreshShippingUI();
     });
 
-    // Eventos de AI
     openAiBtn?.addEventListener("click", openAiChat);
     navOpenAi?.addEventListener("click", openAiChat);
     floatingAiBtn?.addEventListener("click", openAiChat);
@@ -646,14 +647,16 @@
       updateFilterUI();
       renderProducts(); 
     } catch (e) {
-      showToast("Error de conexión");
+      showToast("Error de red");
       console.error(e); 
     } finally {
-      if (splash) {
-        splash.style.opacity = "0";
-        splash.style.visibility = "hidden";
-        setTimeout(() => (splash.hidden = true), 600);
-      }
+      // Intro Cinemática duración total ~3.5s
+      setTimeout(() => {
+        if (splash) {
+          splash.style.opacity = "0";
+          setTimeout(() => (splash.hidden = true), 800);
+        }
+      }, 3500);
     }
   };
 
