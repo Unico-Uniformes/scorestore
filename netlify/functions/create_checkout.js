@@ -7,6 +7,7 @@ const {
   normalizeQty,
   getBaseUrl,
   readJsonFile,
+  getCatalogIndex,
   getEnviaQuote,
   getFallbackShipping,
   initStripe
@@ -19,9 +20,7 @@ exports.handler = async (event) => {
     if (event.httpMethod === "OPTIONS") return handleOptions(event);
     if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
 
-    // Inicializar de forma segura
     const stripe = initStripe();
-
     const baseUrl = getBaseUrl(event);
     const body = safeJsonParse(event.body) || {};
     const items = normalizeQty(body.items);
@@ -33,11 +32,29 @@ exports.handler = async (event) => {
       return jsonResponse(400, { ok: false, error: "El carrito está vacío." }, origin);
     }
 
+    // CORRECCIÓN: CARGAR CATÁLOGO REAL DEL SERVIDOR (ANTI-FRAUDE)
+    const { index: catalogIndex } = getCatalogIndex();
+
+    let subtotal_cents = 0;
     const items_qty = items.reduce((sum, item) => sum + item.qty, 0);
-    const subtotal_cents = items.reduce((sum, item) => sum + ((item.priceCents || 55000) * item.qty), 0);
+
+    const validatedItems = items.map(item => {
+      const dbItem = catalogIndex.get(item.sku);
+      if (!dbItem) throw new Error(`Producto no reconocido en el catálogo oficial: ${item.sku}`);
+      
+      const realPriceCents = dbItem.price_cents || 55000;
+      subtotal_cents += (realPriceCents * item.qty);
+      
+      return {
+        ...item,
+        realPriceCents: realPriceCents,
+        title: dbItem.title || item.sku
+      };
+    });
+
     const subtotal_mxn = subtotal_cents / 100;
 
-    // --- LÓGICA DE CUPONES (Integración con promos.json) ---
+    // --- LÓGICA DE CUPONES ---
     let discountMultiplier = 1;
     let freeShippingActive = false;
     let promoApplied = "Ninguno";
@@ -67,15 +84,14 @@ exports.handler = async (event) => {
       }
     }
 
-    const lineItems = items.map(item => {
-      const originalPrice = item.priceCents || 55000;
-      const discountedPrice = Math.round(originalPrice * discountMultiplier);
+    const lineItems = validatedItems.map(item => {
+      const discountedPrice = Math.round(item.realPriceCents * discountMultiplier);
       
       return {
         price_data: {
           currency: 'mxn',
           product_data: {
-            name: `${item.title || item.sku} (Talla: ${item.size})`,
+            name: `${item.title} (Talla: ${item.size})`,
             metadata: { sku: item.sku, size: item.size }
           },
           unit_amount: discountedPrice, 
@@ -98,7 +114,6 @@ exports.handler = async (event) => {
         shipping_amount_cents = 0;
         shipping_display_name = shipping_country === "US" ? 'Envío USA (Cupón GRATIS)' : 'Envío Nacional (Cupón GRATIS)';
       } else {
-        // CORRECCIÓN: Calcular la tarifa real en el backend, no confiar en lo que manda el frontend.
         try {
           const quote = await getEnviaQuote({ zip: postal_code, country: shipping_country, items_qty });
           shipping_amount_cents = quote.amount_cents;
@@ -120,17 +135,20 @@ exports.handler = async (event) => {
       }
     });
 
-    const orderSummary = items.map(i => `${i.qty}x ${i.sku}[${i.size}]`).join(" | ").substring(0, 450);
+    const orderSummary = validatedItems.map(i => `${i.qty}x ${i.sku}[${i.size}]`).join(" | ").substring(0, 450);
 
-    // 3. Crear Sesión en Stripe
+    // CORRECCIÓN: Configuración OXXO y validación de dirección
+    const allowedPaymentMethods = process.env.STRIPE_ENABLE_OXXO === "1" ? ['card', 'oxxo'] : ['card'];
+    const addressCollection = shipping_mode !== "pickup" ? { allowed_countries: [shipping_country] } : undefined;
+
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card', 'oxxo'],
+      payment_method_types: allowedPaymentMethods,
       line_items: lineItems,
       mode: 'payment',
       success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/cancel.html`,
       shipping_options: shipping_options,
-      shipping_address_collection: shipping_mode !== "pickup" ? { allowed_countries: [shipping_country] } : undefined,
+      shipping_address_collection: addressCollection,
       metadata: {
         source: "score_store",
         shipping_mode: shipping_mode,
@@ -147,6 +165,6 @@ exports.handler = async (event) => {
 
   } catch (error) {
     console.error("Stripe Checkout Error:", error);
-    return jsonResponse(500, { ok: false, error: "No se pudo procesar el pago seguro. Intenta de nuevo." }, origin);
+    return jsonResponse(500, { ok: false, error: String(error.message || "No se pudo procesar el pago seguro.") }, origin);
   }
 };
