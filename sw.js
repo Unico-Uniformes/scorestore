@@ -1,4 +1,4 @@
-/* SCORE STORE — Service Worker (Pro-PWA 100%) v2026.02.19 */
+/* SCORE STORE — Service Worker (Pro-PWA 100%) */
 const CACHE_VERSION = "scorestore-v2026.02.19.PRO";
 const CORE_ASSETS = [
   "/",
@@ -9,9 +9,7 @@ const CORE_ASSETS = [
   "/data/catalog.json",
   "/assets/logo-score.webp",
   "/assets/logo-world-desert.webp",
-  "/assets/fondo-pagina-score.webp",
-  "/assets/icons/icon-192.png",
-  "/assets/icons/icon-512.png"
+  "/assets/fondo-pagina-score.webp"
 ];
 
 self.addEventListener("install", (event) => {
@@ -47,7 +45,7 @@ self.addEventListener("fetch", (event) => {
 
   if (req.method !== "GET") return;
 
-  // Navegación: Network-first con fallback a index.html (Evita pantallas blancas)
+  // Navegación: Network-first con fallback a index.html
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req)
@@ -62,18 +60,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Assets (Imágenes, CSS, JS): Cache-first con validación silenciosa en background
+  // Assets: Cache-first, revalidate en background
   event.respondWith(
     caches.match(req).then((cached) => {
       const fetchPromise = fetch(req).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-          caches.open(CACHE_VERSION).then((cache) => {
-            cache.put(req, networkResponse.clone());
-          });
-        }
+        caches.open(CACHE_VERSION).then((cache) => {
+          cache.put(req, networkResponse.clone());
+        });
         return networkResponse;
-      }).catch(() => { /* Offline silently */ });
-      
+      }).catch(() => { /* offline silently */ });
       return cached || fetchPromise;
     })
   );
