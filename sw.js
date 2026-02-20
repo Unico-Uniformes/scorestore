@@ -1,4 +1,4 @@
-/* SCORE STORE — Service Worker (Pro-PWA 100%) */
+/* SCORE STORE — Service Worker (Pro-PWA 100%) v2026.02.19 */
 const CACHE_VERSION = "scorestore-v2026.02.19.PRO";
 const CORE_ASSETS = [
   "/",
@@ -9,7 +9,9 @@ const CORE_ASSETS = [
   "/data/catalog.json",
   "/assets/logo-score.webp",
   "/assets/logo-world-desert.webp",
-  "/assets/fondo-pagina-score.webp"
+  "/assets/fondo-pagina-score.webp",
+  "/assets/icons/icon-192.png",
+  "/assets/icons/icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -32,11 +34,20 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Ignorar API y Netlify Functions para no romper Stripe/Envía/Supabase
-  if (url.origin === self.location.origin && (url.pathname.startsWith("/api/") || url.pathname.includes("/.netlify/"))) return;
+  // EXCLUSIÓN QUIRÚRGICA: Ignorar API, Netlify Functions, Stripe y Supabase
+  if (
+    url.pathname.startsWith("/api/") || 
+    url.pathname.includes("/.netlify/") ||
+    url.origin.includes("stripe.com") ||
+    url.origin.includes("envia.com") ||
+    url.origin.includes("supabase.co")
+  ) {
+    return;
+  }
+
   if (req.method !== "GET") return;
 
-  // Navegación: Network-first con fallback a index.html
+  // Navegación: Network-first con fallback a index.html (Evita pantallas blancas)
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req)
@@ -51,15 +62,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Assets: Cache-first, revalidate en background
+  // Assets (Imágenes, CSS, JS): Cache-first con validación silenciosa en background
   event.respondWith(
     caches.match(req).then((cached) => {
       const fetchPromise = fetch(req).then((networkResponse) => {
-        caches.open(CACHE_VERSION).then((cache) => {
-          cache.put(req, networkResponse.clone());
-        });
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          caches.open(CACHE_VERSION).then((cache) => {
+            cache.put(req, networkResponse.clone());
+          });
+        }
         return networkResponse;
-      }).catch(() => { /* offline silently */ });
+      }).catch(() => { /* Offline silently */ });
+      
       return cached || fetchPromise;
     })
   );
