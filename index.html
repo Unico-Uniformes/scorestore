@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#ffffff" />
+  <meta name="theme-color" content="#0f0f0f" />
   <meta name="description" content="Merch Oficial de Score International. Fabricado por UNICO UNIFORMES, patrocinador oficial. Pago seguro con Stripe + OXXO." />
   
   <meta name="facebook-domain-verification" content="wuo7x5sxsjcer1t0epn1id5xgjp8su" />
@@ -20,18 +20,21 @@
   </script>
 
   <link rel="preload" href="css/styles.css" as="style" />
+  <link rel="preload" href="assets/fondo-pagina-score.webp" as="image" type="image/webp" />
   <link rel="preload" href="assets/hero.webp" as="image" type="image/webp" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 
 <body>
   <div id="splash" class="splash" aria-hidden="true">
+    <div class="splash__bg"></div>
     <div class="splash__inner">
-      <img class="splash__logo" src="assets/logo-score.webp" alt="SCORE" width="180" height="72" />
+      <img class="splash__logo" src="assets/logo-score.webp" alt="SCORE" width="220" height="88" />
+      <div class="splash__subtitle" style="color: var(--red); font-weight: 900; letter-spacing: 4px; margin-bottom: 20px;">OFFICIAL MERCHANDISE</div>
       <div class="splash__bar" role="progressbar" aria-label="Cargando">
         <div class="splash__barFill"></div>
       </div>
-      <div class="splash__text">CARGANDO SCORE STORE…</div>
+      <div class="splash__text">PREPARANDO MOTORES...</div>
     </div>
   </div>
 
@@ -80,9 +83,8 @@
         </div>
 
         <div class="hero__meta">
-          <span class="chip">Stripe Checkout</span>
-          <span class="chip">OXXO</span>
-          <span class="chip">Envía.com</span>
+          <span class="chip"><img src="assets/logo-score.webp" alt="Score" style="height:12px; margin-right:5px;"> Stripe / OXXO</span>
+          <span class="chip">📦 Envía.com</span>
         </div>
       </div>
     </div>
@@ -92,7 +94,7 @@
     
     <section class="wrap section main-card-bg" aria-label="Catálogos">
       <div class="section__head">
-        <h2 id="categories">Colecciones Oficiales</h2>
+        <h2 id="categories" style="display:flex; align-items:center; gap:10px;">Colecciones Oficiales</h2>
       </div>
 
       <div id="categoryGrid" class="catgrid" aria-live="polite"></div>
@@ -101,7 +103,7 @@
 
     <section id="catalogCarouselSection" class="carousel-section wrap" aria-label="Catálogo" hidden>
       <div class="carousel-header">
-        <h3 id="carouselTitle" style="color: var(--red);">Productos</h3>
+        <h3 id="carouselTitle" style="color: var(--red); display:flex; align-items:center; gap:10px;">Productos</h3>
         <div class="carousel-controls desktop-only">
           <button id="scrollLeftBtn" class="iconbtn iconbtn--dark" aria-label="Anterior">←</button>
           <button id="scrollRightBtn" class="iconbtn iconbtn--dark" aria-label="Siguiente">→</button>
@@ -120,8 +122,8 @@
       </div>
 
       <div id="activeFilterRow" class="filterrow" hidden>
-        <span id="activeFilterLabel" class="filterrow__label"></span>
-        <button id="clearFilterBtn" class="btn btn--tiny btn--ghost" type="button">Cerrar Catálogo</button>
+        <span id="activeFilterLabel" class="filterrow__label" style="display:flex; align-items:center; gap:8px;"></span>
+        <button id="clearFilterBtn" class="btn btn--tiny btn--ghost" type="button">Cerrar Colección</button>
       </div>
 
       <div id="statusRow" class="status" aria-live="polite"></div>
@@ -264,10 +266,10 @@
         <button id="pmClose" class="iconbtn" aria-label="Cerrar" type="button">✕</button>
       </div>
 
-      <div class="modal__body">
+      <div class="modal__body" style="padding: 0;">
         <div id="pmCarousel" class="pm__media"></div>
 
-        <div class="pm__info">
+        <div class="pm__info" style="padding: 20px;">
           <div class="pm__chips" id="pmChips"></div>
           <div class="pm__price" id="pmPrice" style="color: var(--red);">$0</div>
           <div class="pm__desc" id="pmDesc"></div>
@@ -308,7 +310,7 @@
 
   <section id="cookieBanner" class="cookie" role="dialog" aria-label="Cookies" hidden>
     <div class="cookie__text">
-      Usamos cookies para mejorar tu experiencia de compra.
+      Usamos cookies para asegurar la mejor experiencia Off-Road.
     </div>
     <div class="cookie__actions">
       <button id="cookieReject" class="btn btn--ghost" type="button">Rechazar</button>
@@ -318,6 +320,17 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(registration => {
+          console.log('SW registrado con éxito bajo el scope: ', registration.scope);
+        }).catch(error => {
+          console.error('SW fallo en el registro: ', error);
+        });
+      });
+    }
+  </script>
   <script defer src="js/main.js"></script>
 </body>
 </html>
