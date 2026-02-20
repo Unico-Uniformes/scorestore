@@ -40,7 +40,9 @@ exports.handler = async (event) => {
 
             // 3. Notificar por Telegram si el paquete fue entregado
             if (status.toUpperCase() === "DELIVERED" || status.toUpperCase() === "ENTREGADO") {
-              await sendTelegram(`📦 ✅ <b>Paquete Entregado</b>\nTracking: <code>${trackingNumber}</code>\nCarrier: <b>${carrier.toUpperCase()}</b>\n¡El cliente ya tiene su Merch Oficial!`);
+              try {
+                await sendTelegram(`📦 ✅ <b>Paquete Entregado</b>\nTracking: <code>${trackingNumber}</code>\nCarrier: <b>${carrier.toUpperCase()}</b>\n¡El cliente ya tiene su Merch Oficial!`);
+              } catch(e) { /* ignore telegram fail */ }
             }
           }
 
@@ -53,6 +55,7 @@ exports.handler = async (event) => {
     return jsonResponse(200, { ok: true, received: true }, origin);
   } catch (e) {
     console.error("[envia_webhook] fatal:", e);
+    // CORRECCIÓN HOCKER: Asegurar que envia.com recibe el 200 aunque falle algo interno
     return jsonResponse(200, { ok: true, warning: String(e?.message || e) }, origin);
   }
 };
