@@ -1,7 +1,6 @@
 "use strict";
 
 const { jsonResponse, handleOptions, safeJsonParse } = require("./_shared");
-const axios = require("axios");
 
 exports.handler = async (event) => {
   const origin = event?.headers?.origin || event?.headers?.Origin;
@@ -37,11 +36,22 @@ exports.handler = async (event) => {
       },
     };
 
-    const res = await axios.post(url, payload, { headers: { "content-type": "application/json" }, timeout: 20000 });
+    // Utilización de Fetch Nativo para evitar fallos de dependencias (Axios) en Netlify Functions
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error?.message || "Error conectando con Gemini API");
+    }
 
     const reply =
-      res?.data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
-      res?.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
       "Listo.";
 
     return jsonResponse(200, { ok: true, reply: String(reply || "Listo.").trim() }, origin);
