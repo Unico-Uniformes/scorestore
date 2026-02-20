@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0f0f0f" />
   <title>Pago Exitoso — SCORE STORE</title>
+  
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+  
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center;">
@@ -28,5 +33,9 @@
     </div>
   </main>
 
+  <script>
+    // Limpiar carrito tras éxito
+    try { localStorage.removeItem("scorestore_cart_v1"); } catch(e) {}
+  </script>
 </body>
 </html>
