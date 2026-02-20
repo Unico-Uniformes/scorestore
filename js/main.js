@@ -3,6 +3,7 @@
    - Lógica de UI / UX / Carrusel FB Style Restaurado
    - Fix de botones atrapados y Selectores
    - Efecto Isla Visual y Etiquetas Flotantes
+   - MEJORAS: Loader anti-doble clic en pagos, URLs seguras
    ========================================================= */
 
 (() => {
@@ -16,6 +17,7 @@
 
   const splash = $("#splash");
   const overlay = $("#overlay");
+  const checkoutLoader = $("#checkoutLoader"); // Novedad: Loader de Pago
   const sideMenu = $("#sideMenu");
   const cartDrawer = $("#cartDrawer");
 
@@ -124,6 +126,7 @@
     catch { return `$${n.toFixed(2)}`; }
   };
 
+  // Fix: Corrección para rutas con espacios como 'camiseta-cafe- oscuro-baja400.webp'
   const safeUrl = (p) => { try { return encodeURI(String(p || "").trim()); } catch { return String(p || ""); } };
   const clampInt = (v, min, max) => { const n = Math.floor(Number(v || 0)); if (!Number.isFinite(n)) return min; return Math.max(min, Math.min(max, n)); };
 
@@ -283,7 +286,6 @@
     return out;
   };
 
-  // RENDER PRODUCTOS - CON ETIQUETAS UX Y DISEÑO ISLA
   const renderProducts = () => {
     if (!productGrid || !catalogCarouselSection) return;
     
@@ -315,7 +317,6 @@
 
       const imgs = p.images && p.images.length ? p.images : (p.img ? [p.img] : []);
       
-      // UX: Swipe Hint Dinámico
       let swipeHint = imgs.length > 1 ? `<div class="card__swipe-hint">Desliza ↔</div>` : '';
       let trackHtml = imgs.map((src) => `<img loading="lazy" decoding="async" src="${safeUrl(src)}" alt="${escapeHtml(p.title)}">`).join("");
       let dotsHtml = imgs.length > 1 ? `<div class="card__dots">${imgs.map((_,i)=>`<span class="card__dot ${i===0?'active':''}"></span>`).join('')}</div>` : '';
@@ -340,7 +341,6 @@
         </div>
       `;
 
-      // Eventos del carrusel interno
       const track = card.querySelector('.card__track');
       const dots = card.querySelectorAll('.card__dot');
       const btnPrev = card.querySelector('.card__nav--prev');
@@ -353,7 +353,6 @@
           let idx = Math.round(track.scrollLeft / track.clientWidth);
           dots.forEach((d, i) => d.classList.toggle('active', i === idx));
           
-          // Ocultar el texto de "Desliza" después del primer movimiento
           if(idx > 0 && swipeHintEl) {
              swipeHintEl.style.opacity = '0';
              setTimeout(() => swipeHintEl.remove(), 300);
@@ -374,7 +373,6 @@
         }
       }
 
-      // Evento de Quick Add
       if(btnQuickAdd) {
         btnQuickAdd.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -416,7 +414,6 @@
     }
     if (pmQty) pmQty.value = "1";
 
-    // CARRUSEL EN MODAL
     if (pmCarousel) {
       const imgs = p.images && p.images.length ? p.images : (p.img ? [p.img] : []);
       let trackHtml = imgs.map((src) => `<img src="${safeUrl(src)}" alt="${escapeHtml(p.title)}" loading="lazy">`).join("");
@@ -464,7 +461,7 @@
     if (idx >= 0) cart[idx].qty = clampInt(cart[idx].qty + q, 1, 99);
     else cart.push({ sku: p.sku, title: p.title, priceCents: p.priceCents, size: s, qty: q, img: p.img || "", uiSection: p.uiSection || "", collection: p.collection || "" });
 
-    saveCart(); renderCart(); showToast("Agregado al carrito exitosamente");
+    saveCart(); renderCart(); showToast("✅ Agregado al carrito exitosamente");
   };
 
   const removeCartItem = (sku, size) => { cart = cart.filter((x) => !(x.sku === sku && x.size === size)); saveCart(); renderCart(); };
@@ -486,7 +483,13 @@
     cartItemsEl.innerHTML = "";
 
     if (!cart.length) {
-      cartItemsEl.innerHTML = `<div class="hint" style="text-align:center; padding: 20px;">🛒 Tu carrito está vacío.<br><br><button class="btn btn--primary" onclick="document.querySelector('#closeCartBtn').click()">Explorar Tienda</button></div>`;
+      // MEJORA UX: Boton claro para regresar a comprar
+      cartItemsEl.innerHTML = `
+        <div class="hint" style="text-align:center; padding: 30px 10px;">
+          <div style="font-size: 40px; margin-bottom: 10px;">🛒</div>
+          Tu carrito de compras está vacío.<br><br>
+          <button class="btn btn--primary" type="button" onclick="document.querySelector('#closeCartBtn').click()">¡Ir al Catálogo!</button>
+        </div>`;
       if (cartSubtotalEl) cartSubtotalEl.textContent = money(0);
       if (shippingLineEl) shippingLineEl.textContent = money(0);
       if (cartTotalEl) cartTotalEl.textContent = money(0);
@@ -553,26 +556,28 @@
     if (mode === "pickup") { shipping.mode = "pickup"; shipping.quote = null; saveShipping(); renderCart(); return; }
 
     const postal_code = String(postalCodeInput?.value || "").trim();
-    if (postal_code.length < 4) { showToast("Ingresa un CP o ZIP válido para calcular tu envío."); return; }
+    if (postal_code.length < 4) { showToast("⚠️ Ingresa un Código Postal o ZIP válido."); return; }
     if (!cart.length) { showToast("El carrito está vacío"); return; }
+    
     if (quoteBtn) { quoteBtn.disabled = true; quoteBtn.textContent = "Calculando..."; }
 
     try {
       const body = { postal_code, shipping_mode: mode, country: mode === "envia_us" ? "US" : "MX", items: cart.map((it) => ({ sku: it.sku, qty: it.qty })) };
       const res = await fetch("/.netlify/functions/quote_shipping", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.ok) throw new Error(data?.error || "No se pudo cotizar automáticamente.");
+      if (!res.ok || !data?.ok) throw new Error(data?.error || "No se pudo cotizar automáticamente con el proveedor.");
 
       shipping.mode = mode; shipping.postal_code = postal_code;
       shipping.quote = { amount_cents: Number(data.amount_cents || 0), amount_mxn: Number(data.amount_mxn || 0), label: String(data.label || "Standard"), country: String(data.country || body.country), provider: String(data.provider || "envia") };
-      saveShipping(); renderCart(); showToast(`Costo de envío calculado ✅`);
+      saveShipping(); renderCart(); showToast(`✅ Costo de envío calculado`);
     } catch (e) {
-      shipping.quote = null; saveShipping(); renderCart(); showToast(`Error en cotización, intenta de nuevo.`);
+      shipping.quote = null; saveShipping(); renderCart(); showToast(`❌ Error de sistema de envíos. Verifica tu CP.`);
     } finally {
       if (quoteBtn) { quoteBtn.disabled = false; quoteBtn.textContent = "Calcular"; }
     }
   };
 
+  // MEJORA: Anti-Dobles cobros.
   const doCheckout = async () => {
     if (checkoutMsg) checkoutMsg.hidden = true;
     if (!cart.length) { showToast("Tu carrito está vacío"); return; }
@@ -583,13 +588,15 @@
     const needsZip = shipping_mode === "envia_mx" || shipping_mode === "envia_us";
 
     if (needsZip) {
-      if (postal_code.length < 4) { showToast("Debes ingresar tu CP/ZIP para el envío."); return; }
+      if (postal_code.length < 4) { showToast("Debes ingresar tu Código Postal o ZIP válido."); return; }
       if (!shipping.quote || shipping.postal_code !== postal_code || shipping.mode !== shipping_mode) {
         await quoteShipping(); if (!shipping.quote) return;
       }
     }
 
-    if (checkoutBtn) { checkoutBtn.disabled = true; checkoutBtn.textContent = "Conectando con Stripe Seguro 🔒..."; }
+    // UX Mejora: Loader a pantalla completa para evitar que toquen nada mientras cargan los servidores de Stripe.
+    if (checkoutBtn) { checkoutBtn.disabled = true; }
+    if (checkoutLoader) { checkoutLoader.hidden = false; }
 
     try {
       const payload = { items: cart.map((it) => ({ sku: it.sku, qty: it.qty, size: it.size })), shipping_mode, postal_code: needsZip ? postal_code : "", promo_code };
@@ -599,10 +606,12 @@
       
       window.location.assign(data.url);
     } catch (e) {
+      if (checkoutLoader) { checkoutLoader.hidden = true; }
       if (checkoutMsg) { checkoutMsg.hidden = false; checkoutMsg.textContent = `Aviso del sistema: ${String(e?.message || e)}`; }
-      showToast("Hubo un error al procesar el pago.");
+      showToast("Hubo un error al procesar el pago seguro.");
     } finally {
-      if (checkoutBtn) { checkoutBtn.disabled = false; checkoutBtn.textContent = "Proceder al Pago Seguro 🔒"; }
+      if (checkoutBtn) { checkoutBtn.disabled = false; }
+      // El loader de pantalla completa se queda cargando si hubo éxito porque la página va a saltar a Stripe.
     }
   };
 
@@ -725,7 +734,7 @@
       updateFilterUI();
       renderProducts(); 
     } catch (e) {
-      showToast("Error de conexión al catálogo");
+      showToast("Error de conexión al catálogo principal.");
       console.error(e); 
     } finally {
       setTimeout(() => {
