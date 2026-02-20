@@ -1,22 +1,32 @@
 <!doctype html>
-<html lang="es">
+<html lang="es-MX">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#ffffff" />
-  <title>Pago recibido — SCORE STORE</title>
+  <meta name="theme-color" content="#0f0f0f" />
+  <title>Pago Exitoso — SCORE STORE</title>
   <link rel="stylesheet" href="css/styles.css" />
 </head>
-<body>
-  <main class="wrap section" style="padding-top:28px">
-    <h2>Pago recibido ✅</h2>
-    <p class="hint">
-      Si pagaste con <b>OXXO</b>, tu pago puede tardar en confirmarse. Tu pedido se procesa cuando Stripe confirme el evento por webhook.
+<body style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center;">
+
+  <div class="hero__bg" style="position:fixed; inset:0; z-index:-2; animation: none; filter: brightness(0.4);"></div>
+  
+  <main class="wrap section" style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px); padding: 50px 30px; border-radius: var(--radius2); box-shadow: var(--shadow-modal); max-width: 550px; position: relative; z-index: 10; border-top: 5px solid var(--red);">
+    
+    <img src="assets/logo-score.webp" alt="Score Store" style="height: 60px; margin: 0 auto 20px auto; filter: drop-shadow(0 5px 10px rgba(0,0,0,0.2));">
+    
+    <div style="font-size: 60px; margin-bottom: 10px; animation: scaleIn 0.5s ease;">🏁</div>
+    <h1 style="color: var(--black-btn); font-weight: 900; margin-bottom: 16px; font-size: 32px;">¡PEDIDO CONFIRMADO!</h1>
+    
+    <p class="hint" style="max-width: 400px; margin: 0 auto 24px; font-size: 16px; color: var(--text);">
+      Tu pago ha sido procesado correctamente. <br><br>
+      Si pagaste con <b>OXXO</b>, la confirmación puede tardar unos minutos. Te enviaremos las actualizaciones de tu envío directamente a tu correo.
     </p>
-    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px">
-      <a class="btn btn--primary" href="/">Volver al catálogo</a>
-      <a class="btn btn--ghost" href="/#catalog">Ver productos</a>
+
+    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px;">
+      <a class="btn btn--primary btn--large cinematic-btn" href="/">Seguir Comprando</a>
     </div>
   </main>
+
 </body>
 </html>
