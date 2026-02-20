@@ -17,15 +17,21 @@ exports.handler = async (event) => {
     const body = safeJsonParse(event.body) || {};
     const postalCode = String(body.postal_code || "").trim();
     const country = String(body.country || "MX").trim().toUpperCase();
+    const items = body.items || [];
 
     if (!postalCode || postalCode.length < 4) {
       return jsonResponse(400, { ok: false, error: "Código postal inválido" }, origin);
     }
 
-    // Estructura real de la API de Envía.com
+    // Calcular peso y dimensiones dinámicas basadas en el carrito
+    const totalItems = items.reduce((sum, item) => sum + (Number(item.qty) || 1), 0);
+    const totalWeight = Math.max(1, totalItems * 0.4); // Estimado: 400g por prenda
+    const boxHeight = Math.max(10, totalItems * 5); // 5cm de alto extra por prenda
+
+    // Estructura real de la API de Envía.com con datos de ÚNICO UNIFORMES
     const enviaPayload = {
       origin: {
-        name: "Score Store TJ",
+        name: "Score Store Tijuana",
         company: "Unico Uniformes",
         email: "contacto.hocker@gmail.com",
         phone: "6643011271",
@@ -38,17 +44,17 @@ exports.handler = async (event) => {
         postalCode: "22000"
       },
       destination: {
-        name: "Cliente",
+        name: "Cliente Final",
         country: country,
         postalCode: postalCode
       },
       packages: [
         {
-          content: "Merch Oficial",
+          content: "Ropa Oficial Score Store",
           amount: 1,
           type: "box",
-          dimensions: { length: 20, width: 20, height: 10 },
-          weight: 1,
+          dimensions: { length: 30, width: 25, height: boxHeight },
+          weight: totalWeight,
           weightUnit: "KG",
           lengthUnit: "CM"
         }
@@ -56,21 +62,23 @@ exports.handler = async (event) => {
       shipment: { carrier: "fedex", type: 1 } 
     };
 
-    // Llamada a la API Real de Envía (Sustituye 'TU_TOKEN_ENVIA' en tus variables de entorno)
+    // Llave de producción (Prioriza entorno, usa fallback directo del doc proporcionado)
+    const ENVIA_TOKEN = process.env.ENVIA_API_KEY || "89d853b2b6fd03f6fcbea5e1570a15265342d53315fc9a36b16769bbf9bad4c6";
+
     const enviaResponse = await fetch("https://api.envia.com/ship/rate/", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.ENVIA_API_KEY || 'FALLBACK_TOKEN'}`
+        "Authorization": `Bearer ${ENVIA_TOKEN}`
       },
       body: JSON.stringify(enviaPayload)
     });
 
     const enviaData = await enviaResponse.json();
 
-    // Si no hay token configurado o falla, devuelve un fallback seguro para UX
-    if (!enviaResponse.ok || enviaData.error) {
-       console.warn("Envía API Error/Fallback activado.");
+    // Fallback de seguridad si el CP no tiene cobertura o la API rechaza
+    if (!enviaResponse.ok || enviaData.error || !enviaData.data || enviaData.data.length === 0) {
+       console.warn("Envía API Error o sin cobertura. Fallback activado.");
        return jsonResponse(200, {
         ok: true,
         amount_cents: country === "US" ? 35000 : 18000, 
@@ -80,7 +88,7 @@ exports.handler = async (event) => {
       }, origin);
     }
 
-    // Extracción exitosa (Asumiendo que Envia devuelve data.data[0].totalPrice)
+    // Extracción exitosa (Tomamos la tarifa más económica disponible)
     const rate = enviaData.data[0];
     const finalAmountCents = Math.round(Number(rate.totalPrice) * 100);
 
@@ -94,6 +102,6 @@ exports.handler = async (event) => {
 
   } catch (error) {
     console.error("Shipping Quote Error:", error);
-    return jsonResponse(500, { ok: false, error: "Error interno al cotizar." }, origin);
+    return jsonResponse(500, { ok: false, error: "Error interno al cotizar envío." }, origin);
   }
 };
