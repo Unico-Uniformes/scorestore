@@ -16,7 +16,7 @@
 
   <div class="hero__bg" style="position:fixed; inset:0; z-index:-2; animation: none; filter: brightness(0.4);"></div>
   
-  <main class="wrap section" style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(15px); padding: 50px 30px; border-radius: var(--radius2); box-shadow: var(--shadow-modal); max-width: 550px; position: relative; z-index: 10; border-top: 5px solid var(--red);">
+  <main class="wrap section main-card-bg" style="max-width: 550px; position: relative; z-index: 10; border-top: 5px solid var(--red);">
     
     <img src="assets/logo-score.webp" alt="Score Store" style="height: 60px; margin: 0 auto 20px auto; filter: drop-shadow(0 5px 10px rgba(0,0,0,0.2));">
     
@@ -29,13 +29,18 @@
     </p>
 
     <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px;">
-      <a class="btn btn--primary btn--large cinematic-btn" href="/">Seguir Comprando</a>
+      <a class="btn btn--primary btn--large cinematic-btn" href="/">Regresar a la Tienda</a>
     </div>
   </main>
 
   <script>
-    // Limpiar carrito tras éxito
-    try { localStorage.removeItem("scorestore_cart_v1"); } catch(e) {}
+    // Limpieza profunda post-compra para evitar bugs en pedidos futuros
+    try { 
+      localStorage.removeItem("scorestore_cart_v1"); 
+      localStorage.removeItem("scorestore_ship_v1");
+    } catch(e) {
+      console.error("Error limpiando cache local:", e);
+    }
   </script>
 </body>
 </html>
