@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
   <script>
-    window.__APP_VERSION__ = "2026.02.19.PRO.VFX";
+    window.__APP_VERSION__ = "2026.02.20.UX.PRO";
   </script>
 
   <link rel="preload" href="css/styles.css" as="style" />
@@ -63,7 +63,7 @@
       <div class="topbar__actions">
         <div class="search desktop-only">
           <span class="search__icon" aria-hidden="true">⌕</span>
-          <input id="searchInput" class="search__input" type="search" placeholder="Buscar productos..." autocomplete="off" aria-label="Búsqueda de productos" />
+          <input id="searchInput" class="search__input" type="search" placeholder="Buscar merch oficial..." autocomplete="off" aria-label="Búsqueda de productos" />
         </div>
 
         <button id="openAiBtn" class="iconbtn desktop-only tooltip-wrap" type="button" aria-label="Abrir asistente de IA" title="SCORE AI">
@@ -89,11 +89,11 @@
         <p class="hero__hook">Diseñado y fabricado por <b>ÚNICO UNIFORMES</b>, patrocinador oficial.</p>
 
         <div class="hero__cta">
-          <button id="scrollToCategoriesBtn" class="btn btn--primary btn--large cinematic-btn" type="button">Explorar Colecciones</button>
+          <button id="scrollToCategoriesBtn" class="btn btn--primary btn--large cinematic-btn" type="button">Ver Colecciones ▼</button>
         </div>
 
         <div class="hero__meta">
-          <span class="chip"><img src="assets/logo-score.webp" alt="Score" style="height:12px; margin-right:5px;"> Pagos Seguros Stripe</span>
+          <span class="chip">🔒 Pagos Seguros Stripe</span>
           <span class="chip">📦 Envíos rápidos Envía.com</span>
         </div>
       </div>
@@ -103,11 +103,11 @@
   <main id="main" class="main" role="main">
     <section class="wrap section main-card-bg" aria-label="Catálogos">
       <div class="section__head">
-        <h2 id="categories">Colecciones Oficiales</h2>
+        <h2 id="categories">1. Selecciona una Colección</h2>
       </div>
 
       <div id="categoryGrid" class="catgrid" aria-live="polite"></div>
-      <div id="categoryHint" class="hint">Selecciona una colección para visualizar sus productos exclusivos.</div>
+      <div id="categoryHint" class="hint" style="text-align: center; margin-top: 10px;">👈 Toca una tarjeta para ver sus productos exclusivos.</div>
     </section>
 
     <section id="catalogCarouselSection" class="carousel-section wrap" aria-label="Productos de la colección" hidden>
@@ -119,24 +119,24 @@
         </div>
       </div>
 
-      <div class="section__head" style="margin-bottom: 10px;">
-        <div class="section__tools" style="margin-left: auto;">
-          <select id="sortSelect" class="select" aria-label="Ordenar productos">
-            <option value="featured">Ordenar: Destacados</option>
-            <option value="price_asc">Precio: Menor a mayor</option>
-            <option value="price_desc">Precio: Mayor a menor</option>
-            <option value="name_asc">Nombre: A → Z</option>
+      <div class="section__head" style="margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 15px;">
+        <div class="section__tools" style="width: 100%; justify-content: space-between;">
+          <span id="statusRow" class="status" aria-live="polite" style="margin:0;"></span>
+          <select id="sortSelect" class="select" aria-label="Ordenar productos" style="width: auto; padding: 8px 12px; font-size: 14px;">
+            <option value="featured">★ Relevantes</option>
+            <option value="price_asc">Precio: Menor a Mayor</option>
+            <option value="price_desc">Precio: Mayor a Menor</option>
           </select>
         </div>
       </div>
 
       <div id="activeFilterRow" class="filterrow" hidden>
         <span id="activeFilterLabel" class="filterrow__label" style="display:flex; align-items:center; gap:8px;"></span>
-        <button id="clearFilterBtn" class="btn btn--tiny btn--ghost" type="button">Cerrar Colección</button>
+        <button id="clearFilterBtn" class="btn btn--tiny btn--ghost" type="button">Cerrar Colección ✕</button>
       </div>
-
-      <div id="statusRow" class="status" aria-live="polite"></div>
       
+      <div class="hint" style="margin-bottom: 15px; color: var(--red); font-weight: bold;">💡 Desliza hacia los lados para ver más ángulos de cada prenda. Da clic para ver tallas.</div>
+
       <div class="carousel-wrapper">
         <div id="productGrid" class="carousel-track" aria-live="polite"></div>
       </div>
@@ -196,7 +196,7 @@
       <button class="navitem" type="button" id="navOpenAi"><span style="color: var(--red);">✦</span> Consultar SCORE AI</button>
       
       <div class="drawer__divider"></div>
-      <a class="navitem navitem--link" href="https://unicouniformes.com/" target="_blank" rel="noopener">Ir a Único Uniformes ↗</a>
+      <a class="navitem navitem--link" href="https://unicouniformes.com/" target="_blank" rel="noopener">Sitio de Único Uniformes ↗</a>
     </div>
 
     <div class="drawer__foot">
@@ -206,7 +206,7 @@
 
   <aside id="cartDrawer" class="drawer drawer--right" aria-label="Carrito de compras" hidden>
     <div class="drawer__head">
-      <div class="drawer__title">Tu Carrito</div>
+      <div class="drawer__title">🛒 Tu Carrito</div>
       <button id="closeCartBtn" class="iconbtn" aria-label="Cerrar carrito" type="button">✕</button>
     </div>
 
@@ -222,17 +222,17 @@
         <div class="cartrow cartrow--stack">
           <div class="cartrow__line">
             <span>Método de entrega</span>
-            <span class="muted" id="shipHint">Selecciona modo</span>
+            <span class="muted" id="shipHint" style="font-size: 12px;">Selecciona opción ▼</span>
           </div>
 
           <div class="seg" role="group" aria-label="Opciones de entrega">
             <label class="seg__opt">
               <input type="radio" name="shipMode" value="pickup" checked />
-              <span>Recoger en Tienda (TJ)</span>
+              <span>Fábrica (TJ)</span>
             </label>
             <label class="seg__opt">
               <input type="radio" name="shipMode" value="envia_mx" />
-              <span>Envío México</span>
+              <span>Envío MX</span>
             </label>
             <label class="seg__opt">
               <input type="radio" name="shipMode" value="envia_us" />
@@ -240,9 +240,13 @@
             </label>
           </div>
 
+          <div id="shippingNote" class="hint" style="color: var(--red); font-size: 12px; text-align: center; margin-top: 5px;">
+            Recoge gratis en nuestras instalaciones en Tijuana.
+          </div>
+
           <div id="postalWrap" class="postal" hidden>
-            <input id="postalCode" class="input" inputmode="numeric" maxlength="10" placeholder="Ingresa Código Postal o ZIP" aria-label="Código Postal" />
-            <button id="quoteBtn" class="btn btn--tiny btn--black" type="button">Cotizar Envío</button>
+            <input id="postalCode" class="input" inputmode="numeric" maxlength="10" placeholder="Ingresa tu CP / ZIP..." aria-label="Código Postal" />
+            <button id="quoteBtn" class="btn btn--tiny btn--black" type="button">Calcular</button>
           </div>
 
           <div class="cartrow" style="margin-top:10px;">
@@ -257,12 +261,19 @@
         </div>
 
         <div class="cartrow cartrow--stack">
-          <label class="muted" for="promoCode">¿Tienes un cupón de descuento?</label>
-          <input id="promoCode" class="input" placeholder="Ej. SCORE10" aria-label="Código promocional" />
+          <label class="muted" for="promoCode" style="font-size: 13px;">¿Tienes un cupón de descuento?</label>
+          <div style="display: flex; gap: 8px;">
+            <input id="promoCode" class="input" placeholder="Ej. SCORE25" aria-label="Código promocional" style="text-transform: uppercase;" />
+          </div>
         </div>
 
-        <button id="checkoutBtn" class="btn btn--primary btn--block btn--large" type="button">Proceder al Pago Seguro 🔒</button>
-        <div id="checkoutMsg" class="hint" hidden style="margin-top:10px; color:var(--red);"></div>
+        <button id="checkoutBtn" class="btn btn--primary btn--block btn--large" type="button" style="margin-top: 10px;">
+          Proceder al Pago Seguro 🔒
+        </button>
+        <div style="text-align: center; margin-top: 10px; font-size: 11px; color: var(--muted);">
+          Aceptamos Tarjetas de Crédito/Débito y OXXO Pay.
+        </div>
+        <div id="checkoutMsg" class="hint" hidden style="margin-top:10px; color:var(--red); text-align:center;"></div>
       </div>
     </div>
   </aside>
@@ -270,13 +281,14 @@
   <section id="productModal" class="modal" role="dialog" aria-modal="true" aria-label="Detalles del Producto" hidden>
     <div class="modal__panel">
       <div class="modal__head">
-        <button id="pmBackBtn" class="iconbtn" aria-label="Volver atrás" type="button" style="margin-right: 15px;">←</button>
+        <button id="pmBackBtn" class="iconbtn" aria-label="Volver atrás" type="button" style="margin-right: 15px; font-size: 20px;">←</button>
         <div class="modal__title" id="pmTitle" style="flex-grow: 1; text-align: left;">Cargando...</div>
         <button id="pmClose" class="iconbtn" aria-label="Cerrar detalles" type="button">✕</button>
       </div>
 
-      <div class="modal__body" style="padding: 0;">
+      <div class="modal__body" style="padding: 0; overflow-y: auto;">
         <div id="pmCarousel" class="pm__media"></div>
+        <div class="hint" style="text-align: center; padding: 5px; background: var(--bg-alt); font-size: 12px;">Desliza la imagen ↔</div>
 
         <div class="pm__info" style="padding: 24px;">
           <div class="pm__chips" id="pmChips"></div>
@@ -285,18 +297,27 @@
 
           <div class="pm__row">
             <div class="pm__col">
-              <label class="muted" for="pmSize">Selecciona tu Talla</label>
-              <select id="pmSize" class="select" aria-label="Selector de talla"></select>
+              <label class="ux-label" for="pmSize">1. Elige tu Talla:</label>
+              <div class="select-wrapper">
+                <select id="pmSize" class="select select--huge" aria-label="Selector de talla"></select>
+                <span class="select-arrow">▼</span>
+              </div>
             </div>
             <div class="pm__col">
-              <label class="muted" for="pmQty">Cantidad</label>
-              <input id="pmQty" class="input" type="number" min="1" max="99" value="1" aria-label="Selector de cantidad" />
+              <label class="ux-label" for="pmQty">2. Cantidad:</label>
+              <input id="pmQty" class="input select--huge" type="number" min="1" max="99" value="1" aria-label="Selector de cantidad" />
             </div>
           </div>
 
-          <button id="pmAdd" class="btn btn--black btn--block btn--large cinematic-btn" type="button">
+          <button id="pmAdd" class="btn btn--black btn--block btn--large cinematic-btn" type="button" style="margin-top: 10px; font-size: 18px;">
             🛒 Agregar al Carrito
           </button>
+          
+          <div class="ux-trust-badges">
+            <span>✅ Producto Oficial</span>
+            <span>📦 Envío a MX y USA</span>
+            <span>🛡️ Compra Segura</span>
+          </div>
         </div>
       </div>
     </div>
@@ -312,8 +333,8 @@
       <div class="modal__body" style="background: var(--bg-alt); display:flex; flex-direction:column;">
         <div id="aiOutput" class="chat" aria-live="polite"></div>
         <div class="chatbar">
-          <input id="aiInput" class="input" placeholder="Pregunta sobre envíos, tallas o pedidos..." aria-label="Mensaje para SCORE AI" />
-          <button id="aiSendBtn" class="btn btn--primary" type="button">Enviar</button>
+          <input id="aiInput" class="input" placeholder="Escribe tu duda aquí..." aria-label="Mensaje para SCORE AI" />
+          <button id="aiSendBtn" class="btn btn--primary" type="button">Enviar ➢</button>
         </div>
       </div>
     </div>
@@ -334,9 +355,7 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').then(registration => {
-          console.log('SCORE PWA Registrada exitosamente.', registration.scope);
-        }).catch(error => {
+        navigator.serviceWorker.register('/sw.js').catch(error => {
           console.error('Error al registrar PWA:', error);
         });
       });
