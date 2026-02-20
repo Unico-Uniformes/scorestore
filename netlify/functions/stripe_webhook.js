@@ -11,20 +11,16 @@ const {
 } = require("./_shared");
 
 exports.handler = async (event) => {
-  // Ahora capturamos correctamente el origen de la respuesta para seguridad
-  const origin = event?.headers?.origin || event?.headers?.Origin;
-
   try {
-    if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
+    if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" }, "*");
 
     const stripe = initStripe();
-    // Stripe o Netlify pueden bajar a minúsculas, por seguridad buscamos estandarizado
     const sig = event.headers["stripe-signature"] || event.headers["Stripe-Signature"];
     const whSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
     if (!sig || !whSecret) {
-      console.log("[stripe_webhook] missing signature or STRIPE_WEBHOOK_SECRET");
-      return jsonResponse(200, { received: true, warning: "Webhook secret/signature missing" }, origin);
+      console.log("[stripe_webhook] Missing signature or STRIPE_WEBHOOK_SECRET");
+      return jsonResponse(200, { received: true, warning: "Webhook secret missing" }, "*");
     }
 
     const buf = readRawBody(event);
@@ -33,8 +29,8 @@ exports.handler = async (event) => {
     try {
       evt = stripe.webhooks.constructEvent(buf, sig, whSecret);
     } catch (err) {
-      console.log("[stripe_webhook] signature invalid:", err?.message || err);
-      return jsonResponse(400, { received: false, error: "Invalid signature" }, origin);
+      console.log("[stripe_webhook] Signature invalid:", err?.message || err);
+      return jsonResponse(400, { received: false, error: "Invalid signature" }, "*");
     }
 
     if (evt.type === "checkout.session.completed") {
@@ -45,6 +41,9 @@ exports.handler = async (event) => {
 
       const items_qty = Number(meta.items_qty || 0) || 0;
       const shipping_amount_cents = Number(meta.shipping_amount_cents || 0) || 0;
+      
+      // Respaldo de Email por si el usuario pago con métodos como Apple Pay que lo ocultan a veces.
+      const customer_email = session.customer_details?.email || session.customer_email || "no-reply@scorestore.com";
 
       if (isSupabaseConfigured()) {
         const sb = supabaseAdmin();
@@ -52,16 +51,19 @@ exports.handler = async (event) => {
           try {
             const row = {
               stripe_session_id: session.id,
-              stripe_payment_intent: session.payment_intent || null,
-              customer_email: session.customer_details?.email || null,
-              amount_total_cents: Number(session.amount_total || 0),
-              currency: session.currency || "mxn",
+              stripe_payment_intent_id: session.payment_intent || null,
+              email: customer_email,
+              customer_name: session.customer_details?.name || "Cliente",
+              amount_total_mxn: Number(session.amount_total || 0) / 100,
+              currency: (session.currency || "mxn").toUpperCase(),
               status: "paid",
-              shipping_mode,
-              postal_code: meta.postal_code || null,
-              shipping_amount_cents,
-              shipping_address: session.shipping_details?.address || null,
-              raw: session,
+              shipping_mode: shipping_mode,
+              postal_code: meta.postal_code || session.shipping_details?.address?.postal_code || null,
+              amount_shipping_mxn: shipping_amount_cents / 100,
+              metadata: { 
+                shipping_address: session.shipping_details?.address || null,
+                raw_session: session 
+              },
             };
 
             await sb.from("orders").upsert(row, { onConflict: "stripe_session_id" });
@@ -85,10 +87,10 @@ exports.handler = async (event) => {
               try {
                 await sb.from("shipping_labels").insert({
                   stripe_session_id: session.id,
-                  provider: "envia",
-                  country: shipping_country,
-                  payload: labelData,
-                  created_at: new Date().toISOString(),
+                  carrier: "envia",
+                  tracking_number: labelData.trackingNumber || labelData[0]?.trackingNumber || null,
+                  label_url: labelData.labelUrl || labelData[0]?.label || null,
+                  raw: labelData,
                 });
               } catch (e) {
                 console.log("[shipping_labels] warn insert:", e?.message || e);
@@ -100,9 +102,9 @@ exports.handler = async (event) => {
             `✅ <b>Pago confirmado</b>\nSession: <code>${session.id}</code>\nModo: <b>${shipping_mode}</b>\nPaís: <b>${shipping_country}</b>\nGuía generada (envía).`
           );
         } catch (e) {
-          console.log("[envia] label error:", e?.response?.data || e?.message || e);
+          console.log("[envia] label error:", e?.message || e);
           await sendTelegram(
-            `⚠️ <b>Pago confirmado</b> pero <b>falló guía Envía</b>\nSession: <code>${session.id}</code>\nError: <code>${String(e?.message || e).slice(0, 500)}</code>`
+            `⚠️ <b>Pago confirmado</b> pero <b>falló la guía de Envía</b>\nSession: <code>${session.id}</code>\nError: <code>${String(e?.message || e).slice(0, 500)}</code>`
           );
         }
       } else {
@@ -110,9 +112,9 @@ exports.handler = async (event) => {
       }
     }
 
-    return jsonResponse(200, { received: true }, origin);
+    return jsonResponse(200, { received: true }, "*");
   } catch (e) {
     console.log("[stripe_webhook] fatal:", e?.message || e);
-    return jsonResponse(200, { received: true, warning: String(e?.message || e) }, origin);
+    return jsonResponse(200, { received: true, warning: String(e?.message || e) }, "*");
   }
 };
