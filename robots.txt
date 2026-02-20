@@ -6,4 +6,4 @@ Disallow: /branch-deploys-*
 Disallow: /.netlify/functions/
 Disallow: /api/
 
-Sitemap: https://scorestore.netlify.app/sitemap.xml
+Sitemap: [https://scorestore.netlify.app/sitemap.xml](https://scorestore.netlify.app/sitemap.xml)
