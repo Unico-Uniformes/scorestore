@@ -1,5 +1,5 @@
 /* SCORE STORE — Service Worker (Pro-PWA 100%) */
-const CACHE_VERSION = "scorestore-v2026.02.19.PRO";
+const CACHE_VERSION = "scorestore-v2026.02.21.UX.ISLAND";
 const CORE_ASSETS = [
   "/",
   "/index.html",
