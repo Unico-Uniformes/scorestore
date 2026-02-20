@@ -93,7 +93,7 @@ for dirpath, _, filenames in os.walk(ASSETS):
 
 # Reporte
 report = {
-    "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
+    "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
     "dry_run": DRY_RUN,
     "assets_dir": relpath(ASSETS),
     "created_alias_files": created,
