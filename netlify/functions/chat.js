@@ -49,6 +49,12 @@ exports.handler = async (event) => {
       body: JSON.stringify(payload),
     });
 
+    // CORRECCIÓN HOCKER: Prevenir caídas si Google manda un error en formato texto/html
+    const contentType = res.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+       throw new Error("El servicio de IA no devolvió un JSON válido.");
+    }
+
     const data = await res.json();
 
     if (!res.ok) {
@@ -62,6 +68,7 @@ exports.handler = async (event) => {
 
     return jsonResponse(200, { ok: true, reply: String(reply).trim() }, origin);
   } catch (e) {
+    console.error("[chat.js] Error:", e);
     return jsonResponse(200, { ok: false, error: String(e?.message || e) }, origin);
   }
 };
