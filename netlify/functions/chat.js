@@ -15,22 +15,21 @@ exports.handler = async (event) => {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return jsonResponse(200, { ok: false, error: "GEMINI_API_KEY no configurada" }, origin);
+      return jsonResponse(200, { ok: false, error: "GEMINI_API_KEY no configurada en el servidor." }, origin);
     }
 
     const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
-    // System Prompt Premium y ajustado a la realidad del negocio
     const sys = 
       "Eres SCORE AI, el asistente virtual oficial de la Score Store (Merch Oficial de SCORE International). " +
       "Tu tono debe ser profesional, directo, amable y con espíritu Off-Road (carreras en el desierto, Baja 1000, etc.). " +
       "REGLAS ESTRICTAS: " +
       "1. Toda la ropa es fabricada con calidad premium por ÚNICO UNIFORMES en Tijuana, Baja California. " +
-      "2. Los métodos de pago son 100% seguros mediante Stripe (Tarjeta de Crédito/Débito) y pago en efectivo en OXXO. " +
+      "2. Los métodos de pago son 100% seguros mediante Stripe (Tarjeta de Crédito/Débito) y OXXO Pay. " +
       "3. Envíos: Ofrecemos entregas por Envia.com a todo México y USA. También existe la opción de Recoger en Fábrica (Pickup en Tijuana) sin costo. " +
       "4. Cambios y devoluciones: 7 días naturales por defectos de fábrica (costo cubierto por nosotros) o cambios de talla (costo de envío cubierto por el cliente). " +
-      "5. No inventes precios ni inventario exacto. Si te piden algo fuera de la tienda o muy específico, sugiere enviar un correo a ventas.unicotextil@gmail.com o WhatsApp al 664 236 8701. " +
-      "Responde siempre en español, con respuestas cortas y estructuradas.";
+      "5. No inventes precios ni inventario exacto. Si te piden algo fuera de la tienda o muy específico, sugiere enviar un correo a ventas@unico-uniformes.com " +
+      "Responde siempre en español, con respuestas cortas y estructuradas en párrafos pequeños.";
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
@@ -49,22 +48,21 @@ exports.handler = async (event) => {
       body: JSON.stringify(payload),
     });
 
-    // CORRECCIÓN HOCKER: Prevenir caídas si Google manda un error en formato texto/html
     const contentType = res.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
-       throw new Error("El servicio de IA no devolvió un JSON válido.");
+       throw new Error("El servicio de IA no devolvió un formato válido.");
     }
 
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.error?.message || "Error conectando con Gemini API");
+      throw new Error(data.error?.message || "Error conectando con la inteligencia artificial.");
     }
 
     const reply =
       data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "Sistemas de IA temporalmente saturados. Intenta más tarde.";
+      "Sistemas de SCORE AI temporalmente ocupados. Intenta más tarde.";
 
     return jsonResponse(200, { ok: true, reply: String(reply).trim() }, origin);
   } catch (e) {
