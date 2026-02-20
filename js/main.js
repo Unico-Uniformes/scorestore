@@ -1,8 +1,8 @@
 /* =========================================================
-   SCORE STORE — Frontend (PRO) v2026.02.20 (FULL UX FIX)
+   SCORE STORE — Frontend (PRO) v2026.02.21 (UX ISLANDS)
    - Lógica de UI / UX / Carrusel FB Style Restaurado
    - Fix de botones atrapados y Selectores
-   - Stripe + Envia Checkout Integrations
+   - Efecto Isla Visual y Etiquetas Flotantes
    ========================================================= */
 
 (() => {
@@ -64,7 +64,7 @@
 
   const productModal = $("#productModal");
   const pmClose = $("#pmClose");
-  const pmBackBtn = $("#pmBackBtn"); // Restaurado para UX
+  const pmBackBtn = $("#pmBackBtn"); 
   const pmTitle = $("#pmTitle");
   const pmCarousel = $("#pmCarousel");
   const pmPrice = $("#pmPrice");
@@ -283,7 +283,7 @@
     return out;
   };
 
-  // RESTAURACIÓN UX: CARRUSEL EN GRID Y QUICK ADD
+  // RENDER PRODUCTOS - CON ETIQUETAS UX Y DISEÑO ISLA
   const renderProducts = () => {
     if (!productGrid || !catalogCarouselSection) return;
     
@@ -301,7 +301,7 @@
       return;
     }
 
-    setStatus(`Resultados: ${list.length} prendas`);
+    setStatus(`Resultados: ${list.length} prendas exclusivas`);
     const frag = document.createDocumentFragment();
 
     for (const p of list) {
@@ -313,14 +313,17 @@
       const logoPill = `<span class="pill pill--logo"><img src="${safeUrl(logoUrl)}" alt="Logo"></span>`;
       const collectionPill = p.collection ? `<span class="pill pill--red">${escapeHtml(p.collection)}</span>` : "";
 
-      // Restauración del código de carrusel estilo FB/IG
       const imgs = p.images && p.images.length ? p.images : (p.img ? [p.img] : []);
+      
+      // UX: Swipe Hint Dinámico
+      let swipeHint = imgs.length > 1 ? `<div class="card__swipe-hint">Desliza ↔</div>` : '';
       let trackHtml = imgs.map((src) => `<img loading="lazy" decoding="async" src="${safeUrl(src)}" alt="${escapeHtml(p.title)}">`).join("");
       let dotsHtml = imgs.length > 1 ? `<div class="card__dots">${imgs.map((_,i)=>`<span class="card__dot ${i===0?'active':''}"></span>`).join('')}</div>` : '';
       let navHtml = imgs.length > 1 ? `<button class="card__nav card__nav--prev" aria-label="Anterior" type="button">‹</button><button class="card__nav card__nav--next" aria-label="Siguiente" type="button">›</button>` : '';
 
       card.innerHTML = `
         <div class="card__media">
+          ${swipeHint}
           <div class="card__track">${trackHtml}</div>
           ${navHtml}
           ${dotsHtml}
@@ -337,17 +340,24 @@
         </div>
       `;
 
-      // Eventos del mini-carrusel
+      // Eventos del carrusel interno
       const track = card.querySelector('.card__track');
       const dots = card.querySelectorAll('.card__dot');
       const btnPrev = card.querySelector('.card__nav--prev');
       const btnNext = card.querySelector('.card__nav--next');
       const btnQuickAdd = card.querySelector('.card__quick-add');
+      const swipeHintEl = card.querySelector('.card__swipe-hint');
 
       if (track && dots.length > 0) {
         track.addEventListener('scroll', debounce(() => {
           let idx = Math.round(track.scrollLeft / track.clientWidth);
           dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+          
+          // Ocultar el texto de "Desliza" después del primer movimiento
+          if(idx > 0 && swipeHintEl) {
+             swipeHintEl.style.opacity = '0';
+             setTimeout(() => swipeHintEl.remove(), 300);
+          }
         }, 50));
         
         if(btnPrev) {
@@ -406,7 +416,7 @@
     }
     if (pmQty) pmQty.value = "1";
 
-    // CARRUSEL ESTILO INSTAGRAM / FACEBOOK EN MODAL
+    // CARRUSEL EN MODAL
     if (pmCarousel) {
       const imgs = p.images && p.images.length ? p.images : (p.img ? [p.img] : []);
       let trackHtml = imgs.map((src) => `<img src="${safeUrl(src)}" alt="${escapeHtml(p.title)}" loading="lazy">`).join("");
@@ -446,7 +456,6 @@
 
   const addToCart = (p, size, qty) => {
     const q = clampInt(qty, 1, 99);
-    // Limpiamos la palabra "Talla: " si el usuario la seleccionó del dropdown visual
     const sRaw = String(size || "").trim();
     const s = sRaw.replace("Talla: ", "") || (p.sizes?.[0] || "M");
     const key = `${p.sku}__${s}`;
@@ -524,7 +533,6 @@
     shipping.mode = getSelectedShipMode();
     if (shipHint) shipHint.textContent = SHIPPING_LABELS[shipping.mode] || "Selecciona modo";
     
-    // UI Dinámica para ayudar al usuario
     if (shippingNote) {
       if(shipping.mode === 'pickup') shippingNote.textContent = "Recoge gratis en nuestras instalaciones en Tijuana.";
       else if(shipping.mode === 'envia_mx') shippingNote.textContent = "Envío estándar nacional de 3 a 5 días.";
@@ -668,17 +676,15 @@
 
     sortSelect?.addEventListener("change", () => { sortMode = String(sortSelect.value || "featured"); renderProducts(); });
 
-    // RESTAURACIÓN UX: Event listeners de la modal
     pmClose?.addEventListener("click", () => closeLayer(productModal));
     pmBackBtn?.addEventListener("click", () => closeLayer(productModal)); 
 
     pmAdd?.addEventListener("click", () => {
       if (!currentProduct) return;
       
-      // UX Feedback
       const originalText = pmAdd.innerHTML;
       pmAdd.innerHTML = "✅ ¡Agregado!";
-      pmAdd.style.backgroundColor = "#28a745"; // Verde de éxito temporal
+      pmAdd.style.backgroundColor = "#28a745"; 
       pmAdd.style.borderColor = "#28a745";
       
       setTimeout(() => {
