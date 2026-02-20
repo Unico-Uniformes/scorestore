@@ -182,7 +182,7 @@ const getOriginByCountry = (country) => {
     name: process.env.ORIGIN_MX_NAME || "Score Store MX",
     company: process.env.ORIGIN_MX_COMPANY || "Único Uniformes",
     email: process.env.ORIGIN_MX_EMAIL || process.env.FACTORY_EMAIL || "ventas@unico-uniformes.com",
-    phone: process.env.ORIGIN_MX_PHONE || "+52 664 236 8701",
+    phone: process.env.ORIGIN_MX_PHONE || "6643011271",
     street: process.env.ORIGIN_MX_STREET || "Palermo",
     number: process.env.ORIGIN_MX_NUMBER || "6106 Interior JK",
     district: process.env.ORIGIN_MX_DISTRICT || "Anexa Roma",
@@ -306,10 +306,10 @@ const getEnviaQuote = async ({ zip, country, items_qty }) => {
   const destination = {
     name: "Cliente",
     company: "",
-    email: "",
-    phone: "",
-    street: "",
-    number: "",
+    email: "contacto.hocker@gmail.com", // CORRECCIÓN: Evita error 400 por campos vacíos
+    phone: "0000000000", // CORRECCIÓN: Envía exige teléfono de destino
+    street: "Stripe Temp",
+    number: "1",
     district: "Other",
     city: zipInfo?.city || "",
     state: zipInfo?.state || (c === "US" ? "CA" : "BC"),
@@ -406,20 +406,24 @@ const stripeShippingToEnviaDestination = (shipping_details) => {
   const sd = shipping_details || {};
   const addr = sd.address || {};
   const country = String(addr.country || "").toUpperCase();
+  
+  // Extraer calle inteligentemente (Stripe suele enviar calle + numero en line1)
+  let calle = addr.line1 || "Domicilio Conocido";
+  let num = addr.line2 || "S/N";
 
   return {
-    name: sd.name || "Cliente",
+    name: sd.name || "Cliente Final",
     company: "",
-    email: "",
-    phone: "",
-    street: addr.line1 || "",
-    number: addr.line2 || "",
+    email: "cliente@scorestore.com", // Evita 400 Bad Request en Envia
+    phone: sd.phone || "0000000000", // Obligatorio en Envia API
+    street: calle,
+    number: num,
     district: addr.line2 || "Centro",
     city: addr.city || "",
     state: addr.state || "",
     country: country || "MX",
     postalCode: addr.postal_code || "",
-    reference: "",
+    reference: "Venta Stripe Webhook",
   };
 };
 
@@ -430,7 +434,7 @@ const createEnviaLabel = async ({ shipping_country, stripe_session, items_qty })
   const destination = stripeShippingToEnviaDestination(stripe_session?.shipping_details);
 
   if (!destination?.postalCode || !destination?.state || !destination?.country) {
-    throw new Error("Dirección incompleta para generar guía");
+    throw new Error("Dirección incompleta en Stripe para generar guía");
   }
 
   const pkg = getPackageSpecs(country, items_qty || 1);
@@ -460,6 +464,7 @@ const createEnviaLabel = async ({ shipping_country, stripe_session, items_qty })
   });
 
   const data = await res.json();
+  if (data?.error) throw new Error(data.error.message || "Error al crear la guía");
   return data?.data || data;
 };
 
@@ -472,19 +477,14 @@ module.exports = {
   itemsQtyFromAny,
   getBaseUrl,
   validateZip,
-
   readJsonFile,
   getCatalogIndex,
-
   isSupabaseConfigured,
   supabaseAdmin,
-
   sendTelegram,
-
   getEnviaQuote,
   getFallbackShipping,
   createEnviaLabel,
-
   initStripe,
   readRawBody,
 };
