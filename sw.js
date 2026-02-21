@@ -1,5 +1,5 @@
 /* SCORE STORE — Service Worker (Pro-PWA 100% E-commerce Safe) */
-const CACHE_VERSION = "scorestore-vfx-pro-v1";
+const CACHE_VERSION = "scorestore-vfx-pro-v1.1";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -50,10 +50,19 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(req)
         .then((response) => {
-          return caches.open(CACHE_VERSION).then((cache) => {
-            cache.put(req, response.clone());
+          // FIX: Validar que la respuesta sea válida antes de intentar cachearla
+          if (!response || response.status !== 200 || response.type !== 'basic') {
             return response;
+          }
+
+          // FIX: Clonar la respuesta de manera síncrona ANTES de que el navegador la consuma
+          const responseToCache = response.clone();
+          
+          caches.open(CACHE_VERSION).then((cache) => {
+            cache.put(req, responseToCache);
           });
+          
+          return response;
         })
         .catch(() => caches.match("/index.html"))
     );
@@ -64,11 +73,21 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(req).then((cached) => {
       const fetchPromise = fetch(req).then((networkResponse) => {
+        // FIX: Validar que la respuesta sea válida
+        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+          return networkResponse;
+        }
+
+        // FIX: Clonar la respuesta de manera síncrona ANTES del proceso asíncrono del caché
+        const responseToCache = networkResponse.clone();
+        
         caches.open(CACHE_VERSION).then((cache) => {
-          cache.put(req, networkResponse.clone());
+          cache.put(req, responseToCache);
         });
+        
         return networkResponse;
       }).catch(() => { /* offline silently */ });
+      
       return cached || fetchPromise;
     })
   );
