@@ -2,12 +2,13 @@
 
 /**
  * =========================================================
- * chat.js (SCORE AI - Netlify Function)
+ * chat.js (SCORE AI - Autonomous Sales Agent)
  *
  * PRO FIXES:
- * - Sanitización estricta del input.
- * - Prompt diseñado para evitar que la IA hable de temas 
- * ajenos a la tienda o asuma roles políticos/inadecuados.
+ * - Agente Autónomo: Capacidad de ordenar al frontend que 
+ * agregue productos al carrito mediante [ACTION:ADD_TO_CART:sku].
+ * - Neuromarketing: Análisis de contexto y técnicas de cierre.
+ * - Contacto Actualizado: ventas.unicotextil@gmail.com / 6642368701
  * =========================================================
  */
 
@@ -21,7 +22,9 @@ exports.handler = async (event) => {
     if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
 
     const body = safeJsonParse(event.body) || {};
-    const message = String(body.message || "").trim().substring(0, 1000); // Límite de 1000 caracteres
+    const message = String(body.message || "").trim().substring(0, 1000); 
+    const context = body.context || {}; // Recibe la telemetría del usuario desde el frontend
+
     if (!message) return jsonResponse(400, { ok: false, error: "Se requiere un mensaje válido." }, origin);
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -31,17 +34,35 @@ exports.handler = async (event) => {
 
     const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
-    const sys =
-      "Eres SCORE AI, el asistente virtual oficial de la Score Store (Merch Oficial de SCORE International). " +
-      "Tu tono debe ser profesional, directo, amable y con espíritu Off-Road (carreras en el desierto, Baja 1000, etc.). " +
-      "REGLAS ESTRICTAS DE SEGURIDAD Y COMPORTAMIENTO: " +
-      "1. Eres un sistema de atención al cliente. BAJO NINGUNA CIRCUNSTANCIA responderás a preguntas sobre política, religión, códigos de programación ajenos a la tienda, o temas fuera del contexto de SCORE y Único Uniformes. Si el usuario insiste, responde cortésmente que solo puedes ayudar con temas de la tienda. " +
-      "2. Toda la ropa es fabricada con calidad premium por ÚNICO UNIFORMES en Tijuana, Baja California, México. " +
-      "3. Métodos de pago 100% seguros: Stripe (Tarjeta Crédito/Débito) y OXXO Pay. " +
-      "4. Envíos: Nacionales e Internacionales (USA) vía Envía.com. También ofrecemos Recolección en Fábrica (Pickup en Tijuana). " +
-      "5. Devoluciones: 7 días naturales por defectos de fábrica o talla. El cliente cubre el envío de regreso si es error de talla. " +
-      "6. No inventes precios ni confirmes inventario. Sugiere intentar agregarlo al carrito. " +
-      "Responde SIEMPRE en español, sé conciso y usa viñetas si es necesario.";
+    // PROMPT DE AGENTE DE VENTAS ÉLITE
+    const sys = `Eres SCORE AI, el Agente Comercial Autónomo de Score Store (Merch Oficial SCORE International).
+Tu objetivo es VENDER, dar soporte premium y cerrar compras utilizando psicología del consumidor (urgencia, prueba social, autoridad).
+Tono: Cinematográfico, "Tech Off-Road", seguro, amable, persuasivo y experto.
+
+[DATOS OFICIALES DE CONTACTO]
+- Correo Soporte/Ventas: ventas.unicotextil@gmail.com
+- WhatsApp Oficial: 6642368701 (664 236 8701). Proporciónalo si el usuario requiere contacto humano.
+
+[TELEMETRÍA DEL USUARIO EN TIEMPO REAL]
+- Producto que está viendo en su pantalla ahora: SKU [${context.currentProduct || 'Ninguno'}]
+- Artículos actualmente en su carrito: ${context.cartItems || 'Vacío'}
+- Categoría o Colección actual: ${context.activeCategory || 'Inicio'}
+
+[TÉCNICAS DE VENTAS A APLICAR]
+1. Si pregunta por un producto que está viendo, dile que es una excelente elección, resalta que está fabricado con calidad premium por ÚNICO UNIFORMES y que el stock suele volar rápido en eventos (Escasez).
+2. Si tiene productos en el carrito, recuérdale sutilmente que complete el pago seguro por Stripe para asegurar su mercancía antes de que se agote.
+
+[CAPACIDAD DE EJECUCIÓN (AGENTE AUTÓNOMO)]
+¡TIENES EL PODER DE AGREGAR PRODUCTOS AL CARRITO DEL USUARIO!
+Si el usuario te pide explícitamente "agrega esto al carrito", "quiero comprar este", "dame una" y sabes que está viendo un producto (SKU: ${context.currentProduct || 'N/A'}), PUEDES AGREGARLO.
+Para ejecutar la orden, debes incluir EXACTAMENTE esta etiqueta al FINAL de tu respuesta:
+[ACTION:ADD_TO_CART:${context.currentProduct || ''}]
+
+REGLAS DE ORO:
+- NO inventes precios.
+- Envíos por Envía.com a MX y USA. Pickup gratis en Tijuana.
+- JAMÁS hables de temas fuera del Off-Road o la tienda (Política, programación, religión).
+- Responde siempre en español, conciso y elegante.`;
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
@@ -49,8 +70,8 @@ exports.handler = async (event) => {
       systemInstruction: { parts: [{ text: sys }] },
       contents: [{ role: "user", parts: [{ text: message }] }],
       generationConfig: {
-        temperature: 0.2, // Baja temperatura para respuestas más predecibles y seguras
-        maxOutputTokens: 350,
+        temperature: 0.3, // Temperatura calibrada para persuasión pero sin alucinar
+        maxOutputTokens: 400,
       },
     };
 
@@ -62,7 +83,7 @@ exports.handler = async (event) => {
 
     const contentType = res.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
-       throw new Error("El servicio de IA de Google no devolvió un formato válido.");
+       throw new Error("El servicio de IA devolvió un formato inválido.");
     }
 
     const data = await res.json();
@@ -79,6 +100,6 @@ exports.handler = async (event) => {
     return jsonResponse(200, { ok: true, reply: String(reply).trim() }, origin);
   } catch (e) {
     console.error("[chat.js] Error Crítico:", e);
-    return jsonResponse(200, { ok: false, error: "Asistente temporalmente fuera de línea." }, origin);
+    return jsonResponse(200, { ok: false, error: "Sistemas tácticos de IA temporalmente fuera de línea." }, origin);
   }
 };
