@@ -6,6 +6,9 @@
   <meta name="theme-color" content="#0f0f0f" />
   <meta name="description" content="Merch Oficial de Score International. Fabricado por Único Uniformes, patrocinador oficial. Pago cifrado seguro con Stripe + Logística Envía.com." />
   <meta name="facebook-domain-verification" content="wuo7x5sxsjcer1t0epn1id5xgjp8su" />
+  
+  <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
+  
   <title>SCORE STORE — Official Merchandise</title>
 
   <link rel="manifest" href="site.webmanifest" />
@@ -15,7 +18,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
   <script>
-    window.__APP_VERSION__ = "2026.02.21.ULTRA-UX";
+    window.__APP_VERSION__ = "2026.02.21.ULTRA-UX-PRO";
   </script>
 
   <link rel="preload" href="css/styles.css" as="style" />
@@ -414,10 +417,10 @@
              <span style="display:block; font-size:11px; color:#aaa; font-weight:normal;">Asistente Virtual En Línea</span>
            </div>
         </div>
-        <button id="aiClose" class="iconbtn" aria-label="Minimizar chat" type="button" style="color:white;">✕</button>
+        <button id="aiClose" class="iconbtn" aria-label="Minimizar chat" type="button" style="color:white; background: rgba(255,255,255,0.1); border:none;">✕</button>
       </div>
 
-      <div class="modal__body" style="background: #f5f5f7; display:flex; flex-direction:column;">
+      <div class="modal__body" style="background: #f5f5f7; display:flex; flex-direction:column; padding: 15px;">
         <div id="aiOutput" class="chat custom-scrollbar" aria-live="polite"></div>
         <div class="chatbar">
           <input id="aiInput" class="input" placeholder="Pregunta por tallas, envíos o modelos..." aria-label="Campo de escritura para el chat" />
