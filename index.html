@@ -159,7 +159,7 @@
         <div class="footer__brand"><span style="color: var(--red);">SCORE</span> STORE</div>
         <div class="footer__sub">Pago cifrado y seguro vía Stripe.<br>OXXO Pay disponible.<br>Logística avanzada con Envía.com.<br><br>Fabricado y Operado por <b style="color: white;">Único Uniformes</b>.</div>
       </div>
-      
+
       <div class="footer__socials">
         <div class="social-title">CONÉCTATE</div>
         <div class="social-links">
@@ -194,10 +194,15 @@
     </div>
 
     <div class="drawer__body">
+      <div class="search" style="margin-bottom: 14px;">
+        <span class="search__icon" aria-hidden="true">⌕</span>
+        <input id="menuSearchInput" class="search__input" type="search" placeholder="Buscar merch oficial..." autocomplete="off" aria-label="Búsqueda de productos (menú)" />
+      </div>
+
       <button class="navitem" type="button" data-scroll="#categories">Ver Colecciones SCORE</button>
       <button class="navitem" type="button" id="navOpenCart">Ir a mi Carrito</button>
       <button class="navitem" type="button" id="navOpenAi"><span style="color: var(--red);">✦</span> Consultar SCORE AI</button>
-      
+
       <div class="drawer__divider"></div>
       <a class="navitem navitem--link" href="https://unicouniformes.com/" target="_blank" rel="noopener">Sitio de Único Uniformes ↗</a>
     </div>
@@ -221,7 +226,7 @@
           <span>Subtotal de productos</span>
           <b id="cartSubtotal">$0.00</b>
         </div>
-        
+
         <div id="discountLineWrap" class="cartrow" style="color: var(--red);" hidden>
           <span>Descuento aplicado</span>
           <b id="discountLine">-$0.00</b>
@@ -324,7 +329,7 @@
           <button id="pmAdd" class="btn btn--black btn--block btn--large cinematic-btn" type="button" style="margin-top: 10px; font-size: 18px;">
             🛒 Agregar al Carrito
           </button>
-          
+
           <div class="ux-trust-badges">
             <span>✅ Producto Oficial Garantizado</span>
             <span>📦 Envío a todo MX y USA (Envía.com)</span>
