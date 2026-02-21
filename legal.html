@@ -15,6 +15,7 @@
     .legal-content {
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
       padding: 50px 40px;
       border-radius: var(--radius2);
       box-shadow: var(--shadow-modal);
@@ -32,7 +33,6 @@
     .legal-content a { color: var(--red); text-decoration: none; font-weight: 700; }
     .legal-content a:hover { text-decoration: underline; }
     
-    /* CORRECCIÓN: Evitar que el botón herede el color rojo de los enlaces de texto */
     .legal-content a.btn { color: #ffffff !important; }
     
     .legal-box { border: 1px solid var(--border); border-radius: 16px; padding: 30px; margin: 20px 0; background: #fff; box-shadow: var(--shadow); }
@@ -63,39 +63,65 @@
         <p>Todos los productos son mercancía oficial de SCORE International, fabricada por Único Uniformes. Debido a la naturaleza textil, pueden existir ligeras variaciones entre el producto digital y el físico.</p>
 
         <h3>1.2. Precios y Pagos</h3>
-        <p>Precios expresados en <strong>MXN (Pesos Mexicanos)</strong> con IVA incluido. Los pagos son procesados de manera segura por <strong>Stripe</strong>. Aceptamos Tarjetas de Crédito, Débito y OXXO Pay. BAJATEX no almacena datos financieros.</p>
+        <p>Precios expresados en <strong>MXN (Pesos Mexicanos)</strong> con IVA incluido. Los pagos son procesados de manera encriptada y segura por <strong>Stripe Inc</strong>. Aceptamos Tarjetas de Crédito, Débito y OXXO Pay. BAJATEX no procesa ni almacena datos financieros en sus servidores.</p>
       </div>
 
       <div class="legal-box">
         <h2>2. Políticas de Envío y Entregas</h2>
         <h3>2.1. Métodos de Entrega</h3>
         <ul>
-          <li><strong>Pickup (Recolección en Fábrica):</strong> Sin costo. En instalaciones de Único Uniformes (Tijuana).</li>
-          <li><strong>Envíos Nacionales e Internacionales:</strong> Gestionados vía <strong>Envia.com</strong>. Costo calculado en tiempo real en la pantalla de pago.</li>
+          <li><strong>Pickup (Recolección en Fábrica):</strong> Sin costo. En instalaciones de Único Uniformes (Tijuana, B.C.).</li>
+          <li><strong>Envíos Nacionales e Internacionales:</strong> Gestionados vía <strong>Envia.com</strong> (Red DHL, FedEx, USPS). Costo calculado en tiempo real con precisión durante el Checkout.</li>
         </ul>
-        <h3>2.2. Tiempos</h3>
-        <p>Procesamiento interno de 1 a 3 días hábiles. El tiempo en tránsito depende de la paquetería seleccionada automáticamente por el sistema (FedEx, DHL, USPS, etc.).</p>
+        <h3>2.2. Tiempos Logísticos</h3>
+        <p>Procesamiento interno de almacén de 1 a 3 días hábiles. El tiempo en tránsito depende exclusivamente de la paquetería seleccionada automáticamente por la plataforma según su Código Postal.</p>
       </div>
 
       <div class="legal-box">
         <h2>3. Cambios y Devoluciones</h2>
-        <p>El Cliente cuenta con <strong>7 días naturales</strong> a partir de la recepción para notificar defectos de fábrica. BAJATEX cubre el envío en caso de defecto. Si el cambio es por error de talla del cliente, el cliente absorbe los costos de paquetería.</p>
+        <p>El Cliente cuenta con <strong>7 días naturales</strong> a partir de la recepción para notificar defectos de fábrica. BAJATEX cubre el envío logístico en caso de defecto comprobable. Si el cambio es por error de selección de talla por parte del cliente, el cliente absorbe los costos de la nueva paquetería.</p>
       </div>
 
       <div class="legal-box">
-        <h2>4. Aviso de Privacidad</h2>
-        <p>Sus datos (Nombre, Dirección, Teléfono, Correo) son recabados exclusivamente para el procesamiento, envío de su pedido y facturación, en estricto cumplimiento con la LFPDPPP de México. Los datos son compartidos únicamente con proveedores logísticos (Envia.com) para generar su guía y realizar la entrega.</p>
-        <p>Para ejercer sus derechos ARCO, envíe un correo a <em>ventas.unicotextil@gmail.com</em>.</p>
+        <h2>4. Aviso de Privacidad Estricto</h2>
+        <p>Sus datos (Nombre, Dirección de Envío, Teléfono, Correo) son recabados exclusivamente para el procesamiento logístico, despacho de su pedido y facturación, en estricto cumplimiento con la LFPDPPP de México. Los datos son compartidos únicamente mediante conexión API cifrada con proveedores logísticos (Envia.com) para generar su guía oficial.</p>
+        <p>Para ejercer sus derechos ARCO, envíe una solicitud a <em>contacto.hocker@gmail.com</em>.</p>
       </div>
 
       <div style="text-align: center; margin-top: 40px;">
         <p style="margin-bottom: 20px; font-weight: 600;">
           <strong>BAJATEX S. de R.L. de C.V. (Único Uniformes)</strong><br>
-          <a href="mailto:contacto.hocker@gmail.com">contacto.hocker@gmail.com</a> | WhatsApp: 664 301 1271
+          <a href="mailto:contacto.hocker@gmail.com">contacto.hocker@gmail.com</a> | Soporte WhatsApp: 664 301 1271
         </p>
-        <a href="index.html" class="btn btn--primary btn--large cinematic-btn">Volver a la Tienda</a>
       </div>
     </div>
   </main>
+
+  <footer class="footer" role="contentinfo">
+    <div class="wrap footer__inner">
+      <div class="footer__brand-col">
+        <div class="footer__brand"><span style="color: var(--red);">SCORE</span> STORE</div>
+        <div class="footer__sub">
+          <strong>Seguridad Total Garantizada</strong><br>
+          Pago cifrado vía Stripe. Aceptamos OXXO Pay.<br>
+          Logística inteligente internacional con Envía.com.<br><br>
+          Hecho con pasión. Fabricado y Operado por <b style="color: white;">Único Uniformes</b>.
+        </div>
+      </div>
+
+      <div class="footer__socials">
+        <div class="social-title">SÍGUENOS EN LA PISTA</div>
+        <div class="social-links">
+          <a href="https://www.facebook.com/uniforme.unico/" target="_blank" rel="noopener">Facebook</a>
+          <a href="https://www.instagram.com/uniformes.unico" target="_blank" rel="noopener">Instagram</a>
+          <a href="https://youtu.be/F4lw1EcehIA?si=jFBT9skFLs566g8N" target="_blank" rel="noopener">YouTube</a>
+        </div>
+      </div>
+
+      <div class="footer__right">
+        <a href="index.html" class="btn btn--primary hover-fx" style="width: 100%; text-align: center;">← Regresar a la Tienda</a>
+      </div>
+    </div>
+  </footer>
 </body>
 </html>
