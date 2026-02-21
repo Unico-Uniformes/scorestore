@@ -2,6 +2,8 @@
 # =========================================================
 # generate_pwa_icons.py
 # - Genera icons PNG para PWA (standard + maskable)
+# - FIX: Compatibilidad con Pillow v10+ (Image.Resampling)
+# - FIX: Reemplazo de alpha_composite por paste robusto
 # =========================================================
 
 import argparse
@@ -12,7 +14,7 @@ def ensure_pillow():
     try:
         from PIL import Image  # noqa
         return True
-    except Exception:
+    except ImportError:
         return False
 
 def die(msg: str, code: int = 1):
@@ -26,12 +28,19 @@ def main():
     args = ap.parse_args()
 
     if not os.path.exists(args.input):
-        die(f"No existe input: {args.input}")
+        die(f"El archivo de entrada no existe: {args.input}")
 
     if not ensure_pillow():
-        die("Falta Pillow. Instalar con: pip install pillow")
+        die("Falta la librería Pillow. Instálala en tu entorno ejecutando: pip install pillow")
 
     from PIL import Image
+
+    # Soporte para versiones nuevas y antiguas de Pillow
+    try:
+        RESAMPLE_FILTER = Image.Resampling.LANCZOS
+    except AttributeError:
+        RESAMPLE_FILTER = Image.LANCZOS
+
     os.makedirs(args.out, exist_ok=True)
     src = Image.open(args.input).convert("RGBA")
 
@@ -41,13 +50,18 @@ def main():
         max_w = size - pad * 2
         max_h = size - pad * 2
         w, h = im.size
+        
+        # Calcular escala para mantener aspecto sin deformar
         scale = min(max_w / w, max_h / h)
         nw = max(1, int(w * scale))
         nh = max(1, int(h * scale))
-        resized = im.resize((nw, nh), Image.LANCZOS)
+        
+        resized = im.resize((nw, nh), RESAMPLE_FILTER)
         x = (size - nw) // 2
         y = (size - nh) // 2
-        canvas.alpha_composite(resized, (x, y))
+        
+        # Uso de paste con máscara en lugar de alpha_composite para evitar fallos de dimensiones
+        canvas.paste(resized, (x, y), resized)
         return canvas
 
     outputs = [
@@ -61,9 +75,9 @@ def main():
         out_path = os.path.join(args.out, filename)
         img = make_square(src, size, pad)
         img.save(out_path, format="PNG", optimize=True)
-        print(f"OK: {out_path}")
+        print(f"OK: Generado {out_path} (Tamaño: {size}x{size})")
 
-    print("DONE: PWA icons generados.")
+    print("DONE: Todos los íconos PWA han sido generados exitosamente.")
 
 if __name__ == "__main__":
     main()
