@@ -118,7 +118,7 @@ button, input, select { font: inherit; }
 .hero__hook { margin: 16px 0 32px; font-size: 18px; color: #ddd; font-weight: 400; }
 .hero__cta { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
 .cinematic-btn { box-shadow: 0 8px 25px rgba(225,6,0,0.4); transition: all 0.4s; }
-.cinematic-btn:hover { transform: translateY(-4px) scale(1.05); box-shadow: 0 15px 35px rgba(225,6,0,0.6); }
+.cinematic-btn:hover:not(:disabled) { transform: translateY(-4px) scale(1.05); box-shadow: 0 15px 35px rgba(225,6,0,0.6); }
 .hero__meta { margin-top: 24px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .chip { display: inline-flex; align-items: center; border: 1px solid rgba(225,6,0,0.5); background: rgba(0,0,0,0.6); color: #fff; border-radius: 999px; padding: 7px 14px; font-size: 12px; font-weight: 800; }
 
@@ -140,14 +140,15 @@ button, input, select { font: inherit; }
 
 /* BOTONES GLOBALES */
 .btn { border: none; border-radius: 999px; padding: 12px 24px; cursor: pointer; font-weight: 800; letter-spacing: .02em; transition: all 0.3s var(--ease); display: inline-flex; justify-content: center; align-items: center; gap: 8px; }
-.btn:hover { transform: translateY(-2px); box-shadow: var(--shadow2); }
-.btn:active { transform: translateY(0) scale(.98); }
+.btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow2); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(.98); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none !important; transform: none !important; }
 .btn--primary { background: var(--red); color: var(--text-inverse); }
-.btn--primary:hover { background: var(--red-hover); box-shadow: 0 5px 15px rgba(225,6,0,0.3); }
+.btn--primary:hover:not(:disabled) { background: var(--red-hover); box-shadow: 0 5px 15px rgba(225,6,0,0.3); }
 .btn--black { background: var(--black-btn); color: var(--text-inverse); }
-.btn--black:hover { background: var(--black-btn-hover); border: 1px solid var(--red); }
+.btn--black:hover:not(:disabled) { background: var(--black-btn-hover); border: 1px solid var(--red); }
 .btn--ghost { background: #fff; border: 2px solid var(--black-btn); color: var(--black-btn); }
-.btn--ghost:hover { background: var(--black-btn); color: #fff; }
+.btn--ghost:hover:not(:disabled) { background: var(--black-btn); color: #fff; }
 .btn--tiny { padding: 8px 16px; font-size: 13px; }
 .btn--large { padding: 16px 32px; font-size: 16px; }
 .btn--block { width: 100%; }
