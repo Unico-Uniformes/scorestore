@@ -783,13 +783,16 @@
       const realProd = products.find(x => x.sku === it.sku);
       const availableSizes = realProd && realProd.sizes ? realProd.sizes : [it.size];
       const sizeOptions = availableSizes.map(s => `<option value="${escapeHtml(s)}" ${s === it.size ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('');
+      
+      // Creamos un ID único seguro para el select removiendo espacios
+      const safeId = `cartSize_${escapeHtml(it.sku)}_${escapeHtml(it.size).replace(/\s+/g, '')}`;
 
       row.innerHTML = `
         <div class="cartitem__img">${it.img ? `<img src="${safeUrl(it.img)}" alt="${escapeHtml(it.title)}">` : ""}</div>
         <div style="flex-grow:1; display:flex; flex-direction:column; justify-content:center;">
           <h4 class="cartitem__title">${escapeHtml(it.title)}</h4>
           <div class="cartitem__meta" style="display:flex; align-items:center; gap:8px; margin-top:5px;">
-            Talla: <select class="select cart-size-selector" data-sku="${escapeHtml(it.sku)}" data-old-size="${escapeHtml(it.size)}" aria-label="Cambiar talla en el carrito" style="padding: 2px 5px; width:auto; font-size:13px; font-weight:bold; height:auto; border-width:1px;">${sizeOptions}</select> 
+            Talla: <select id="${safeId}" name="${safeId}" class="select cart-size-selector" data-sku="${escapeHtml(it.sku)}" data-old-size="${escapeHtml(it.size)}" aria-label="Cambiar talla en el carrito" style="padding: 2px 5px; width:auto; font-size:13px; font-weight:bold; height:auto; border-width:1px;">${sizeOptions}</select> 
             <span style="font-weight:bold; color:var(--red);">${money(it.priceCents)}</span>
           </div>
           <div class="cartitem__controls" style="margin-top:10px;">
