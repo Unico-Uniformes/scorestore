@@ -4,46 +4,146 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0f0f0f" />
-  <title>Pago Exitoso — SCORE STORE</title>
-  
+  <title>Estado de Pedido — SCORE STORE</title>
+
   <link rel="manifest" href="site.webmanifest" />
   <link rel="icon" href="assets/icons/icon-192.png" />
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-  
+
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center;">
 
   <div class="hero__bg" style="position:fixed; inset:0; z-index:-2; animation: none; filter: brightness(0.4);"></div>
-  
-  <main class="wrap section main-card-bg" style="max-width: 550px; position: relative; z-index: 10; border-top: 5px solid var(--red);">
-    
+
+  <main class="wrap section main-card-bg" style="max-width: 620px; position: relative; z-index: 10; border-top: 5px solid var(--red);">
     <img src="assets/logo-score.webp" alt="Score Store" style="height: 60px; margin: 0 auto 20px auto; filter: drop-shadow(0 5px 10px rgba(0,0,0,0.2));">
-    
-    <div style="font-size: 60px; margin-bottom: 10px; animation: scaleIn 0.5s ease;">🏁</div>
-    <h1 style="color: var(--black-btn); font-weight: 900; margin-bottom: 16px; font-size: 32px;">¡PEDIDO CONFIRMADO!</h1>
-    
-    <p class="hint" style="max-width: 400px; margin: 0 auto 24px; font-size: 16px; color: var(--text);">
-      Tu pago ha sido procesado correctamente. <br><br>
-      Si pagaste con <b>OXXO</b>, la confirmación puede tardar unos minutos. Te enviaremos las actualizaciones de tu envío directamente a tu correo.
+
+    <div id="heroEmoji" style="font-size: 60px; margin-bottom: 10px; animation: scaleIn 0.5s ease;">🏁</div>
+    <h1 id="heroTitle" style="color: var(--black-btn); font-weight: 900; margin-bottom: 12px; font-size: 32px;">Cargando estado…</h1>
+
+    <p id="heroText" class="hint" style="max-width: 520px; margin: 0 auto 18px; font-size: 16px; color: var(--text);">
+      Estamos verificando tu pago con Stripe.
     </p>
 
-    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px;">
-      <a class="btn btn--primary btn--large cinematic-btn" href="index.html">Regresar a la Tienda</a>
+    <div class="legal-box" style="text-align:left; margin: 18px 0;">
+      <div style="display:flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+        <div>
+          <div class="muted" style="font-size: 12px;">ID de Pedido (Stripe Session)</div>
+          <div id="orderId" style="font-weight: 900; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">—</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="muted" style="font-size: 12px;">Total</div>
+          <div id="orderTotal" style="font-weight: 900;">—</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 12px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+        <button id="copyBtn" class="btn btn--black btn--tiny" type="button">Copiar ID</button>
+        <a class="btn btn--ghost btn--tiny" href="index.html">Regresar a la Tienda</a>
+      </div>
+    </div>
+
+    <div id="extraHint" class="hint" style="font-size: 13px; color: var(--muted);">
+      Si pagaste con OXXO, la confirmación puede tardar hasta 1 día hábil. Revisa tu correo para ver actualizaciones.
     </div>
   </main>
 
   <script>
-    // Limpieza profunda y agresiva post-compra
-    try { 
-      localStorage.removeItem("scorestore_cart_v1"); 
+    // Limpieza post-checkout (evitar carritos fantasma / doble compra)
+    try {
+      localStorage.removeItem("scorestore_cart_v1");
       localStorage.removeItem("scorestore_ship_v1");
-      
-      // Prevenir que el "Back" del navegador reviva el carrito viejo
       window.history.replaceState(null, '', window.location.href);
-    } catch(e) {
-      console.error("Error limpiando cache local:", e);
+    } catch (e) {}
+
+    const qs = new URLSearchParams(location.search);
+    const sessionId = qs.get("session_id") || "";
+
+    const $ = (id) => document.getElementById(id);
+
+    function setUI({ title, text, emoji, borderColor }) {
+      if ($("heroTitle")) $("heroTitle").textContent = title;
+      if ($("heroText")) $("heroText").innerHTML = text;
+      if ($("heroEmoji")) $("heroEmoji").textContent = emoji;
+      if (borderColor) document.querySelector("main").style.borderTopColor = borderColor;
     }
+
+    function fmtMoney(n) {
+      try { return Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN" }); }
+      catch { return "$" + Number(n).toFixed(2); }
+    }
+
+    async function loadStatus() {
+      if (!sessionId) {
+        $("orderId").textContent = "—";
+        $("orderTotal").textContent = "—";
+        setUI({
+          title: "Pedido creado",
+          text: "Tu proceso de compra finalizó. Si no ves confirmación, revisa tu correo o vuelve a intentar el pago.",
+          emoji: "🏁"
+        });
+        return;
+      }
+
+      $("orderId").textContent = sessionId;
+
+      try {
+        const res = await fetch(`/.netlify/functions/checkout_status?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+
+        if (!data || !data.ok) throw new Error(data && data.error ? data.error : "No se pudo verificar el estado");
+
+        $("orderTotal").textContent = fmtMoney(data.amount_total_mxn || 0);
+
+        const ps = String(data.payment_status || "").toLowerCase();
+
+        // Stripe: payment_status = paid | unpaid | no_payment_required
+        if (ps === "paid") {
+          setUI({
+            title: "¡PAGO CONFIRMADO!",
+            text: "Tu pago ha sido confirmado por Stripe. <br><br>Si elegiste envío, tu guía se genera automáticamente y recibirás el tracking por correo.",
+            emoji: "✅",
+            borderColor: "var(--red)"
+          });
+          $("extraHint").textContent = "Tip: guarda tu ID por si necesitas soporte. Gracias por apoyar el merch oficial.";
+        } else if (ps === "unpaid") {
+          setUI({
+            title: "Pedido creado (Pago pendiente)",
+            text: "Tu pedido ya está registrado. <br><br><b>Si elegiste OXXO:</b> tu voucher se generó en Checkout y la confirmación puede tardar. Te avisaremos cuando el pago se refleje.",
+            emoji: "🕒",
+            borderColor: "var(--black-btn)"
+          });
+          $("extraHint").textContent = "No generamos guía de envío hasta que Stripe confirme el pago. (Evita cargos y guías duplicadas).";
+        } else {
+          setUI({
+            title: "Pedido registrado",
+            text: "Tu pedido existe en Stripe. Si el pago aún no aparece como confirmado, revisa tu correo o intenta nuevamente.",
+            emoji: "🏁",
+            borderColor: "var(--black-btn)"
+          });
+          $("extraHint").textContent = "Si tu pago no se confirma, el pedido puede expirar o fallar según el método de pago.";
+        }
+      } catch (e) {
+        setUI({
+          title: "Pedido creado",
+          text: "No pudimos consultar el estado en este momento. <br><br>Si pagaste con OXXO, la confirmación puede tardar. Revisa tu correo.",
+          emoji: "🏁",
+          borderColor: "var(--black-btn)"
+        });
+      }
+    }
+
+    $("copyBtn").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(sessionId || "");
+        alert("ID copiado ✅");
+      } catch(e) {
+        alert("No se pudo copiar. Copia manualmente el ID.");
+      }
+    });
+
+    loadStatus();
   </script>
 </body>
 </html>
