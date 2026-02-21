@@ -1,4 +1,4 @@
-/* SCORE STORE — Service Worker (Pro-PWA 100%) */
+/* SCORE STORE — Service Worker (Pro-PWA 100% E-commerce Safe) */
 const CACHE_VERSION = "scorestore-v2026.02.21.UX.ISLAND";
 const CORE_ASSETS = [
   "/",
@@ -6,7 +6,6 @@ const CORE_ASSETS = [
   "/css/styles.css",
   "/js/main.js",
   "/site.webmanifest",
-  "/data/catalog.json",
   "/assets/logo-score.webp",
   "/assets/logo-world-desert.webp",
   "/assets/fondo-pagina-score.webp"
@@ -32,10 +31,11 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // EXCLUSIÓN QUIRÚRGICA: Ignorar API, Netlify Functions, Stripe y Supabase
+  // EXCLUSIÓN QUIRÚRGICA: Ignorar APIs, JSONs dinámicos, Stripe y Supabase
   if (
     url.pathname.startsWith("/api/") || 
     url.pathname.includes("/.netlify/") ||
+    url.pathname.endsWith(".json") || 
     url.origin.includes("stripe.com") ||
     url.origin.includes("envia.com") ||
     url.origin.includes("supabase.co")
@@ -45,7 +45,7 @@ self.addEventListener("fetch", (event) => {
 
   if (req.method !== "GET") return;
 
-  // Navegación: Network-first con fallback a index.html
+  // Navegación: Network-first
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req)
@@ -60,7 +60,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Assets: Cache-first, revalidate en background
+  // Assets estáticos: Cache-first con actualización en segundo plano
   event.respondWith(
     caches.match(req).then((cached) => {
       const fetchPromise = fetch(req).then((networkResponse) => {
