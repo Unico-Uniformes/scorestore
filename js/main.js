@@ -3,13 +3,14 @@
    - Lógica de UI / UX / Carrusel FB Style Restaurado
    - Fix de botones atrapados y Selectores
    - Efecto Isla Visual y Etiquetas Flotantes
-   - MEJORAS: Cupones UI, Cambio de tallas in-cart, Vaciar Carrito
+   - MEJORAS: Cupones UI, Cambio de tallas in-cart, Vaciar Carrito,
+     Protección Anti-Doble Cobro (Stripe/Envía)
    ========================================================= */
 
 (() => {
   "use strict";
 
-  const APP_VERSION = window.__APP_VERSION__ || "dev";
+  const APP_VERSION = window.__APP_VERSION__ || "2026.02.21.UX.ISLAND.V2";
 
   // ---------- DOM ----------
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -51,8 +52,8 @@
   const cartItemsEl = $("#cartItems");
   const cartSubtotalEl = $("#cartSubtotal");
   const shippingLineEl = $("#shippingLine");
-  const discountLineWrap = $("#discountLineWrap"); // Se agregará en index.html
-  const discountLineEl = $("#discountLine");       // Se agregará en index.html
+  const discountLineWrap = $("#discountLineWrap"); 
+  const discountLineEl = $("#discountLine");       
   const cartTotalEl = $("#cartTotal");
 
   const shipHint = $("#shipHint");
@@ -62,10 +63,10 @@
   const quoteBtn = $("#quoteBtn");
 
   const promoCodeInput = $("#promoCode");
-  const applyPromoBtn = $("#applyPromoBtn");       // Se agregará en index.html
+  const applyPromoBtn = $("#applyPromoBtn");       
   const checkoutBtn = $("#checkoutBtn");
   const checkoutMsg = $("#checkoutMsg");
-  const checkoutLoader = $("#checkoutLoader");     // Se agregará en index.html
+  const checkoutLoader = $("#checkoutLoader");     
 
   const productModal = $("#productModal");
   const pmClose = $("#pmClose");
@@ -113,8 +114,8 @@
   // ---------- STATE ----------
   let catalog = null;
   let products = [];
-  let promosData = null; // Guardará las reglas de cupones
-  let activePromo = null; // Guardará el cupón validado activo
+  let promosData = null; 
+  let activePromo = null; 
   let activeCategory = null; 
   let searchQuery = "";
   let sortMode = "featured";
@@ -218,7 +219,6 @@
     return await res.json();
   };
 
-  // Novedad: Cargar promos en segundo plano para cálculo en UI
   const fetchPromos = async () => {
     try {
       const url = `data/promos.json?cv=${encodeURIComponent(APP_VERSION)}`;
@@ -484,16 +484,13 @@
     if (it) { it.qty = clampInt(qty, 1, 99); saveCart(); validatePromo(); renderCart(); }
   };
 
-  // Novedad: Cambiar talla directamente en el carrito
   const changeCartItemSize = (sku, oldSize, newSize) => {
     if(oldSize === newSize) return;
     const itemIndex = cart.findIndex((x) => x.sku === sku && x.size === oldSize);
     if(itemIndex === -1) return;
     
-    // Verificar si la nueva talla ya existe para ese SKU
     const existingIndex = cart.findIndex((x) => x.sku === sku && x.size === newSize);
     if (existingIndex >= 0) {
-      // Si existe, sumar cantidad y borrar el viejo
       cart[existingIndex].qty = clampInt(cart[existingIndex].qty + cart[itemIndex].qty, 1, 99);
       cart.splice(itemIndex, 1);
     } else {
@@ -502,7 +499,6 @@
     saveCart(); renderCart(); showToast("✅ Talla actualizada");
   };
 
-  // Novedad: Validar Cupón Localmente para UI
   const validatePromo = () => {
     const code = String(promoCodeInput?.value || "").trim().toUpperCase();
     if (!code || !promosData || !promosData.rules) { activePromo = null; return; }
@@ -537,7 +533,7 @@
 
   const shippingCents = () => {
     if (shipping.mode === "pickup") return 0;
-    if (activePromo && activePromo.type === 'free_shipping') return 0; // Envío gratis en UI
+    if (activePromo && activePromo.type === 'free_shipping') return 0; 
     
     const cents = Number(shipping.quote?.amount_cents || shipping.quote?.amount || 0);
     return Number.isFinite(cents) ? cents : 0;
@@ -553,20 +549,23 @@
         <div class="hint" style="text-align:center; padding: 30px 10px;">
           <div style="font-size: 40px; margin-bottom: 10px;">🛒</div>
           Tu carrito de compras está vacío.<br><br>
-          <button class="btn btn--primary" type="button" onclick="document.querySelector('#closeCartBtn').click()">¡Ir al Catálogo!</button>
         </div>`;
       if (cartSubtotalEl) cartSubtotalEl.textContent = money(0);
       if (shippingLineEl) shippingLineEl.textContent = money(0);
       if (discountLineWrap) discountLineWrap.hidden = true;
       if (cartTotalEl) cartTotalEl.textContent = money(0);
+      if (checkoutBtn) { checkoutBtn.disabled = true; checkoutBtn.style.opacity = "0.5"; }
+      if (quoteBtn) { quoteBtn.disabled = true; }
       return;
+    } else {
+      if (checkoutBtn) { checkoutBtn.disabled = false; checkoutBtn.style.opacity = "1"; }
+      if (quoteBtn) { quoteBtn.disabled = false; }
     }
 
     const frag = document.createDocumentFragment();
     for (const it of cart) {
       const row = document.createElement("div"); row.className = "cartitem";
       
-      // Obtener el producto real para listar sus tallas en el Select
       const realProd = products.find(x => x.sku === it.sku);
       const availableSizes = realProd && realProd.sizes ? realProd.sizes : [it.size];
       const sizeOptions = availableSizes.map(s => `<option value="${s}" ${s === it.size ? 'selected' : ''}>${s}</option>`).join('');
@@ -591,7 +590,6 @@
       row.querySelector('[data-act="inc"]').addEventListener("click", (ev) => { ev.stopPropagation(); setCartQty(it.sku, it.size, it.qty + 1); });
       row.querySelector(".trash").addEventListener("click", (ev) => { ev.stopPropagation(); removeCartItem(it.sku, it.size); });
       
-      // Evento para cambio de talla
       row.querySelector('.cart-size-selector').addEventListener("change", (ev) => {
         ev.stopPropagation();
         changeCartItemSize(ev.target.dataset.sku, ev.target.dataset.oldSize, ev.target.value);
@@ -600,7 +598,6 @@
       frag.appendChild(row);
     }
     
-    // Botón para vaciar carrito
     const clearWrap = document.createElement("div");
     clearWrap.style.textAlign = "center";
     clearWrap.style.marginTop = "10px";
@@ -620,7 +617,6 @@
     
     if (cartSubtotalEl) cartSubtotalEl.textContent = money(subGross);
     
-    // Mostrar descuento si aplica
     if (discountLineWrap && discountLineEl) {
       if (subNet < subGross && activePromo.type !== 'free_shipping') {
         discountLineWrap.hidden = false;
@@ -653,7 +649,7 @@
     
     if (shipHint) {
       if(shipping.mode === "pickup") shipHint.textContent = "Fábrica";
-      else if(shipping.quote) shipHint.textContent = shipping.quote.label; // Muestra la paquetería cotizada si existe
+      else if(shipping.quote) shipHint.textContent = shipping.quote.label; 
       else shipHint.textContent = SHIPPING_LABELS[shipping.mode];
     }
     
@@ -681,6 +677,7 @@
     if (!cart.length) { showToast("El carrito está vacío"); return; }
     
     if (quoteBtn) { quoteBtn.disabled = true; quoteBtn.textContent = "Calculando..."; }
+    if (checkoutBtn) { checkoutBtn.disabled = true; } 
 
     try {
       const body = { postal_code, shipping_mode: mode, country: mode === "envia_us" ? "US" : "MX", items: cart.map((it) => ({ sku: it.sku, qty: it.qty })) };
@@ -693,12 +690,13 @@
       saveShipping(); refreshShippingUI(); showToast(`✅ Costo de envío calculado`);
     } catch (e) {
       shipping.quote = null; saveShipping(); refreshShippingUI(); showToast(`❌ Error de sistema de envíos. Verifica tu CP.`);
+      if (checkoutMsg) { checkoutMsg.hidden = false; checkoutMsg.textContent = "No pudimos calcular el envío a tu código postal. Intenta nuevamente."; }
     } finally {
       if (quoteBtn) { quoteBtn.disabled = false; quoteBtn.textContent = "Calcular"; }
+      if (checkoutBtn && cart.length > 0) { checkoutBtn.disabled = false; }
     }
   };
 
-  // MEJORA: Anti-Dobles cobros y Checkout Seguro.
   const doCheckout = async () => {
     if (checkoutMsg) checkoutMsg.hidden = true;
     if (!cart.length) { showToast("Tu carrito está vacío"); return; }
@@ -709,14 +707,14 @@
     const needsZip = shipping_mode === "envia_mx" || shipping_mode === "envia_us";
 
     if (needsZip) {
-      if (postal_code.length < 4) { showToast("Debes ingresar tu Código Postal o ZIP válido."); return; }
+      if (postal_code.length < 4) { showToast("Debes ingresar tu Código Postal o ZIP válido para calcular el envío."); return; }
       if (!shipping.quote || shipping.postal_code !== postal_code || shipping.mode !== shipping_mode) {
         await quoteShipping(); if (!shipping.quote) return;
       }
     }
 
     if (checkoutBtn) { checkoutBtn.disabled = true; }
-    if (checkoutLoader) { checkoutLoader.hidden = false; } // Full Screen Loader
+    if (checkoutLoader) { checkoutLoader.hidden = false; } 
 
     try {
       const payload = { items: cart.map((it) => ({ sku: it.sku, qty: it.qty, size: it.size })), shipping_mode, postal_code: needsZip ? postal_code : "", promo_code };
@@ -729,8 +727,7 @@
       if (checkoutLoader) { checkoutLoader.hidden = true; }
       if (checkoutMsg) { checkoutMsg.hidden = false; checkoutMsg.textContent = `Aviso del sistema: ${String(e?.message || e)}`; }
       showToast("Hubo un error al procesar el pago seguro.");
-    } finally {
-      if (checkoutBtn) { checkoutBtn.disabled = false; }
+      if (checkoutBtn) { checkoutBtn.disabled = false; } 
     }
   };
 
@@ -770,7 +767,6 @@
     if (appVersionLabel) appVersionLabel.textContent = APP_VERSION;
     loadCart(); loadShipping(); 
 
-    // Novedad: Carga de promos para aplicar cupones en frontend
     await fetchPromos(); 
     validatePromo();
     refreshShippingUI();
@@ -814,7 +810,9 @@
 
     pmAdd?.addEventListener("click", () => {
       if (!currentProduct) return;
+      if (pmAdd.disabled) return;
       
+      pmAdd.disabled = true;
       const originalText = pmAdd.innerHTML;
       pmAdd.innerHTML = "✅ ¡Agregado!";
       pmAdd.style.backgroundColor = "#28a745"; 
@@ -824,6 +822,7 @@
         pmAdd.innerHTML = originalText;
         pmAdd.style.backgroundColor = "";
         pmAdd.style.borderColor = "";
+        pmAdd.disabled = false;
         
         addToCart(currentProduct, String(pmSize?.value || "").trim(), clampInt(pmQty?.value, 1, 99));
         closeLayer(productModal); 
@@ -843,14 +842,12 @@
     quoteBtn?.addEventListener("click", quoteShipping);
     postalCodeInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") quoteShipping(); });
     
-    // UI Eventos Cupones
     promoCodeInput?.addEventListener("blur", () => { validatePromo(); renderCart(); });
     promoCodeInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") { validatePromo(); renderCart(); }});
     if(applyPromoBtn) { applyPromoBtn.addEventListener("click", () => { validatePromo(); renderCart(); showToast("Verificando cupón..."); }); }
 
     checkoutBtn?.addEventListener("click", doCheckout);
 
-    // FIX COOKIES: Solo mostrar si no hay decisión
     const consentDecision = localStorage.getItem(STORAGE_KEYS.consent);
     if (!consentDecision && cookieBanner) { cookieBanner.hidden = false; }
     cookieAccept?.addEventListener("click", () => { try { localStorage.setItem(STORAGE_KEYS.consent, "accept"); } catch {} if(cookieBanner) cookieBanner.hidden = true; });
