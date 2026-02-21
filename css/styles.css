@@ -1,6 +1,7 @@
 /* =========================================================
    SCORE STORE — UI (Pro / Premium PWA) v2026.02.21
    Mejoras: Hardware Acceleration, Animaciones Neuromarketing, Scroll-snap perfecto.
+   ULTRA-UX: Píldoras de Talla, Steppers Gigantes, Búsqueda Móvil, Guía de Tallas.
    ========================================================= */
 
 :root {
@@ -59,8 +60,14 @@ button, input, select { font: inherit; }
 .skip:focus { left: 10px; }
 
 .wrap { width: min(var(--wrap), calc(100% - 32px)); margin: 0 auto; }
+
+/* UTILIDADES RESPONSIVAS */
 .desktop-only { display: flex; }
-@media (max-width: 768px) { .desktop-only { display: none !important; } }
+.mobile-only { display: none; }
+@media (max-width: 768px) { 
+  .desktop-only { display: none !important; } 
+  .mobile-only { display: flex !important; } 
+}
 
 /* ANIMACIONES NEUROMARKETING */
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -70,6 +77,7 @@ button, input, select { font: inherit; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 @keyframes pulseGlow { 0% { box-shadow: 0 0 0 0 rgba(225,6,0,0.4); } 70% { box-shadow: 0 0 0 10px rgba(225,6,0,0); } 100% { box-shadow: 0 0 0 0 rgba(225,6,0,0); } }
 @keyframes bounceHorizontal { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(5px); } }
+@keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
 
 .pulse-hint { animation: pulseGlow 2s infinite; border-radius: 8px; }
 .bounce-anim { animation: bounceHorizontal 2s infinite ease-in-out; display: inline-block; }
@@ -102,6 +110,8 @@ button, input, select { font: inherit; }
 .search:focus-within { border-color: var(--red); background: #fff; box-shadow: 0 0 10px rgba(225,6,0,0.15); }
 .search__icon { color: var(--muted); font-weight: bold; }
 .search__input { border: 0; outline: none; background: transparent; width: 100%; font-weight: 500; }
+
+.mobile-search-bar { position: absolute; top: 100%; left: 0; width: 100%; background: #fff; padding: 15px; border-bottom: 1px solid var(--border); box-shadow: var(--shadow); display: flex; gap: 10px; animation: slideDown 0.3s ease; z-index: 1900; }
 
 .iconbtn { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative; color: var(--text); font-size: 18px; }
 .iconbtn.hover-fx:hover { background: var(--bg-alt); transform: translateY(-4px) scale(1.05); border-color: var(--red); color: var(--red); box-shadow: 0 5px 15px rgba(225,6,0,0.2); }
@@ -178,6 +188,22 @@ button, input, select { font: inherit; }
 .select--huge.hover-fx:hover { border-color: #ccc; }
 .select-wrapper { position: relative; }
 .select-arrow { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-size: 14px; color: var(--red); pointer-events: none; font-weight: bold; }
+
+/* NUEVOS COMPONENTES UX DE PRODUCTO (TALLAS Y CANTIDAD) */
+.size-pill-container { display: flex; flex-wrap: wrap; gap: 10px; }
+.size-pill { background: #fff; border: 2px solid var(--border); color: var(--muted); border-radius: 8px; padding: 12px 20px; font-weight: 900; font-size: 15px; cursor: pointer; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); flex-grow: 1; text-align: center; }
+.size-pill:hover { border-color: var(--black-btn); color: var(--black-btn); }
+.size-pill.active { background: var(--black-btn); color: #fff; border-color: var(--black-btn); box-shadow: 0 4px 10px rgba(0,0,0,0.2); transform: scale(1.05); }
+
+.qty-stepper-large { display: flex; align-items: center; justify-content: space-between; background: #fff; border: 2px solid var(--border); border-radius: 12px; padding: 5px; height: 55px; }
+.qty-stepper-large button { background: none; border: none; font-size: 24px; font-weight: 900; color: var(--red); cursor: pointer; width: 50px; height: 100%; border-radius: 8px; transition: background 0.2s; }
+.qty-stepper-large button:hover { background: var(--bg-alt); }
+.qty-stepper-large span { font-size: 20px; font-weight: 900; min-width: 40px; text-align: center; color: var(--black-btn); }
+
+/* TABLA GUIA DE TALLAS */
+.size-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+.size-table th { background: var(--bg-alt); padding: 12px; text-align: left; font-weight: 900; border-bottom: 2px solid var(--border); color: var(--black-btn); }
+.size-table td { padding: 12px; border-bottom: 1px solid var(--border); font-weight: 600; color: #444; }
 
 /* CUSTOM SCROLLBARS PARA ZONAS DE SCROLL INTERNO */
 .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
