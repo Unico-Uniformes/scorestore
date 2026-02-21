@@ -1,5 +1,5 @@
 /* SCORE STORE — Service Worker (Pro-PWA 100% E-commerce Safe) */
-const CACHE_VERSION = "scorestore-v2026.02.21.UX.ISLAND";
+const CACHE_VERSION = "scorestore-vfx-pro-v1";
 const CORE_ASSETS = [
   "/",
   "/index.html",
