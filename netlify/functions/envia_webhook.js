@@ -3,11 +3,8 @@
 /**
  * =========================================================
  * envia_webhook.js (Netlify Function)
- * Endpoint: /.netlify/functions/envia_webhook
  *
- * FIXES v2026-02-21:
- * - Verificación opcional de token.
- * - Update de shipping_labels por tracking_number (idempotente)
+ * PRO FIXES: Update idempotente y alertas limpias.
  * =========================================================
  */
 
@@ -43,7 +40,7 @@ exports.handler = async (event) => {
     if (required) {
       const provided = String(getProvidedToken(event) || "").trim();
       if (!provided || provided !== required) {
-        return jsonResponse(401, { ok: false, error: "Unauthorized" }, origin);
+        return jsonResponse(401, { ok: false, error: "Unauthorized access" }, origin);
       }
     }
 
@@ -77,20 +74,20 @@ exports.handler = async (event) => {
             if (String(status).toUpperCase() === "DELIVERED" || String(status).toUpperCase() === "ENTREGADO") {
               try {
                 await sendTelegram(
-                  `📦 ✅ <b>Paquete Entregado</b>\nTracking: <code>${trackingNumber}</code>\nCarrier: <b>${String(carrier).toUpperCase()}</b>\n¡El cliente ya recibió su paquete Oficial!`
+                  `📦 ✅ <b>Paquete Entregado</b>\nTracking: <code>${trackingNumber}</code>\nCarrier: <b>${String(carrier).toUpperCase()}</b>\n¡El cliente recibió su Merch SCORE!`
                 );
               } catch {}
             }
           }
         } catch (e) {
-          console.log("[shipping_webhooks] warn Supabase sync:", e?.message || e);
+          console.error("[shipping_webhooks] Supabase sync error:", e?.message);
         }
       }
     }
 
     return jsonResponse(200, { ok: true, received: true }, origin);
   } catch (e) {
-    console.error("[envia_webhook] fatal:", e);
-    return jsonResponse(200, { ok: true, warning: String(e?.message || e) }, origin);
+    console.error("[envia_webhook] fatal error:", e);
+    return jsonResponse(200, { ok: true, warning: "Processed with minor errors" }, origin);
   }
 };
