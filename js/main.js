@@ -1,8 +1,8 @@
 /* =========================================================
    SCORE STORE — Frontend (PRO) v2026.02.21 (UX ISLANDS + LOGICA AVANZADA)
    - Lógica de UI / UX / Carrusel FB Style Restaurado
-   - Fix de botones atrapados y Selectores
-   - Efecto Isla Visual y Etiquetas Flotantes
+   - Cierre inteligente de modales (Anti-Empalmes)
+   - Efecto Isla Visual y Etiquetas Flotantes (.mediaframe)
    - MEJORAS: Cupones UI, Cambio de tallas in-cart, Vaciar Carrito,
      Protección Anti-Doble Cobro (Stripe/Envía)
    ========================================================= */
@@ -151,12 +151,24 @@
 
   const setStatus = (text) => { if (statusRow) statusRow.textContent = text || ""; };
 
+  // ---------- GESTIÓN ANTI-EMPALMES (CAPAS) ----------
   const openSet = new Set();
-  const lockScrollIfNeeded = () => { document.body.style.overflow = openSet.size > 0 ? "hidden" : ""; };
-  const refreshOverlay = () => { if (overlay) overlay.hidden = openSet.size === 0; lockScrollIfNeeded(); };
+  const lockScrollIfNeeded = () => { 
+    // Bloquea el scroll de fondo solo si hay modales abiertos
+    document.body.style.overflow = openSet.size > 0 ? "hidden" : ""; 
+  };
+  
+  const refreshOverlay = () => { 
+    if (overlay) overlay.hidden = openSet.size === 0; 
+    lockScrollIfNeeded(); 
+  };
 
   const openLayer = (el) => {
     if (!el) return;
+    // Si se abre una capa, asegurarnos que menús empalmados se cierren
+    if (el === cartDrawer && openSet.has(sideMenu)) closeLayer(sideMenu);
+    if (el === sideMenu && openSet.has(cartDrawer)) closeLayer(cartDrawer);
+    
     el.hidden = false;
     openSet.add(el);
     refreshOverlay();
@@ -164,12 +176,12 @@
   };
 
   const closeLayer = (el) => {
-    if (!el) return;
+    if (!el || !openSet.has(el)) return;
     openSet.delete(el);
     refreshOverlay();
     if(el.classList.contains('drawer')) {
       el.style.transform = el.classList.contains('drawer--right') ? 'translateX(100%)' : 'translateX(-100%)';
-      setTimeout(() => el.hidden = true, 400);
+      setTimeout(() => { if(!openSet.has(el)) el.hidden = true; }, 400);
     } else {
       el.hidden = true;
     }
@@ -332,6 +344,7 @@
       const imgs = p.images && p.images.length ? p.images : (p.img ? [p.img] : []);
 
       let swipeHint = imgs.length > 1 ? `<div class="card__swipe-hint">Desliza ↔</div>` : '';
+      // Se utiliza .mediaframe de la nueva versión para el efecto borroso en el fondo
       let trackHtml = imgs.map((src) => `<div class="mediaframe" style="--mf:url('${safeUrl(src)}')"><img loading="lazy" decoding="async" src="${safeUrl(src)}" alt="${escapeHtml(p.title)}"></div>`).join("");
       let dotsHtml = imgs.length > 1 ? `<div class="card__dots">${imgs.map((_,i)=>`<span class="card__dot ${i===0?'active':''}"></span>`).join('')}</div>` : '';
       let navHtml = imgs.length > 1 ? `<button class="card__nav card__nav--prev" aria-label="Anterior" type="button">‹</button><button class="card__nav card__nav--next" aria-label="Siguiente" type="button">›</button>` : '';
@@ -429,6 +442,7 @@
 
     if (pmCarousel) {
       const imgs = p.images && p.images.length ? p.images : (p.img ? [p.img] : []);
+      // Efecto mediaframe también en el modal del producto
       let trackHtml = imgs.map((src) => `<div class="mediaframe mediaframe--pm" style="--mf:url('${safeUrl(src)}')"><img src="${safeUrl(src)}" alt="${escapeHtml(p.title)}" loading="lazy"></div>`).join("");
       let dotsHtml = imgs.length > 1 ? `<div class="pm__dots">${imgs.map((_,i)=>`<span class="pm__dot ${i===0?'active':''}" data-idx="${i}"></span>`).join('')}</div>` : '';
 
@@ -700,8 +714,6 @@
   };
 
   // ---------- CHECKOUT LOCK (anti doble intento) ----------
-  // Evita que el usuario genere múltiples sesiones si toca el botón varias veces
-  // o si el dispositivo se laggea y reintenta.
   const checkoutLockRead = () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.checkoutLock);
@@ -740,7 +752,6 @@ const doCheckout = async () => {
     if (checkoutMsg) checkoutMsg.hidden = true;
     if (!cart.length) { showToast("Tu carrito está vacío"); return; }
 
-    // Anti doble checkout (mismo carrito/params en ventana corta)
     const fp = checkoutFingerprint();
     const lock = checkoutLockRead();
     if (lock && lock.fp === fp && (Date.now() - lock.ts) < 120000) {
@@ -761,7 +772,6 @@ const doCheckout = async () => {
       }
     }
 
-    // Bloqueo local para evitar dobles sesiones en Stripe
     checkoutLockWrite(fp);
 
     if (checkoutBtn) { checkoutBtn.disabled = true; }
@@ -819,7 +829,6 @@ const doCheckout = async () => {
     if (appVersionLabel) appVersionLabel.textContent = APP_VERSION;
     loadCart(); loadShipping();
 
-    // Limpieza del lock de checkout si quedó colgado (ej. se cerró la app en medio)
     try {
       const lock = checkoutLockRead();
       if (lock && (Date.now() - lock.ts) > 600000) checkoutLockClear();
@@ -836,7 +845,7 @@ const doCheckout = async () => {
     closeMenuBtn?.addEventListener("click", () => closeLayer(sideMenu));
     openCartBtn?.addEventListener("click", () => { openLayer(cartDrawer); refreshShippingUI(); renderCart(); });
     closeCartBtn?.addEventListener("click", () => closeLayer(cartDrawer));
-    navOpenCart?.addEventListener("click", () => { closeLayer(sideMenu); openLayer(cartDrawer); refreshShippingUI(); renderCart(); });
+    navOpenCart?.addEventListener("click", () => { openLayer(cartDrawer); refreshShippingUI(); renderCart(); });
 
     scrollLeftBtn?.addEventListener("click", () => { productGrid?.scrollBy({ left: -320, behavior: 'smooth' }); });
     scrollRightBtn?.addEventListener("click", () => { productGrid?.scrollBy({ left: 320, behavior: 'smooth' }); });
@@ -862,7 +871,6 @@ const doCheckout = async () => {
       updateFilterUI(); renderProducts();
     }, 200));
 
-    // Search input dentro del menú (mobile)
     menuSearchInput?.addEventListener("input", debounce(() => {
       searchQuery = String(menuSearchInput?.value || "").trim();
       if (searchInput) searchInput.value = searchQuery;
