@@ -1,5 +1,5 @@
 /* SCORE STORE — Service Worker (Pro-PWA 100% E-commerce Safe) */
-const CACHE_VERSION = "scorestore-v2026.02.21.UX.ISLAND";
+const CACHE_VERSION = "scorestore-v2026.02.21.UX.ISLAND.V4-PRO";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -31,7 +31,7 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // EXCLUSIÓN QUIRÚRGICA: Ignorar APIs, JSONs dinámicos, Stripe y Supabase
+  // EXCLUSIÓN QUIRÚRGICA: Ignorar APIs, JSONs dinámicos, Stripe y Supabase para no causar conflictos transaccionales
   if (
     url.pathname.startsWith("/api/") ||
     url.pathname.includes("/.netlify/") ||
@@ -45,7 +45,7 @@ self.addEventListener("fetch", (event) => {
 
   if (req.method !== "GET") return;
 
-  // Navegación: Network-first
+  // Navegación: Network-first (Asegura que siempre reciban la versión más nueva del HTML si hay internet)
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req)
@@ -60,7 +60,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Assets estáticos: Cache-first con actualización en segundo plano
+  // Assets estáticos: Cache-first con actualización en segundo plano (Velocidad máxima UI)
   event.respondWith(
     caches.match(req).then((cached) => {
       const fetchPromise = fetch(req).then((networkResponse) => {
