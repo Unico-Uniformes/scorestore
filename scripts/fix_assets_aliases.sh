@@ -2,9 +2,10 @@
 set -euo pipefail
 
 # =========================================================
-# fix_assets_aliases.sh
+# fix_assets_aliases.sh (PRO VERSION)
 # - Crea aliases sin espacios para assets (copias reales)
-# - Opcional: actualiza data/catalog.json para usar los aliases
+# - Actualiza data/catalog.json para usar los aliases
+# - FIX: Prevención de Bash Bad Substitution y Command Injection
 #
 # Uso:
 #   bash scripts/fix_assets_aliases.sh                 # crea aliases + actualiza catalog.json
@@ -15,17 +16,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-ASSETS_DIR="assets"
-CATALOG_JSON="data/catalog.json"
-REPORT_JSON="scripts/assets_aliases_report.json"
+# Exportamos las variables para que Python las lea de forma segura
+export ASSETS_DIR="assets"
+export CATALOG_JSON="data/catalog.json"
+export REPORT_JSON="scripts/assets_aliases_report.json"
+export ROOT_DIR
 
-DRY_RUN="0"
-UPDATE_CATALOG="1"
+export DRY_RUN="0"
+export UPDATE_CATALOG="1"
 
 for arg in "$@"; do
   case "$arg" in
-    --dry-run) DRY_RUN="1" ;;
-    --no-catalog) UPDATE_CATALOG="0" ;;
+    --dry-run) export DRY_RUN="1" ;;
+    --no-catalog) export UPDATE_CATALOG="0" ;;
     *) echo "Unknown arg: $arg" >&2; exit 1 ;;
   esac
 done
@@ -37,15 +40,16 @@ fi
 
 mkdir -p scripts
 
-python3 - <<PY
+# El uso de 'PY' entre comillas simples previene la evaluación de variables bash dentro del código Python
+python3 - << 'PY'
 import os, re, json, shutil, datetime, sys
 
-ROOT = ${ROOT_DIR!r}
-ASSETS = os.path.join(ROOT, ${ASSETS_DIR!r})
-CATALOG = os.path.join(ROOT, ${CATALOG_JSON!r})
-REPORT = os.path.join(ROOT, ${REPORT_JSON!r})
-DRY_RUN = ${DRY_RUN} == "1"
-UPDATE_CATALOG = ${UPDATE_CATALOG} == "1"
+ROOT = os.environ.get("ROOT_DIR")
+ASSETS = os.path.join(ROOT, os.environ.get("ASSETS_DIR"))
+CATALOG = os.path.join(ROOT, os.environ.get("CATALOG_JSON"))
+REPORT = os.path.join(ROOT, os.environ.get("REPORT_JSON"))
+DRY_RUN = os.environ.get("DRY_RUN") == "1"
+UPDATE_CATALOG = os.environ.get("UPDATE_CATALOG") == "1"
 
 def norm_name(name: str) -> str:
     # 1) trim
@@ -87,7 +91,7 @@ for dirpath, _, filenames in os.walk(ASSETS):
         if DRY_RUN:
             continue
 
-        # Copia real (no symlink) para que Netlify lo sirva sí o sí
+        # Copia real (no symlink) para que Netlify lo sirva sí o sí sin fallos de ruteo
         shutil.copy2(src, dst)
         created += 1
 
@@ -135,13 +139,13 @@ if UPDATE_CATALOG:
             print("ERROR: No pude leer/actualizar catalog.json:", e, file=sys.stderr)
             sys.exit(1)
 
-print("OK: assets scan terminado")
-print(f"- aliases creados: {created}" + (" (dry-run)" if DRY_RUN else ""))
-print(f"- mappings encontrados: {len(mappings)}")
-print(f"- replacements en catalog.json: {replacements}" if UPDATE_CATALOG else "- catalog.json: no tocado (--no-catalog)")
-print(f"- reporte: {relpath(REPORT)}" if not DRY_RUN else "- reporte: (dry-run, no escrito)")
+print("OK: Auditoría de assets terminada")
+print(f"- Aliases de imágenes creados: {created}" + (" (dry-run)" if DRY_RUN else ""))
+print(f"- Mappings encontrados que requerían corrección: {len(mappings)}")
+print(f"- Reemplazos exactos en catalog.json: {replacements}" if UPDATE_CATALOG else "- catalog.json: no tocado (--no-catalog)")
+print(f"- Reporte de auditoría guardado en: {relpath(REPORT)}" if not DRY_RUN else "- Reporte: (dry-run, no escrito)")
 PY
 
 echo ""
-echo "DONE."
-echo "Tip: revisa el reporte en scripts/assets_aliases_report.json"
+echo "PROCESO COMPLETADO EXITOSAMENTE."
+echo "Tip: Revisa el reporte log en scripts/assets_aliases_report.json"
