@@ -5,6 +5,7 @@
    - Neuromarketing: Inyección dinámica de escasez y Notificaciones de Ventas (Fake Sales).
    - Logística: Integración robusta con Envia.com y Stripe.
    - ULTRA-UX FIX: Anti-Empalme de botón IA y Notificaciones.
+   - CÁLCULO DE CARRUSEL FIX: Movimiento exacto tarjeta por tarjeta.
    ========================================================= */
 
 (() => {
@@ -204,7 +205,7 @@
     if (statusRow) statusRow.textContent = text || ""; 
   };
 
-  // ---------- CONTROL DE CAPAS Y MODALES (CON FIX ANTI-EMPALME) ----------
+  // ---------- CONTROL DE CAPAS Y MODALES ----------
   const openSet = new Set(); 
   const lockScrollIfNeeded = () => { 
     document.body.style.overflow = openSet.size > 0 ? "hidden" : ""; 
@@ -214,7 +215,6 @@
     if (overlay) overlay.hidden = openSet.size === 0; 
     lockScrollIfNeeded(); 
 
-    // FIX UX/UI Nivel Apple: Ocultamos elementos flotantes si hay modales abiertos
     if (floatingAiBtn) {
       if (openSet.size > 0) {
         floatingAiBtn.style.transform = 'scale(0) translateY(20px)';
@@ -227,7 +227,6 @@
       }
     }
 
-    // Si abren un modal, ocultamos también la notificación de ventas si estaba activa
     if (salesNotification && openSet.size > 0) {
         salesNotification.classList.remove("show");
     }
@@ -238,7 +237,7 @@
     el.hidden = false;
     openSet.add(el);
     refreshOverlay();
-    void el.offsetWidth; // Forzar reflow para animación
+    void el.offsetWidth; 
     if(el.classList.contains('drawer')) { el.style.transform = 'none'; }
     if(el.classList.contains('modal')) { el.classList.add('modal--open'); }
   };
@@ -267,12 +266,11 @@
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); 
   };
 
-  // ---------- SISTEMA DE NEUROMARKETING (VENTAS EN VIVO FALSAS) ----------
+  // ---------- SISTEMA DE NEUROMARKETING (VENTAS FALSAS) ----------
   const fakeNames = ["Carlos R.", "Ernesto Padilla", "Miguel A.", "Jorge S.", "Luis F.", "Alejandro M.", "Roberto C.", "Daniel T.", "Ricardo P.", "Hugo L.", "Armando G.", "Eduardo V."];
   const fakeItems = ["una Hoodie SCORE Oficial", "una Gorra Baja 1000", "una Camiseta Oficial", "una Chamarra Premium", "un Jersey San Felipe 250", "Merch de Edición Especial"];
 
   const triggerSalesNotification = () => {
-    // Si hay un menú o modal abierto, o si está en el checkout, no estorbamos.
     if (!salesNotification || openSet.size > 0 || (checkoutLoader && !checkoutLoader.hidden)) return;
     
     const randomName = fakeNames[Math.floor(Math.random() * fakeNames.length)];
@@ -282,10 +280,9 @@
     if (salesAction) salesAction.textContent = `acaba de comprar ${randomItem}`;
     
     salesNotification.hidden = false;
-    void salesNotification.offsetWidth; // Trigger reflow
+    void salesNotification.offsetWidth; 
     salesNotification.classList.add("show");
 
-    // Ocultar después de 5 segundos
     setTimeout(() => {
       salesNotification.classList.remove("show");
       setTimeout(() => salesNotification.hidden = true, 500);
@@ -293,10 +290,8 @@
   };
 
   const initNeuromarketing = () => {
-    // Primera notificación a los 12 segundos de entrar a la tienda
     setTimeout(() => {
       triggerSalesNotification();
-      // Luego, repetirla aleatoriamente entre 30 y 45 segundos
       setInterval(() => {
         triggerSalesNotification();
       }, Math.floor(Math.random() * 15000) + 30000);
@@ -442,7 +437,6 @@
     return out;
   };
 
-  // Marketing: Inyección de escasez visual
   const getScarcityText = (sku) => {
       const charCodeSum = sku.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
       if (charCodeSum % 5 === 0) return "🔥 ¡Últimas 2 piezas en inventario!";
@@ -558,7 +552,6 @@
     if (!p) return;
     currentProduct = p;
 
-    // Reset Estricto de UX State para evitar bug de persistencia de cantidades entre productos
     selectedQty = 1;
     if (pmQtyDisplay) pmQtyDisplay.textContent = selectedQty;
 
@@ -577,7 +570,6 @@
       if (p.collection) pmChips.innerHTML += `<span class="pill pill--red">${escapeHtml(p.collection)}</span>`;
     }
 
-    // UX: Píldoras de Talla Dinámicas
     if (pmSizePills) {
       pmSizePills.innerHTML = "";
       selectedSize = p.sizes[0] || "Unitalla"; 
@@ -784,17 +776,18 @@
       const availableSizes = realProd && realProd.sizes ? realProd.sizes : [it.size];
       const sizeOptions = availableSizes.map(s => `<option value="${escapeHtml(s)}" ${s === it.size ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('');
       
-      // Creamos un ID único seguro para el select removiendo espacios
       const safeId = `cartSize_${escapeHtml(it.sku)}_${escapeHtml(it.size).replace(/\s+/g, '')}`;
 
       row.innerHTML = `
         <div class="cartitem__img">${it.img ? `<img src="${safeUrl(it.img)}" alt="${escapeHtml(it.title)}">` : ""}</div>
         <div style="flex-grow:1; display:flex; flex-direction:column; justify-content:center;">
           <h4 class="cartitem__title">${escapeHtml(it.title)}</h4>
-          <div class="cartitem__meta" style="display:flex; align-items:center; gap:8px; margin-top:5px;">
-            Talla: <select id="${safeId}" name="${safeId}" class="select cart-size-selector" data-sku="${escapeHtml(it.sku)}" data-old-size="${escapeHtml(it.size)}" aria-label="Cambiar talla en el carrito" style="padding: 2px 5px; width:auto; font-size:13px; font-weight:bold; height:auto; border-width:1px;">${sizeOptions}</select> 
-            <span style="font-weight:bold; color:var(--red);">${money(it.priceCents)}</span>
-          </div>
+          <label class="cartitem__meta" style="display:flex; align-items:center; gap:8px; margin-top:5px; cursor:pointer;">
+            <span style="color:var(--muted); font-size: 13px;">Talla:</span>
+            <select id="${safeId}" name="${safeId}" class="select cart-size-selector" data-sku="${escapeHtml(it.sku)}" data-old-size="${escapeHtml(it.size)}" aria-label="Cambiar talla en el carrito" style="padding: 2px 5px; width:auto; font-size:13px; font-weight:bold; height:auto; border-width:1px;">${sizeOptions}</select> 
+            <span style="font-weight:bold; color:var(--red); margin-left: auto;">${money(it.priceCents)}</span>
+          </label>
+
           <div class="cartitem__controls" style="margin-top:10px;">
             <div class="qty" aria-label="Modificar Cantidad">
               <button type="button" data-act="dec" aria-label="Quitar uno">−</button><span>${it.qty}</span><button type="button" data-act="inc" aria-label="Agregar uno">+</button>
@@ -1148,12 +1141,17 @@
       triggerSearch();
     });
 
+    // FIX CÁLCULO CARRUSEL: Movimiento exacto tarjeta por tarjeta
     scrollLeftBtn?.addEventListener("click", () => { 
-        productGrid?.scrollBy({ left: -window.innerWidth * 0.8, behavior: 'smooth' }); 
+        const card = productGrid?.querySelector('.card');
+        const step = card ? card.offsetWidth + 32 : window.innerWidth * 0.8;
+        productGrid?.scrollBy({ left: -step, behavior: 'smooth' }); 
     });
     
     scrollRightBtn?.addEventListener("click", () => { 
-        productGrid?.scrollBy({ left: window.innerWidth * 0.8, behavior: 'smooth' }); 
+        const card = productGrid?.querySelector('.card');
+        const step = card ? card.offsetWidth + 32 : window.innerWidth * 0.8;
+        productGrid?.scrollBy({ left: step, behavior: 'smooth' }); 
     });
 
     $$(".navitem[data-scroll]").forEach((btn) => {
