@@ -1,15 +1,16 @@
 /* =========================================================
-   SCORE STORE — Frontend (PRO) v2026.02.21 (UX ISLANDS + LOGICA AVANZADA)
+   SCORE STORE — Frontend (ULTRA-UX PRO) v2026.02.21
    - Lógica de UI / UX / Carrusel FB Style Restaurado
-   - Seguridad mejorada: Sanitización de inputs y validación estricta de carrito
-   - Marketing: Inyección dinámica de escasez (Scarcity) para aumentar conversión
-   - Logística: Integración robusta con Envia.com y Stripe con manejo de estados
+   - Seguridad mejorada: Sanitización de inputs y validación
+   - Marketing: Inyección dinámica de escasez (Scarcity)
+   - Logística: Integración robusta con Envia.com y Stripe
+   - ULTRA-UX: Píldoras de Talla, Steppers, Búsqueda Móvil, Web Share API
    ========================================================= */
 
 (() => {
   "use strict";
 
-  const APP_VERSION = window.__APP_VERSION__ || "2026.02.21.PRO";
+  const APP_VERSION = window.__APP_VERSION__ || "2026.02.21.ULTRA-UX";
 
   // ---------- DOM Helpers ----------
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -42,6 +43,10 @@
   const statusRow = $("#statusRow");
 
   const searchInput = $("#searchInput");
+  const mobileSearchBtn = $("#mobileSearchBtn");
+  const mobileSearchWrap = $("#mobileSearchWrap");
+  const mobileSearchInput = $("#mobileSearchInput");
+  const closeMobileSearchBtn = $("#closeMobileSearchBtn");
   const sortSelect = $("#sortSelect");
 
   const activeFilterRow = $("#activeFilterRow");
@@ -75,10 +80,21 @@
   const pmCarousel = $("#pmCarousel");
   const pmPrice = $("#pmPrice");
   const pmDesc = $("#pmDesc");
-  const pmSize = $("#pmSize");
-  const pmQty = $("#pmQty");
-  const pmAdd = $("#pmAdd");
   const pmChips = $("#pmChips");
+  const pmShareBtn = $("#pmShareBtn");
+  const pmAdd = $("#pmAdd");
+
+  // Nuevos Controles UX Producto
+  const pmSizePills = $("#pmSizePills");
+  const pmQtyDec = $("#pmQtyDec");
+  const pmQtyInc = $("#pmQtyInc");
+  const pmQtyDisplay = $("#pmQtyDisplay");
+
+  // Modal de Guía de Tallas
+  const sizeGuideModal = $("#sizeGuideModal");
+  const openSizeGuideBtn = $("#openSizeGuideBtn");
+  const closeSizeGuideBtn = $("#closeSizeGuideBtn");
+  const understandSizeBtn = $("#understandSizeBtn");
 
   const aiModal = $("#aiModal");
   const openAiBtn = $("#openAiBtn");
@@ -122,6 +138,10 @@
   let cart = [];
   let shipping = { mode: "pickup", postal_code: "", quote: null };
   let currentProduct = null;
+  
+  // Estado Temporal del Modal UX
+  let selectedSize = "";
+  let selectedQty = 1;
 
   // ---------- UTILIDADES DE SEGURIDAD Y FORMATO ----------
   const escapeHtml = (s) => String(s || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -134,7 +154,6 @@
 
   const safeUrl = (p) => { 
     try { 
-      // Protege contra inyecciones javascript: en urls
       const url = encodeURI(String(p || "").trim()); 
       if(url.toLowerCase().startsWith('javascript:')) return '';
       return url;
@@ -177,8 +196,7 @@
     el.hidden = false;
     openSet.add(el);
     refreshOverlay();
-    // Forzar reflow para animación
-    void el.offsetWidth;
+    void el.offsetWidth; // Forzar reflow para animación
     if(el.classList.contains('drawer')) { el.style.transform = 'none'; }
     if(el.classList.contains('modal')) { el.classList.add('modal--open'); }
   };
@@ -198,7 +216,7 @@
     }
   };
   
-  const closeAll = () => { [sideMenu, cartDrawer, productModal, aiModal].forEach(el => closeLayer(el)); };
+  const closeAll = () => { [sideMenu, cartDrawer, productModal, sizeGuideModal, aiModal].forEach(el => closeLayer(el)); };
   const scrollToEl = (sel) => { const el = $(sel); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); };
 
   // ---------- LÓGICA DE PRODUCTOS Y CATÁLOGO ----------
@@ -229,7 +247,7 @@
     const priceCents = Number.isFinite(Number(p?.price_cents)) ? Math.round(Number(p.price_cents)) : 0;
     const images = Array.isArray(p?.images) ? p.images : p?.img ? [p.img] : [];
     const img = images[0] ? safeUrl(images[0]) : "";
-    const sizes = Array.isArray(p?.sizes) && p.sizes.length ? p.sizes : ["S", "M", "L", "XL"];
+    const sizes = Array.isArray(p?.sizes) && p.sizes.length ? p.sizes : ["S", "M", "L", "XL", "XXL"];
     const rawSection = String(p?.sectionId || p?.categoryId || p?.section || "").trim();
     const uiSection = normalizeSectionIdToUi(rawSection) || "BAJA1000";
     const collection = inferCollection(p);
@@ -327,7 +345,6 @@
 
   // Marketing: Inyección de escasez visual
   const getScarcityText = (sku) => {
-      // Lógica simulada basada en el código ASCII del SKU para consistencia visual
       const charCodeSum = sku.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
       if (charCodeSum % 5 === 0) return "🔥 ¡Últimas 2 piezas!";
       if (charCodeSum % 7 === 0) return "⚡ Muy solicitado hoy";
@@ -442,6 +459,10 @@
     if (!p) return;
     currentProduct = p;
 
+    // Reset UX State
+    selectedQty = 1;
+    if (pmQtyDisplay) pmQtyDisplay.textContent = selectedQty;
+
     if (pmTitle) pmTitle.textContent = p.title;
     if (pmPrice) pmPrice.textContent = money(p.priceCents);
     if (pmDesc) {
@@ -457,16 +478,23 @@
       if (p.collection) pmChips.innerHTML += `<span class="pill pill--red">${escapeHtml(p.collection)}</span>`;
     }
 
-    if (pmSize) {
-      pmSize.innerHTML = "";
-      for (const s of p.sizes) {
-        const opt = document.createElement("option"); 
-        opt.value = escapeHtml(s); 
-        opt.textContent = `Talla: ${escapeHtml(s)}`;
-        pmSize.appendChild(opt);
-      }
+    // UX: Píldoras de Talla Dinámicas (Reemplazo del Select)
+    if (pmSizePills) {
+      pmSizePills.innerHTML = "";
+      selectedSize = p.sizes[0] || "Unitalla"; 
+      
+      p.sizes.forEach((s) => {
+        const btn = document.createElement("button");
+        btn.className = `size-pill ${s === selectedSize ? 'active' : ''}`;
+        btn.textContent = escapeHtml(s);
+        btn.onclick = () => {
+          $$('.size-pill').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          selectedSize = s;
+        };
+        pmSizePills.appendChild(btn);
+      });
     }
-    if (pmQty) pmQty.value = "1";
 
     if (pmCarousel) {
       const imgs = p.images && p.images.length ? p.images : (p.img ? [p.img] : []);
@@ -503,7 +531,6 @@
       const raw = localStorage.getItem(STORAGE_KEYS.cart);
       if (raw) { 
         const parsed = JSON.parse(raw); 
-        // Validación estricta de estructura al cargar
         if (Array.isArray(parsed)) {
             cart = parsed.filter(it => it && typeof it.sku === 'string' && typeof it.qty === 'number' && it.qty > 0);
         } 
@@ -577,7 +604,6 @@
     const code = String(promoCodeInput?.value || "").trim().toUpperCase();
     if (!code || !promosData || !promosData.rules) { activePromo = null; return; }
     
-    // Evita ataques XSS en la validación local
     const sanitizedCode = escapeHtml(code);
     const p = promosData.rules.find(x => x.code === sanitizedCode && x.active);
     
@@ -594,7 +620,6 @@
   };
 
   const cartSubtotalCents = (applyDiscount = false) => {
-    // Calculo seguro forzando tipos numéricos
     const sub = cart.reduce((sum, it) => sum + (Math.max(0, Number(it.priceCents || 0)) * Math.max(1, Number(it.qty || 1))), 0);
     if(!applyDiscount || !activePromo) return sub;
 
@@ -656,7 +681,7 @@
         <div style="flex-grow:1; display:flex; flex-direction:column; justify-content:center;">
           <h4 class="cartitem__title">${escapeHtml(it.title)}</h4>
           <div class="cartitem__meta" style="display:flex; align-items:center; gap:8px; margin-top:5px;">
-            Talla: <select class="select cart-size-selector" data-sku="${escapeHtml(it.sku)}" data-old-size="${escapeHtml(it.size)}" aria-label="Cambiar talla en el carrito">${sizeOptions}</select> 
+            Talla: <select class="select cart-size-selector" data-sku="${escapeHtml(it.sku)}" data-old-size="${escapeHtml(it.size)}" aria-label="Cambiar talla en el carrito" style="padding: 2px 5px; width:auto; font-size:13px; font-weight:bold; height:auto; border-width:1px;">${sizeOptions}</select> 
             <span style="font-weight:bold; color:var(--red);">${money(it.priceCents)}</span>
           </div>
           <div class="cartitem__controls" style="margin-top:10px;">
@@ -829,12 +854,12 @@
       if (postal_code.length < 4) { showToast("Por favor ingresa un Código Postal válido para cotizar el envío.", "error"); return; }
       if (!shipping.quote || shipping.postal_code !== postal_code || shipping.mode !== shipping_mode) {
         await quoteShipping(); 
-        if (!shipping.quote) return; // Se detiene si la cotización falló
+        if (!shipping.quote) return; 
       }
     }
 
     if (checkoutBtn) { checkoutBtn.disabled = true; }
-    if (checkoutLoader) { openLayer(checkoutLoader); } // Usamos openLayer para bloquear UI
+    if (checkoutLoader) { openLayer(checkoutLoader); } 
 
     try {
       const payload = { 
@@ -853,7 +878,6 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.ok || !data?.url) throw new Error(data?.error || "Error al conectar con pasarela segura.");
       
-      // Redirección segura a Stripe
       window.location.assign(data.url);
     } catch (e) {
       if (checkoutLoader) { closeLayer(checkoutLoader); }
@@ -868,7 +892,6 @@
     if (!aiOutput) return;
     const div = document.createElement("div"); 
     div.className = `msg ${who === "me" ? "msg--me" : "msg--ai"}`;
-    // Usamos HTML seguro, el escapeHtml protege el texto inyectado
     div.innerHTML = `<div>${escapeHtml(text)}</div><div class="msg__meta">${who === "me" ? "Tú" : "SCORE AI"}</div>`;
     aiOutput.appendChild(div); 
     aiOutput.scrollTop = aiOutput.scrollHeight;
@@ -902,28 +925,15 @@
   const openAiChat = () => {
     closeLayer(sideMenu); 
     openLayer(aiModal);
-    setTimeout(() => aiInput?.focus(), 300); // Dar tiempo a la animación CSS
+    setTimeout(() => aiInput?.focus(), 300); 
     if (!aiOutput?.children?.length) {
         addChatMsg("ai", "¡Hola! Soy SCORE AI. ¿Tienes dudas con tu talla, un envío o buscas un artículo específico?");
     }
   };
 
-  // ---------- INICIALIZACIÓN GLOBAL ----------
-  const init = async () => {
-    if (appVersionLabel) appVersionLabel.textContent = APP_VERSION;
-    
-    // Cargas locales
-    loadCart(); 
-    loadShipping(); 
-
-    // Cargas de red
-    await fetchPromos(); 
-    validatePromo();
-    refreshShippingUI();
-
-    // Eventos Globales
+  // ---------- EVENTOS GLOBALES E INICIALIZACIÓN ----------
+  const initEvents = () => {
     if (overlay) overlay.addEventListener("click", () => {
-        // Prevenir cerrar el loader de checkout dando click afuera
         if(checkoutLoader && !checkoutLoader.hidden) return;
         closeAll();
     });
@@ -935,14 +945,36 @@
         }
     });
 
-    // Menús
     openMenuBtn?.addEventListener("click", () => openLayer(sideMenu));
     closeMenuBtn?.addEventListener("click", () => closeLayer(sideMenu));
     openCartBtn?.addEventListener("click", () => { openLayer(cartDrawer); refreshShippingUI(); renderCart(); });
     closeCartBtn?.addEventListener("click", () => closeLayer(cartDrawer));
     navOpenCart?.addEventListener("click", () => { closeLayer(sideMenu); openLayer(cartDrawer); refreshShippingUI(); renderCart(); });
 
-    // Carrusel Principal
+    // UX: Buscador Desktop y Sincronización Móvil
+    const triggerSearch = debounce(() => {
+      searchQuery = String(searchInput?.value || mobileSearchInput?.value || "").trim();
+      if(searchQuery !== "") catalogCarouselSection.hidden = false;
+      updateFilterUI(); renderProducts();
+    }, 250);
+
+    searchInput?.addEventListener("input", () => { if(mobileSearchInput) mobileSearchInput.value = searchInput.value; triggerSearch(); });
+    mobileSearchInput?.addEventListener("input", () => { if(searchInput) searchInput.value = mobileSearchInput.value; triggerSearch(); });
+
+    // UX: Buscador Móvil (Toggle)
+    mobileSearchBtn?.addEventListener("click", () => {
+      if(mobileSearchWrap) {
+        mobileSearchWrap.hidden = !mobileSearchWrap.hidden;
+        if(!mobileSearchWrap.hidden) setTimeout(() => mobileSearchInput?.focus(), 100);
+      }
+    });
+    closeMobileSearchBtn?.addEventListener("click", () => {
+      if(mobileSearchWrap) mobileSearchWrap.hidden = true;
+      if(searchInput) searchInput.value = "";
+      if(mobileSearchInput) mobileSearchInput.value = "";
+      triggerSearch();
+    });
+
     scrollLeftBtn?.addEventListener("click", () => { productGrid?.scrollBy({ left: -window.innerWidth * 0.8, behavior: 'smooth' }); });
     scrollRightBtn?.addEventListener("click", () => { productGrid?.scrollBy({ left: window.innerWidth * 0.8, behavior: 'smooth' }); });
 
@@ -952,22 +984,14 @@
 
     scrollToCategoriesBtn?.addEventListener("click", () => scrollToEl("#categories"));
 
-    // Filtros
     clearFilterBtn?.addEventListener("click", () => {
       activeCategory = null; searchQuery = "";
       $$('.catcard').forEach(c => c.classList.remove('active'));
       if (searchInput) searchInput.value = "";
+      if (mobileSearchInput) mobileSearchInput.value = "";
       if (categoryHint) categoryHint.hidden = false;
-      updateFilterUI(); 
-      renderProducts();
+      updateFilterUI(); renderProducts();
     });
-
-    searchInput?.addEventListener("input", debounce(() => {
-      searchQuery = String(searchInput?.value || "").trim();
-      if(searchQuery !== "") catalogCarouselSection.hidden = false;
-      updateFilterUI(); 
-      renderProducts();
-    }, 250));
 
     sortSelect?.addEventListener("change", () => { sortMode = String(sortSelect.value || "featured"); renderProducts(); });
 
@@ -975,14 +999,46 @@
     pmClose?.addEventListener("click", () => closeLayer(productModal));
     pmBackBtn?.addEventListener("click", () => closeLayer(productModal)); 
 
+    // UX: Stepper
+    pmQtyDec?.addEventListener("click", () => {
+      selectedQty = clampInt(selectedQty - 1, 1, 99);
+      if(pmQtyDisplay) pmQtyDisplay.textContent = selectedQty;
+    });
+    pmQtyInc?.addEventListener("click", () => {
+      selectedQty = clampInt(selectedQty + 1, 1, 99);
+      if(pmQtyDisplay) pmQtyDisplay.textContent = selectedQty;
+    });
+
+    // UX: Botón Compartir (Web Share API)
+    pmShareBtn?.addEventListener("click", async () => {
+      if(!currentProduct) return;
+      const shareData = {
+        title: `SCORE Store: ${currentProduct.title}`,
+        text: 'Mira esta mercancía oficial que encontré en la SCORE Store.',
+        url: window.location.href.split('?')[0] + `?sku=${currentProduct.sku}`
+      };
+      if (navigator.share) {
+        try { await navigator.share(shareData); } catch (err) { console.log("Share cancelado"); }
+      } else {
+        try { await navigator.clipboard.writeText(shareData.url); showToast("Enlace copiado al portapapeles ✅", "success"); } 
+        catch (err) { showToast("No se pudo copiar el enlace.", "error"); }
+      }
+    });
+
+    // Modal Guía de Tallas
+    openSizeGuideBtn?.addEventListener("click", () => openLayer(sizeGuideModal));
+    closeSizeGuideBtn?.addEventListener("click", () => closeLayer(sizeGuideModal));
+    understandSizeBtn?.addEventListener("click", () => closeLayer(sizeGuideModal));
+
     pmAdd?.addEventListener("click", () => {
       if (!currentProduct) return;
+      if (!selectedSize) { showToast("⚠️ Por favor selecciona una talla.", "error"); return; }
       
       const originalText = pmAdd.innerHTML;
       pmAdd.innerHTML = "✅ ¡Guardado en tu equipo!";
       pmAdd.style.backgroundColor = "#28a745"; 
       pmAdd.style.borderColor = "#28a745";
-      pmAdd.disabled = true; // Prevenir múltiples clicks rápidos
+      pmAdd.disabled = true; 
       
       setTimeout(() => {
         pmAdd.innerHTML = originalText;
@@ -990,14 +1046,13 @@
         pmAdd.style.borderColor = "";
         pmAdd.disabled = false;
         
-        addToCart(currentProduct, String(pmSize?.value || "").trim(), clampInt(pmQty?.value, 1, 99));
+        addToCart(currentProduct, selectedSize, selectedQty);
         closeLayer(productModal); 
         openLayer(cartDrawer); 
         refreshShippingUI();
       }, 700);
     });
 
-    // Eventos AI
     openAiBtn?.addEventListener("click", openAiChat);
     navOpenAi?.addEventListener("click", openAiChat);
     floatingAiBtn?.addEventListener("click", openAiChat);
@@ -1005,7 +1060,6 @@
     aiSendBtn?.addEventListener("click", sendAi);
     aiInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") sendAi(); });
 
-    // Eventos Checkout y Envíos
     $$('input[name="shipMode"]').forEach((r) => { r.addEventListener("change", refreshShippingUI); });
     quoteBtn?.addEventListener("click", quoteShipping);
     postalCodeInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") quoteShipping(); });
@@ -1016,39 +1070,53 @@
 
     checkoutBtn?.addEventListener("click", doCheckout);
 
-    // GDPR / Cookies
     const consentDecision = localStorage.getItem(STORAGE_KEYS.consent);
     if (!consentDecision && cookieBanner) { cookieBanner.hidden = false; }
     cookieAccept?.addEventListener("click", () => { try { localStorage.setItem(STORAGE_KEYS.consent, "accept"); } catch {} if(cookieBanner) cookieBanner.hidden = true; });
     cookieReject?.addEventListener("click", () => { try { localStorage.setItem(STORAGE_KEYS.consent, "reject"); } catch {} if(cookieBanner) cookieBanner.hidden = true; });
+  };
 
+  const init = async () => {
+    if (appVersionLabel) appVersionLabel.textContent = APP_VERSION;
+    
+    loadCart(); 
+    loadShipping(); 
+    initEvents();
+
+    await fetchPromos(); 
+    validatePromo();
+    refreshShippingUI();
     renderCart();
 
-    // Carga de Datos Principales
     try {
       catalog = await fetchCatalog();
       products = catalog.products.map(normalizeProduct).filter((p) => p.sku);
-      // Fallback: si no tiene sección asignada, va a BAJA1000 por defecto
       products = products.map((p) => { if (!CATEGORY_CONFIG.some((c) => c.uiId === p.uiSection)) p.uiSection = "BAJA1000"; return p; });
 
       renderCategories();
       updateFilterUI();
       renderProducts(); 
+
+      // UX: Deep Linking (Abrir producto si viene por URL)
+      const qs = new URLSearchParams(window.location.search);
+      const deepSku = qs.get("sku");
+      if(deepSku && products.some(p => p.sku === deepSku)) {
+        openProduct(deepSku);
+      }
+
     } catch (e) {
       showToast("Problemas al cargar el catálogo principal. Verifica tu conexión.", "error");
       console.error(e); 
     } finally {
-      // Manejo del Splash Screen con transición suave
       setTimeout(() => {
         if (splash) {
-          splash.classList.add('fade-out'); // Requiere clase CSS de opacidad 0 en styles.css
+          splash.classList.add('fade-out'); 
           splash.style.opacity = "0";
           setTimeout(() => (splash.hidden = true), 800);
         }
-      }, 2500); // Tiempo ajustado para no aburrir al usuario
+      }, 2500); 
     }
   };
 
-  // Lanzador
   init().catch((e) => { console.error("Error crítico de inicialización:", e); if (splash) splash.hidden = true; });
 })();
