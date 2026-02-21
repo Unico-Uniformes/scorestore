@@ -1,7 +1,25 @@
-node_modules
+# Dependencias Node
+node_modules/
+
+# Sistema Operativo y Metadatos
 .DS_Store
+Thumbs.db
+
+# Entornos Virtuales y Cache Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Variables de Entorno (¡Nunca subir a GitHub!)
 .env
 .env.*
-.netlify
-dist
-.cache
+
+# Directorios de Build y Caché Netlify
+.netlify/
+dist/
+build/
+.cache/
+
+# Reportes de Scripts
+scripts/assets_aliases_report.json
