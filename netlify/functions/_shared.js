@@ -13,6 +13,7 @@
  * - Envía: parsing de respuestas más tolerante (data/data[0]/labelUrl/label)
  * - Stripe: helpers para idempotency keys (anti doble sesión / doble cobro)
  * - Stripe→Envía: extracción robusta de calle/número/distrito (heurística)
+ * - Envía: normalización de state para MX + geocodes fallback en label generation
  * =========================================================
  */
 
@@ -592,6 +593,66 @@ const stripeSessionToEnviaDestination = (stripeSession) => {
   const email = session.customer_details?.email || session.customer_email || process.env.DEFAULT_CUSTOMER_EMAIL || "no-reply@scorestore.com";
   const name = sd.name || session.customer_details?.name || "Cliente Final";
 
+  // Normaliza state para MX (Envía suele requerir código, no nombre completo)
+  const stateRaw = String(addr.state || "").trim();
+  const state = (() => {
+    const c = String(country || "MX").toUpperCase();
+    if (!stateRaw) return "";
+    if (c !== "MX") return stateRaw;
+
+    // Si ya viene en 2 letras, lo dejamos.
+    if (/^[A-Z]{2}$/.test(stateRaw.toUpperCase())) return stateRaw.toUpperCase();
+
+    const norm = (s) =>
+      String(s || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\./g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const MX = {
+      "aguascalientes": "AG",
+      "baja california": "BC",
+      "baja california sur": "BS",
+      "campeche": "CM",
+      "chiapas": "CS",
+      "chihuahua": "CH",
+      "ciudad de mexico": "CX",
+      "cdmx": "CX",
+      "coahuila": "CO",
+      "colima": "CL",
+      "durango": "DG",
+      "guanajuato": "GT",
+      "guerrero": "GR",
+      "hidalgo": "HG",
+      "jalisco": "JA",
+      "estado de mexico": "MX",
+      "mexico": "MX",
+      "michoacan": "MI",
+      "morelos": "MO",
+      "nayarit": "NA",
+      "nuevo leon": "NL",
+      "oaxaca": "OA",
+      "puebla": "PU",
+      "queretaro": "QT",
+      "quintana roo": "QR",
+      "san luis potosi": "SL",
+      "sinaloa": "SI",
+      "sonora": "SO",
+      "tabasco": "TB",
+      "tamaulipas": "TM",
+      "tlaxcala": "TL",
+      "veracruz": "VE",
+      "yucatan": "YU",
+      "zacatecas": "ZA",
+    };
+
+    const key = norm(stateRaw);
+    return MX[key] || stateRaw;
+  })();
+
   return {
     name,
     company: "",
@@ -601,7 +662,7 @@ const stripeSessionToEnviaDestination = (stripeSession) => {
     number,
     district: inferDistrict(addr.line2),
     city: addr.city || "",
-    state: addr.state || "",
+    state: state || "",
     country: country || "MX",
     postalCode: addr.postal_code || "",
     reference: "Score Store · Stripe",
@@ -635,6 +696,23 @@ const createEnviaLabel = async ({ shipping_country, stripe_session, items_qty })
 
   const origin = getOriginByCountry(country);
   const destination = stripeSessionToEnviaDestination(stripe_session);
+
+  // Envía suele ser estricto en city/state: si Stripe manda nombre completo (MX) o viene vacío,
+  // hacemos lookup por CP/ZIP con Geocodes y normalizamos.
+  try {
+    const zinfo = await getZipDetails(country, destination.postalCode);
+    if (zinfo) {
+      if (!destination.city) destination.city = zinfo.city || destination.city;
+      if (!destination.state) destination.state = zinfo.state || destination.state;
+      // En MX, si state no es código de 2 letras y zinfo trae uno, úsalo.
+      if (country === "MX" && zinfo.state && !/^[A-Z]{2}$/.test(String(destination.state || "").toUpperCase())) {
+        destination.state = String(zinfo.state).toUpperCase();
+      }
+    }
+  } catch (e) {
+    // No romper generación de guía si geocodes falla; Envía puede aceptar lo de Stripe.
+    console.log("[envia][geocodes] warn:", e?.message || e);
+  }
 
   if (!destination?.postalCode || !destination?.state || !destination?.country) {
     throw new Error("Dirección incompleta en Stripe para generar guía automáticamente");
