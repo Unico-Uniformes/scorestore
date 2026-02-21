@@ -47,6 +47,7 @@ exports.handler = async (event) => {
         const sb = supabaseAdmin();
         if (sb) {
           try {
+            // CORRECCIÓN: Inyectar resumen y cupón para UnicOs admin
             const row = {
               stripe_session_id: session.id,
               stripe_payment_intent_id: session.payment_intent || null,
@@ -58,6 +59,8 @@ exports.handler = async (event) => {
               shipping_mode: shipping_mode,
               postal_code: meta.postal_code || session.shipping_details?.address?.postal_code || null,
               amount_shipping_mxn: shipping_amount_cents / 100,
+              items_summary: meta.items_summary || "Sin detalles",
+              promo_code: meta.promo_code || "Ninguno",
               metadata: { 
                 shipping_address: session.shipping_details?.address || null,
                 raw_session: session 
@@ -106,7 +109,7 @@ exports.handler = async (event) => {
           console.log("[envia] label error:", e?.message || e);
           try {
             await sendTelegram(
-              `⚠️ <b>Pago confirmado</b> pero <b>falló la guía de Envía</b>\nSession: <code>${session.id}</code>\nError: <code>${String(e?.message || e).slice(0, 500)}</code>\n(Puedes generarla manualmente en el portal).`
+              `⚠️ <b>Pago confirmado</b> pero <b>falló la guía de Envía</b>\nSession: <code>${session.id}</code>\nError: <code>${String(e?.message || e).slice(0, 500)}</code>\n(Generar manual en panel).`
             );
           } catch(err) {}
         }
@@ -117,11 +120,10 @@ exports.handler = async (event) => {
       }
     }
 
-    // Respuesta rápida a Stripe (siempre debe ser 200 si la firma es válida)
     return jsonResponse(200, { received: true }, "*");
   } catch (e) {
     console.log("[stripe_webhook] fatal:", e?.message || e);
-    // IMPORTANTE: Devolver 200 en catch fatal para evitar bucle de reintentos infinito de Stripe
+    // CORRECCIÓN: Responder 200 siempre en fatal error para evitar reintentos infinitos que cobren o generen guías dobles
     return jsonResponse(200, { received: true, warning: String(e?.message || e) }, "*");
   }
 };
