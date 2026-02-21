@@ -57,7 +57,7 @@ def norm_name(name: str) -> str:
     return s
 
 def relpath(p: str) -> str:
-    rp = os.path.relpath(p, ROOT).replace("\\\\", "/")
+    rp = os.path.relpath(p, ROOT).replace("\\", "/")
     return rp
 
 mappings = []  # {from, to}
