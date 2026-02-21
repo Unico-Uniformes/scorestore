@@ -8,10 +8,11 @@
   <meta name="facebook-domain-verification" content="wuo7x5sxsjcer1t0epn1id5xgjp8su" />
   
   <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
+  
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  
+
   <title>SCORE STORE — Official Merchandise</title>
 
   <link rel="manifest" href="site.webmanifest" />
@@ -46,7 +47,7 @@
     <div class="splash__grid"></div>
     <div class="splash__inner">
       <div class="splash__logo-wrap">
-        <img class="splash__logo" src="assets/logo-score.webp" alt="SCORE" width="280" height="112" />
+        <img class="splash__logo" src="assets/logo-score.webp" alt="SCORE" width="220" height="88" />
         <div class="splash__laser"></div>
       </div>
       <div class="splash__subtitle">OFFICIAL MERCHANDISE</div>
@@ -74,7 +75,7 @@
       <div class="topbar__actions">
         <div class="search desktop-only glass-panel">
           <span class="search__icon" aria-hidden="true">⌕</span>
-          <input id="searchInput" class="search__input" type="search" placeholder="Buscar merch oficial..." autocomplete="off" aria-label="Caja de búsqueda de productos" />
+          <input id="searchInput" class="search__input" type="search" placeholder="Buscar hoodies, gorras, merch..." autocomplete="off" aria-label="Caja de búsqueda de productos" />
         </div>
 
         <button id="mobileSearchBtn" class="iconbtn hover-fx mobile-only" type="button" aria-label="Buscar productos">
@@ -93,7 +94,7 @@
     </div>
     
     <div id="mobileSearchWrap" class="mobile-search-bar glass-panel" hidden>
-      <input id="mobileSearchInput" class="input" type="search" placeholder="Escribe para buscar..." />
+      <input id="mobileSearchInput" class="input" type="search" placeholder="Buscar mercancía oficial..." />
       <button id="closeMobileSearchBtn" class="iconbtn btn--ghost" style="border:none;">✕</button>
     </div>
   </header>
@@ -104,17 +105,17 @@
 
     <div class="wrap hero__inner">
       <div class="hero__content">
-        <img class="hero__desert hero-vfx-float" src="assets/logo-world-desert.webp" alt="World Desert Championship" width="320" height="290" />
+        <img class="hero__desert hero-vfx-float" src="assets/logo-world-desert.webp" alt="World Desert Championship" width="280" height="253" />
         <h1 class="hero__title">Merch Oficial <span class="accent tech-text">SCORE</span></h1>
-        <p class="hero__hook">Diseño, pasión y rendimiento extremo. Fabricado por <b>ÚNICO UNIFORMES</b>, patrocinador oficial global.</p>
+        <p class="hero__hook">Diseño, pasión y rendimiento en cada hilo. Fabricado por <b>ÚNICO UNIFORMES</b>, patrocinador oficial global.</p>
 
         <div class="hero__cta">
           <button id="scrollToCategoriesBtn" class="btn btn--primary btn--large cinematic-btn neon-border" type="button" aria-label="Desplazarse a ver las colecciones de la tienda">Explorar Colecciones ▼</button>
         </div>
 
         <div class="hero__meta">
-          <span class="chip tech-chip" title="Transacciones encriptadas">🔒 Encriptación Stripe</span>
-          <span class="chip tech-chip" title="Cobertura total">📦 Logística Envía.com</span>
+          <span class="chip tech-chip" title="Transacciones encriptadas de extremo a extremo">🔒 Pago Seguro Stripe</span>
+          <span class="chip tech-chip" title="Cobertura total en México y Estados Unidos">📦 Envíos rápidos Envía.com</span>
         </div>
       </div>
     </div>
@@ -127,28 +128,28 @@
       </div>
 
       <div id="categoryGrid" class="catgrid" aria-live="polite"></div>
-      <div id="categoryHint" class="hint bounce-anim" style="text-align: center; margin-top: 20px; font-weight: 800; color: var(--red);">👈 Selecciona un evento para cargar la telemetría del inventario.</div>
+      <div id="categoryHint" class="hint bounce-anim" style="text-align: center; margin-top: 15px; font-weight: bold; color: var(--red);">👈 Selecciona una tarjeta para descubrir productos exclusivos.</div>
     </section>
 
-    <section id="catalogCarouselSection" class="carousel-section wrap vfx-glass-container" aria-label="Productos destacados" hidden>
+    <section id="catalogCarouselSection" class="carousel-section wrap vfx-glass-container" aria-label="Productos destacados de la colección seleccionada" hidden>
       <div class="carousel-header">
         <h3 id="carouselTitle" style="color: var(--red); display:flex; align-items:center; gap:10px; margin: 0; text-shadow: 0 2px 10px rgba(225,6,0,0.3);">Catálogo</h3>
         <div class="carousel-controls">
-          <button id="scrollLeftBtn" class="iconbtn iconbtn--dark hover-fx vfx-nav-btn" aria-label="Izquierda" title="Ver anteriores">←</button>
-          <button id="scrollRightBtn" class="iconbtn iconbtn--dark hover-fx vfx-nav-btn" aria-label="Derecha" title="Ver siguientes">→</button>
+          <button id="scrollLeftBtn" class="iconbtn iconbtn--dark hover-fx vfx-nav-btn" aria-label="Desplazar carrusel hacia la izquierda" title="Ver anteriores">←</button>
+          <button id="scrollRightBtn" class="iconbtn iconbtn--dark hover-fx vfx-nav-btn" aria-label="Desplazar carrusel hacia la derecha" title="Ver siguientes">→</button>
         </div>
       </div>
 
-      <div class="section__head" style="margin-bottom: 20px; border-bottom: 1px solid rgba(0,0,0,0.1); padding-bottom: 15px;">
+      <div class="section__head" style="margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px;">
         <div class="section__tools" style="width: 100%; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-          <span id="statusRow" class="status neon-text-dark" aria-live="polite" style="margin:0; font-weight: 900;"></span>
+          <span id="statusRow" class="status neon-text-dark" aria-live="polite" style="margin:0; font-weight: 600;"></span>
           <div class="sort-wrapper glass-panel" style="display: flex; align-items: center; gap: 10px; padding: 5px 15px; border-radius: 999px;">
-            <label for="sortSelect" style="font-size: 13px; color: var(--black-btn); font-weight: 900;">Ordenar:</label>
-            <select id="sortSelect" class="select select--modern tech-select" aria-label="Opciones de ordenamiento">
+            <label for="sortSelect" style="font-size: 13px; color: var(--muted); font-weight: bold;">Ordenar por:</label>
+            <select id="sortSelect" class="select select--modern tech-select" aria-label="Opciones de ordenamiento de productos">
               <option value="featured">★ Relevancia</option>
               <option value="price_asc">Menor Precio</option>
               <option value="price_desc">Mayor Precio</option>
-              <option value="name_asc">A-Z</option>
+              <option value="name_asc">Orden Alfabético (A-Z)</option>
             </select>
           </div>
         </div>
@@ -156,7 +157,7 @@
 
       <div id="activeFilterRow" class="filterrow tech-filter-row" hidden>
         <span id="activeFilterLabel" class="filterrow__label" style="display:flex; align-items:center; gap:8px;"></span>
-        <button id="clearFilterBtn" class="btn btn--tiny btn--black hover-fx tech-clear-btn" type="button" aria-label="Borrar filtros actuales">✕ Quitar Filtros</button>
+        <button id="clearFilterBtn" class="btn btn--tiny btn--ghost hover-fx tech-clear-btn" type="button" aria-label="Borrar filtros actuales">Quitar Filtros ✕</button>
       </div>
 
       <div class="carousel-wrapper" style="position: relative;">
@@ -165,7 +166,7 @@
     </section>
   </main>
 
-  <section class="partners">
+  <section class="partners" aria-label="Marcas y patrocinadores oficiales">
     <div class="wrap partners__inner">
       <div class="partners__title">SCORE INTERNATIONAL OFFICIAL PARTNERS</div>
       <div class="partners__row">
@@ -182,25 +183,25 @@
       <div class="footer__brand-col">
         <div class="footer__brand"><span class="tech-text" style="color: var(--red);">SCORE</span> STORE</div>
         <div class="footer__sub">
-          <strong>Infraestructura Segura</strong><br>
-          Pago cifrado 256-bit vía Stripe. Aceptamos OXXO Pay.<br>
+          <strong>Seguridad Total Garantizada</strong><br>
+          Pago cifrado vía Stripe. Aceptamos OXXO Pay.<br>
           Logística inteligente internacional con Envía.com.<br><br>
-          Operado y fabricado por <b style="color: white; text-shadow: 0 0 5px rgba(255,255,255,0.5);">Único Uniformes</b>.
+          Hecho con pasión. Fabricado y Operado por <b style="color: white; text-shadow: 0 0 5px rgba(255,255,255,0.5);">Único Uniformes</b>.
         </div>
       </div>
 
       <div class="footer__socials">
-        <div class="social-title">REDES OFICIALES</div>
+        <div class="social-title">SÍGUENOS EN LA PISTA</div>
         <div class="social-links">
-          <a href="https://www.facebook.com/uniforme.unico/" target="_blank" rel="noopener">Facebook</a>
-          <a href="https://www.instagram.com/uniformes.unico" target="_blank" rel="noopener">Instagram</a>
-          <a href="https://youtu.be/F4lw1EcehIA?si=jFBT9skFLs566g8N" target="_blank" rel="noopener">YouTube</a>
-          <a href="https://unicouniformes.com/" target="_blank" rel="noopener">Web Corporativa</a>
+          <a href="https://www.facebook.com/uniforme.unico/" target="_blank" rel="noopener" aria-label="Facebook Oficial">Facebook</a>
+          <a href="https://www.instagram.com/uniformes.unico" target="_blank" rel="noopener" aria-label="Instagram Oficial">Instagram</a>
+          <a href="https://youtu.be/F4lw1EcehIA?si=jFBT9skFLs566g8N" target="_blank" rel="noopener" aria-label="YouTube Oficial">YouTube</a>
+          <a href="https://unicouniformes.com/" target="_blank" rel="noopener" aria-label="Sitio Corporativo Único Uniformes">Sitio Corporativo Único</a>
         </div>
       </div>
 
       <div class="footer__right">
-        <a href="legal.html" class="linkbtn hover-fx">Centro Legal y Políticas</a>
+        <a href="legal.html" class="linkbtn hover-fx" aria-label="Leer términos y políticas de privacidad">Términos, Privacidad y Devoluciones</a>
       </div>
     </div>
   </footer>
@@ -222,111 +223,158 @@
 
   <div id="checkoutLoader" class="checkout-loader glass-panel" hidden role="alert" aria-live="assertive">
     <div class="checkout-loader__spinner tech-spinner"></div>
-    <div class="checkout-loader__text">Estableciendo conexión encriptada...<br><small style="color: var(--red); font-weight:bold;">No cierres esta ventana.</small></div>
+    <div class="checkout-loader__text">Estableciendo conexión encriptada con Stripe...<br><small style="color: var(--red); font-weight:bold;">Por tu seguridad, no actualices ni cierres esta ventana.</small></div>
   </div>
 
   <aside id="sideMenu" class="drawer glass-drawer" aria-label="Menú principal de navegación" hidden>
     <div class="drawer__head">
       <div class="drawer__title tech-text">Menú Principal</div>
-      <button id="closeMenuBtn" class="iconbtn hover-fx tech-close" aria-label="Cerrar" type="button">✕</button>
+      <button id="closeMenuBtn" class="iconbtn hover-fx tech-close" aria-label="Cerrar menú lateral" type="button">✕</button>
     </div>
+
     <div class="drawer__body">
       <div class="search glass-panel" style="margin-bottom: 20px;">
         <span class="search__icon" aria-hidden="true">⌕</span>
-        <input id="menuSearchInput" class="search__input" type="search" placeholder="Buscar merch..." autocomplete="off" />
+        <input id="menuSearchInput" class="search__input tech-input" type="search" placeholder="Buscar en la tienda..." autocomplete="off" aria-label="Búsqueda rápida en menú" />
       </div>
-      <button class="navitem tech-navitem hover-fx" type="button" data-scroll="#categories">🏁 Colecciones</button>
-      <button class="navitem tech-navitem hover-fx" type="button" id="navOpenCart">🛒 Mi Carrito</button>
-      <button class="navitem tech-navitem hover-fx" type="button" id="navOpenAi"><span style="color: var(--red);">✦</span> SCORE AI</button>
+
+      <button class="navitem tech-navitem hover-fx" type="button" data-scroll="#categories">🏁 Ver Todas las Colecciones</button>
+      <button class="navitem tech-navitem hover-fx" type="button" id="navOpenCart">🛒 Ir a Mi Carrito de Compras</button>
+      <button class="navitem tech-navitem hover-fx" type="button" id="navOpenAi"><span style="color: var(--red);">✦</span> Consultar al Asistente SCORE AI</button>
+
       <div class="drawer__divider"></div>
-      <a class="navitem navitem--link tech-navitem hover-fx" href="https://unicouniformes.com/" target="_blank" rel="noopener">Único Uniformes ↗</a>
-      <a class="navitem navitem--link tech-navitem hover-fx" href="legal.html" style="font-size: 14px;">Legal / Soporte</a>
+      <a class="navitem navitem--link tech-navitem hover-fx" href="https://unicouniformes.com/" target="_blank" rel="noopener">Ir a web Único Uniformes ↗</a>
+      <a class="navitem navitem--link tech-navitem hover-fx" href="legal.html" style="font-size: 14px;">Centro de Ayuda / Políticas</a>
     </div>
+
     <div class="drawer__foot">
-      <div class="muted" style="font-size: 11px;">SCORE STORE OS v<span id="appVersionLabel">—</span></div>
+      <div class="muted">SCORE STORE OS v<span id="appVersionLabel">—</span></div>
     </div>
   </aside>
 
   <aside id="cartDrawer" class="drawer drawer--right glass-drawer" aria-label="Panel de tu carrito de compras" hidden>
     <div class="drawer__head">
-      <div class="drawer__title tech-text">🛒 Telemetría de Carrito</div>
-      <button id="closeCartBtn" class="iconbtn hover-fx tech-close" aria-label="Cerrar carrito" type="button">✕</button>
+      <div class="drawer__title tech-text">🛒 Tu Carrito</div>
+      <button id="closeCartBtn" class="iconbtn hover-fx tech-close" aria-label="Ocultar carrito de compras" type="button">✕</button>
     </div>
+
     <div class="drawer__body" style="display: flex; flex-direction: column; height: 100%;">
       <div id="cartItems" class="cartitems custom-scrollbar" style="flex-grow: 1;"></div>
+
       <div class="cartbox tech-cartbox">
-        <div class="cartrow"><span>Subtotal</span><b id="cartSubtotal">$0.00</b></div>
+        <div class="cartrow">
+          <span>Subtotal de productos</span>
+          <b id="cartSubtotal">$0.00</b>
+        </div>
+
         <div id="discountLineWrap" class="cartrow" style="color: var(--red);" hidden>
-          <span>Descuento aplicado</span><b id="discountLine">-$0.00</b>
+          <span>Descuento aplicado</span>
+          <b id="discountLine">-$0.00</b>
         </div>
-        <div class="cartrow cartrow--stack tech-shipping-box">
+
+        <div class="cartrow cartrow--stack tech-shipping-box" style="background: var(--bg-alt); padding: 15px; border-radius: 8px; margin-top: 10px;">
           <div class="cartrow__line">
-            <span style="font-weight:bold;">Logística</span>
-            <span class="muted" id="shipHint" style="font-size: 12px; font-weight: 900;">Selecciona ▼</span>
+            <span style="font-weight:bold;">Logística y Entrega</span>
+            <span class="muted" id="shipHint" style="font-size: 12px; font-weight: bold;">Selecciona ▼</span>
           </div>
-          <div class="seg tech-seg" role="group">
-            <label class="seg__opt"><input type="radio" name="shipMode" value="pickup" checked /><span>Fábrica TJ</span></label>
-            <label class="seg__opt"><input type="radio" name="shipMode" value="envia_mx" /><span>Envío MX</span></label>
-            <label class="seg__opt"><input type="radio" name="shipMode" value="envia_us" /><span>Envío USA</span></label>
+
+          <div class="seg tech-seg" role="group" aria-label="Selecciona tu opción de entrega">
+            <label class="seg__opt">
+              <input type="radio" name="shipMode" value="pickup" checked />
+              <span>Fábrica (TJ)</span>
+            </label>
+            <label class="seg__opt">
+              <input type="radio" name="shipMode" value="envia_mx" />
+              <span>Envío MX</span>
+            </label>
+            <label class="seg__opt">
+              <input type="radio" name="shipMode" value="envia_us" />
+              <span>Envío USA</span>
+            </label>
           </div>
-          <div id="shippingNote" class="hint tech-hint">Recolección sin costo (Tijuana).</div>
+
+          <div id="shippingNote" class="hint tech-hint" style="color: var(--red); font-size: 12px; text-align: center; margin-top: 8px;">
+            Recolección sin costo en nuestras instalaciones (Tijuana).
+          </div>
+
           <div id="postalWrap" class="postal" hidden>
-            <input id="postalCode" class="input tech-input" inputmode="numeric" maxlength="10" placeholder="Código Postal..." />
-            <button id="quoteBtn" class="btn btn--tiny btn--black hover-fx neon-border" type="button">Cotizar</button>
+            <input id="postalCode" class="input tech-input" inputmode="numeric" maxlength="10" placeholder="Ingresa tu CP / ZIP para calcular..." aria-label="Escribe tu Código Postal" />
+            <button id="quoteBtn" class="btn btn--tiny btn--black hover-fx neon-border" type="button" aria-label="Cotizar envío a tu código postal">Cotizar</button>
           </div>
-          <div class="cartrow" style="margin-top:12px; font-weight:900;"><span>Costo Envío</span><b id="shippingLine">$0.00</b></div>
+
+          <div class="cartrow" style="margin-top:12px; font-weight:bold;">
+            <span>Costo de Envío Final</span>
+            <b id="shippingLine">$0.00</b>
+          </div>
         </div>
-        <div class="cartrow tech-total-row">
-          <span class="total-label">Total Seguro</span><b id="cartTotal" class="total-price tech-price">$0.00</b>
+
+        <div class="cartrow tech-total-row" style="border-top: 2px dashed var(--border); padding-top: 15px; margin-top: 15px; align-items: flex-end;">
+          <span class="total-label" style="font-size: 18px;">Total Seguro</span>
+          <b id="cartTotal" class="total-price tech-price" style="font-size: 26px; color: var(--black-btn);">$0.00</b>
         </div>
+
         <div class="cartrow cartrow--stack" style="margin-top: 10px;">
-          <label class="muted" for="promoCode" style="font-size: 12px; font-weight: bold;">Código Promocional</label>
+          <label class="muted" for="promoCode" style="font-size: 13px; cursor: pointer;">¿Tienes un código de promoción SCORE?</label>
           <div style="display: flex; gap: 8px;">
-            <input id="promoCode" class="input tech-input" placeholder="Ej. SCOREVIP" style="text-transform: uppercase;" />
-            <button id="applyPromoBtn" class="btn btn--black hover-fx" type="button">Validar</button>
+            <input id="promoCode" class="input tech-input" placeholder="Ej. SCOREVIP" aria-label="Escribe aquí tu código promocional" style="text-transform: uppercase;" />
+            <button id="applyPromoBtn" class="btn btn--black hover-fx" type="button" style="padding: 0 15px;">Validar</button>
           </div>
         </div>
-        <button id="checkoutBtn" class="btn btn--primary btn--block btn--large cinematic-btn neon-border" type="button" style="margin-top: 20px;">
-          PAGAR SEGURO 🔒
+
+        <button id="checkoutBtn" class="btn btn--primary btn--block btn--large cinematic-btn neon-border" type="button" style="margin-top: 20px; box-shadow: 0 4px 15px rgba(228,0,43,0.3);">
+          Proceder al Pago Seguro 🔒
         </button>
-        <button id="continueShoppingBtn" class="btn btn--ghost btn--block hover-fx tech-ghost-btn" type="button" style="margin-top: 10px;" onclick="document.querySelector('#closeCartBtn').click()">
-          ← Seguir Comprando
+        <button id="continueShoppingBtn" class="btn btn--ghost btn--block btn--large hover-fx tech-ghost-btn" type="button" style="margin-top: 10px;" onclick="document.querySelector('#closeCartBtn').click()">
+          ← Seguir Explorando Tienda
         </button>
-        <div class="checkout-trust-badges">
-          <span>Stripe Security 256-bit</span>
-          <div>💳 Tarjetas • 🏪 OXXO Pay</div>
+        
+        <div style="text-align: center; margin-top: 15px; font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 5px; align-items: center;">
+          <span>Pagos respaldados y protegidos por infraestructura Stripe Inc.</span>
+          <div style="display:flex; gap: 8px; justify-content:center; align-items:center;">
+             <span>💳 Tarjetas Crédito/Débito</span>
+             <span>🏪 Efectivo en OXXO</span>
+          </div>
         </div>
-        <div id="checkoutMsg" class="hint" hidden style="margin-top:10px; color:var(--red); text-align:center; font-weight: 900;"></div>
+        <div id="checkoutMsg" class="hint" hidden style="margin-top:10px; color:var(--red); text-align:center; font-weight: bold;"></div>
       </div>
     </div>
   </aside>
 
-  <section id="productModal" class="modal" role="dialog" aria-modal="true" aria-label="Detalles del Producto" hidden>
+  <section id="productModal" class="modal" role="dialog" aria-modal="true" aria-label="Ficha de detalles completos del Producto" hidden>
     <div class="modal__panel vfx-modal-panel">
       <div class="modal__head sticky-header glass-header">
-        <button id="pmBackBtn" class="iconbtn hover-fx tech-close" type="button" style="margin-right: 15px;">←</button>
-        <div class="modal__title tech-text" id="pmTitle" style="flex-grow: 1; font-size: 18px;">Cargando...</div>
-        <button id="pmShareBtn" class="iconbtn btn--ghost hover-fx" style="margin-right: 10px;"><span aria-hidden="true">↗</span></button>
-        <button id="pmClose" class="iconbtn hover-fx tech-close" type="button">✕</button>
+        <button id="pmBackBtn" class="iconbtn hover-fx tech-close" aria-label="Regresar al catálogo" type="button" style="margin-right: 15px; font-size: 22px;">←</button>
+        <div class="modal__title tech-text" id="pmTitle" style="flex-grow: 1; text-align: left; font-size: 18px;">Cargando detalles...</div>
+        <button id="pmShareBtn" class="iconbtn btn--ghost hover-fx" style="margin-right: 10px;" title="Compartir"><span aria-hidden="true">↗</span></button>
+        <button id="pmClose" class="iconbtn hover-fx tech-close" aria-label="Cerrar ventana del producto" type="button">✕</button>
       </div>
-      <div class="modal__body" style="padding: 0; overflow-y: auto; overflow-x: hidden; position: relative; background: var(--bg);">
+
+      <div class="modal__body" style="padding: 0; overflow-y: auto; overflow-x: hidden; position: relative;">
         <div id="pmCarousel" class="pm__media tech-media-box"></div>
-        <div class="hint pulse-hint tech-swipe-hint">📸 Desliza a los lados para más detalles ↔</div>
+        <div class="hint pulse-hint tech-swipe-hint" style="text-align: center; padding: 10px; background: var(--bg-alt); font-size: 13px; font-weight: bold; color: var(--black-btn); border-bottom: 1px solid var(--border);">
+          📸 Desliza a los lados para ver detalles ↔
+        </div>
+
         <div class="pm__info" style="padding: 24px;">
           <div class="pm__chips" id="pmChips"></div>
           <div class="pm__price-wrap" style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom: 15px;">
-            <div class="pm__price tech-price-large" id="pmPrice">$0.00</div>
-            <span class="stock-badge neon-green-text">✓ Stock Verificado</span>
+            <div class="pm__price tech-price-large" id="pmPrice" style="color: var(--red); font-size: 32px; font-weight: 900;">$0.00</div>
+            <span class="stock-badge neon-green-text" style="color: #28a745; font-size: 13px; font-weight: bold;">✓ Stock Disponible</span>
           </div>
-          <div class="pm__desc" id="pmDesc" style="font-size: 15px; font-weight: 500; color: #444; margin-bottom: 25px;"></div>
-          <div class="pm__row glass-panel tech-controls-box">
+          
+          <div class="pm__desc" id="pmDesc" style="font-size: 16px; line-height: 1.5; color: #444; margin-bottom: 25px;"></div>
+
+          <div class="pm__row tech-controls-box glass-panel" style="background: var(--bg-alt); padding: 15px; border-radius: 8px; border: 1px solid var(--border); display:flex; flex-direction:column; gap:20px;">
+            
             <div>
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <label class="ux-label tech-label">1. Talla:</label>
-                <button id="openSizeGuideBtn" class="btn btn--tiny btn--ghost tech-ghost-btn">📏 Guía</button>
+                <label class="ux-label tech-label" style="margin:0;">1. Selecciona Talla:</label>
+                <button id="openSizeGuideBtn" class="btn btn--tiny btn--ghost tech-ghost-btn" style="font-size:11px; padding:4px 8px;">📏 Guía de Tallas</button>
               </div>
-              <div id="pmSizePills" class="size-pill-container"></div>
+              <div id="pmSizePills" class="size-pill-container">
+                </div>
             </div>
+
             <div>
               <label class="ux-label tech-label">2. Cantidad:</label>
               <div class="qty-stepper-large tech-stepper">
@@ -336,13 +384,17 @@
               </div>
             </div>
           </div>
+
           <div class="sticky-mobile-cta glass-mobile-cta">
-            <button id="pmAdd" class="btn btn--black btn--block btn--large cinematic-btn neon-border" type="button">🛒 AGREGAR AL EQUIPO</button>
+            <button id="pmAdd" class="btn btn--black btn--block btn--large cinematic-btn neon-border" type="button" style="margin-top: 20px; font-size: 18px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+              🛒 Agregar a Mi Carrito
+            </button>
           </div>
-          <div class="ux-trust-badges tech-trust-box">
-            <div class="trust-item"><span aria-hidden="true">⭐</span> Producto Oficial Original</div>
-            <div class="trust-item"><span aria-hidden="true">📦</span> Despacho Inteligente Envía.com</div>
-            <div class="trust-item"><span aria-hidden="true">🛡️</span> Checkout Nivel Bancario</div>
+
+          <div class="ux-trust-badges tech-trust-box" style="margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px;">
+            <div class="trust-item"><span aria-hidden="true">⭐</span> Producto Score Oficial Original</div>
+            <div class="trust-item"><span aria-hidden="true">📦</span> Despacho rápido nacional e internacional (Envía.com)</div>
+            <div class="trust-item"><span aria-hidden="true">🛡️</span> Checkout con Nivel de Seguridad Bancaria (Stripe)</div>
           </div>
         </div>
       </div>
@@ -352,10 +404,11 @@
   <section id="sizeGuideModal" class="modal" style="z-index: 8500;" hidden>
     <div class="modal__panel vfx-modal-panel" style="width: min(500px, 100%);">
       <div class="modal__head glass-header">
-        <div class="modal__title tech-text">📏 Medidas Oficiales</div>
+        <div class="modal__title tech-text">📏 Guía de Tallas Oficial</div>
         <button id="closeSizeGuideBtn" class="iconbtn hover-fx tech-close">✕</button>
       </div>
-      <div class="modal__body" style="padding: 20px; background: var(--bg);">
+      <div class="modal__body" style="padding: 20px;">
+        <p class="hint" style="margin-bottom: 15px;">Medidas estándar en centímetros (Pecho x Largo). Tolerancia de +/- 2cm por proceso de confección.</p>
         <table class="size-table tech-table">
           <thead><tr><th>Talla</th><th>Pecho (cm)</th><th>Largo (cm)</th></tr></thead>
           <tbody>
@@ -366,46 +419,54 @@
             <tr><td>XXL (Doble XL)</td><td>62</td><td>78</td></tr>
           </tbody>
         </table>
-        <button id="understandSizeBtn" class="btn btn--black btn--block cinematic-btn" style="margin-top:20px;">Cerrar</button>
+        <button id="understandSizeBtn" class="btn btn--black btn--block cinematic-btn" style="margin-top:20px;">Entendido</button>
       </div>
     </div>
   </section>
 
-  <section id="aiModal" class="modal" role="dialog" hidden>
-    <div class="modal__panel modal__panel--tall vfx-modal-panel ai-panel-fx">
-      <div class="modal__head" style="background: var(--black-btn); color: white; border-bottom: 2px solid var(--red); padding: 15px 20px;">
+  <section id="aiModal" class="modal" role="dialog" aria-modal="true" aria-label="Interfaz del Asistente SCORE AI" hidden>
+    <div class="modal__panel modal__panel--tall vfx-modal-panel ai-panel-fx" style="border-radius: 12px; overflow: hidden;">
+      <div class="modal__head glass-header" style="background: var(--black-btn); color: white; border-bottom: none; padding: 15px 20px;">
         <div class="modal__title" style="display:flex; align-items:center; gap:8px;">
-           <span class="pulse-icon" style="color: var(--red); font-size: 24px; text-shadow: 0 0 10px var(--red);">✦</span> 
+           <span class="pulse-icon" style="color: var(--red); font-size: 22px;">✦</span> 
            <div>
              <span class="tech-text" style="display:block; font-size:16px;">SCORE AI</span>
-             <span style="display:block; font-size:11px; color:#aaa;">Sistema de Asistencia Inteligente</span>
+             <span style="display:block; font-size:11px; color:#aaa; font-weight:normal;">Asistente Virtual En Línea</span>
            </div>
         </div>
-        <button id="aiClose" class="iconbtn tech-close" type="button" style="color:white; background: rgba(255,255,255,0.1); border:none;">✕</button>
+        <button id="aiClose" class="iconbtn tech-close" aria-label="Minimizar chat" type="button" style="color:white; background: rgba(255,255,255,0.1); border:none;">✕</button>
       </div>
-      <div class="modal__body" style="background: url('assets/baja1000-texture.webp') center/cover; position:relative; display:flex; flex-direction:column; padding: 15px;">
-        <div style="position:absolute; inset:0; background:rgba(250,250,252,0.95); backdrop-filter: blur(10px);"></div>
-        <div id="aiOutput" class="chat custom-scrollbar tech-chat-box" aria-live="polite" style="position:relative; z-index:2;"></div>
-        <div class="chatbar" style="position:relative; z-index:2;">
-          <input id="aiInput" class="input tech-input" placeholder="Comunícate con la IA..." />
-          <button id="aiSendBtn" class="btn btn--primary hover-fx neon-border" type="button">Enviar ➢</button>
+
+      <div class="modal__body" style="background: #f5f5f7; display:flex; flex-direction:column; padding: 15px;">
+        <div id="aiOutput" class="chat custom-scrollbar tech-chat-box" aria-live="polite"></div>
+        <div class="chatbar">
+          <input id="aiInput" class="input tech-input" placeholder="Pregunta por tallas, envíos o modelos..." aria-label="Campo de escritura para el chat" />
+          <button id="aiSendBtn" class="btn btn--primary hover-fx neon-border" type="button" aria-label="Enviar mensaje a la IA">Enviar ➢</button>
         </div>
       </div>
     </div>
   </section>
 
-  <section id="cookieBanner" class="cookie glass-panel" hidden>
-    <div class="cookie__text"><b>Telemetría y Privacidad:</b> Usamos cookies estrictamente necesarias para el motor de la tienda y pagos seguros. Al navegar, aceptas nuestras reglas de pista.</div>
+  <section id="cookieBanner" class="cookie glass-panel" role="dialog" aria-label="Alerta de Uso de Cookies y Privacidad" hidden>
+    <div class="cookie__text">
+      <b>Aviso de Privacidad (GDPR/Ley de Datos):</b> Usamos cookies estrictamente necesarias para procesar tu carrito y asegurar el pago. Al navegar, aceptas el rugir de nuestros términos off-road.
+    </div>
     <div class="cookie__actions">
-      <button id="cookieReject" class="btn btn--ghost tech-ghost-btn hover-fx" type="button">Esenciales</button>
-      <button id="cookieAccept" class="btn btn--primary cinematic-btn neon-border hover-fx" type="button">Aceptar y Entrar</button>
+      <button id="cookieReject" class="btn btn--ghost tech-ghost-btn hover-fx" type="button">Solo Esenciales</button>
+      <button id="cookieAccept" class="btn btn--primary cinematic-btn neon-border hover-fx" type="button" style="box-shadow: 0 2px 10px rgba(228,0,43,0.4);">Aceptar Todo y Entrar</button>
     </div>
   </section>
 
-  <div id="toast" class="toast glass-panel" hidden></div>
+  <div id="toast" class="toast glass-panel" role="status" aria-live="polite" hidden></div>
 
   <script>
-    if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(e => console.warn(e)); }); }
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(error => {
+          console.warn('PWA Worker log:', error);
+        });
+      });
+    }
   </script>
   <script defer src="js/main.js"></script>
 </body>
