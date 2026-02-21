@@ -27,7 +27,6 @@ exports.handler = async (event) => {
             created_at: new Date().toISOString(),
           });
 
-          // CORRECCIÓN: Actualización directa ahora que las columnas existen en el schema.sql
           if (trackingNumber) {
             await sb.from("shipping_labels")
               .update({ 
