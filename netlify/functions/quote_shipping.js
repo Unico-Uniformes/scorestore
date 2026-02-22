@@ -5,9 +5,9 @@
  * quote_shipping.js (Netlify Function)
  * Endpoint: /.netlify/functions/quote_shipping
  *
- * FIXES v2026-02-21 PRO:
- * - Sanitización estricta de variables.
- * - Prevención de exceso de peticiones a la API de Envía.
+ * SECURE V2026-02-21 PRO:
+ * - Sanitización estricta por Regex.
+ * - Prevención de inyección y sobrecarga logística.
  * =========================================================
  */
 
@@ -29,14 +29,14 @@ exports.handler = async (event) => {
 
     const body = safeJsonParse(event.body) || {};
     
-    // Sanitización
-    const zipRaw = String(body.postal_code || "").trim().substring(0, 15);
-    const country = String(body.country || "MX").trim().toUpperCase().substring(0, 2);
+    // Sanitización estricta Regex anti-inyección
+    const zipRaw = String(body.postal_code || "").trim().substring(0, 15).replace(/[^a-zA-Z0-9-]/g, '');
+    const country = String(body.country || "MX").trim().toUpperCase().substring(0, 2).replace(/[^A-Z]/g, '');
     const items = Array.isArray(body.items) ? body.items : [];
 
-    const items_qty = items.reduce((sum, item) => sum + (Number(item.qty) || 1), 0);
+    const items_qty = items.reduce((sum, item) => sum + Math.max(1, (Number(item.qty) || 1)), 0);
 
-    // Bloqueo de abuso
+    // Bloqueo de abuso (Máximo 200 items físicos calculables por caja)
     if (items_qty <= 0 || items_qty > 200) {
         return jsonResponse(400, { ok: false, error: "Volumen de artículos fuera de rango para cotización automática." }, origin);
     }
