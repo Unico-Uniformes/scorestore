@@ -1,10 +1,14 @@
 "use strict";
 
+const crypto = require("crypto"); // INYECCIÓN: Requerido para Timing Attacks
+
 /**
  * =========================================================
  * envia_webhook.js (Netlify Function)
  *
- * PRO FIXES: Update idempotente y alertas limpias.
+ * PRO FIXES: 
+ * VULNERABILIDAD ZERO-DAY SOLUCIONADA: Timing Attack predeterminado 
+ * en validaciones JS mediante timingSafeEqual.
  * =========================================================
  */
 
@@ -39,7 +43,9 @@ exports.handler = async (event) => {
     const required = String(process.env.ENVIA_WEBHOOK_TOKEN || "").trim();
     if (required) {
       const provided = String(getProvidedToken(event) || "").trim();
-      if (!provided || provided !== required) {
+      
+      // FIX CRÍTICO: Prevención de Timing Attack comparando buffers
+      if (!provided || provided.length !== required.length || !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(required))) {
         return jsonResponse(401, { ok: false, error: "Unauthorized access" }, origin);
       }
     }
