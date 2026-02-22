@@ -17,39 +17,39 @@
 
   <link rel="stylesheet" href="css/styles.css" />
 </head>
-<body style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center;">
+<body style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; overflow: hidden;">
 
-  <div class="hero__bg" style="position:fixed; inset:0; z-index:-2; animation: none; filter: brightness(0.4);"></div>
+  <div class="hero__bg" style="position:fixed; inset:0; z-index:-2; animation: slowPan 30s linear infinite alternate; filter: brightness(0.3) blur(2px);"></div>
 
-  <main class="wrap section main-card-bg" style="max-width: 620px; position: relative; z-index: 10; border-top: 5px solid var(--red);">
-    <img src="assets/logo-score.webp" alt="Score Store" style="height: 60px; margin: 0 auto 20px auto; filter: drop-shadow(0 5px 10px rgba(0,0,0,0.2));">
+  <main class="wrap section vfx-glass-container" style="max-width: 620px; position: relative; z-index: 10; padding: 40px; margin-top: 20px;">
+    <img src="assets/logo-score.webp" alt="Score Store" style="height: 60px; margin: 0 auto 20px auto; filter: drop-shadow(0 5px 15px rgba(225,6,0,0.5)); animation: float 3s infinite ease-in-out;">
 
-    <div id="heroEmoji" style="font-size: 60px; margin-bottom: 10px; animation: scaleIn 0.5s ease;">🏁</div>
-    <h1 id="heroTitle" style="color: var(--black-btn); font-weight: 900; margin-bottom: 12px; font-size: 32px;">Cargando estado…</h1>
+    <div id="heroEmoji" style="font-size: 60px; margin-bottom: 10px; animation: scaleIn 0.5s ease; filter: drop-shadow(0 0 10px rgba(255,255,255,0.4));">🏁</div>
+    <h1 id="heroTitle" class="tech-text" style="color: var(--black-btn); font-weight: 900; margin-bottom: 12px; font-size: 32px;">Cargando estado…</h1>
 
     <p id="heroText" class="hint" style="max-width: 520px; margin: 0 auto 18px; font-size: 16px; color: var(--text);">
       Estableciendo conexión encriptada para verificar tu pago con Stripe.
     </p>
 
-    <div class="legal-box" style="text-align:left; margin: 18px 0;">
+    <div class="glass-panel" style="text-align:left; margin: 25px 0; padding: 20px; border-radius: 12px;">
       <div style="display:flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
         <div>
-          <div class="muted" style="font-size: 12px;">ID de Pedido Oficial (Consérvalo)</div>
-          <div id="orderId" style="font-weight: 900; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; color: var(--red);">—</div>
+          <div class="muted" style="font-size: 12px; font-weight: bold;">ID de Pedido Oficial (Consérvalo)</div>
+          <div id="orderId" style="font-weight: 900; font-family: monospace; color: var(--red); font-size: 15px;">—</div>
         </div>
         <div style="text-align:right;">
-          <div class="muted" style="font-size: 12px;">Total Pagado</div>
-          <div id="orderTotal" style="font-weight: 900; font-size: 18px;">—</div>
+          <div class="muted" style="font-size: 12px; font-weight: bold;">Total Pagado</div>
+          <div id="orderTotal" class="tech-price" style="font-weight: 900; font-size: 20px; color: var(--black-btn);">—</div>
         </div>
       </div>
 
-      <div style="margin-top: 15px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
-        <button id="copyBtn" class="btn btn--black btn--tiny hover-fx" type="button">Copiar ID de Rastreo</button>
+      <div style="margin-top: 20px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+        <button id="copyBtn" class="btn btn--black btn--tiny hover-fx neon-border" type="button">Copiar ID de Rastreo</button>
         <a class="btn btn--primary btn--tiny cinematic-btn" href="index.html">← Volver a la Tienda</a>
       </div>
     </div>
 
-    <div id="extraHint" class="hint" style="font-size: 13px; color: var(--muted); font-weight: bold;">
+    <div id="extraHint" class="hint" style="font-size: 13px; color: var(--muted); font-weight: bold; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;">
       Si pagaste en efectivo vía OXXO, la confirmación puede tardar hasta 1 día hábil. Te enviaremos actualizaciones a tu correo.
     </div>
   </main>
@@ -67,9 +67,9 @@
 
     function setUI({ title, text, emoji, borderColor }) {
       if ($("heroTitle")) $("heroTitle").textContent = title;
-      if ($("heroText")) $("heroText").innerHTML = text;
+      if ($("heroText")) $("heroText").innerHTML = text; // Mantenido por diseño, texto hardcodeado en JS seguro
       if ($("heroEmoji")) $("heroEmoji").textContent = emoji;
-      if (borderColor) document.querySelector("main").style.borderTopColor = borderColor;
+      if (borderColor) document.querySelector("main").style.setProperty('--red', borderColor);
     }
 
     function fmtMoney(n) {
@@ -121,7 +121,7 @@
           setUI({
             title: "Pedido Registrado",
             text: "Tu orden está en el sistema. Si el pago aún no se refleja como confirmado, verifica tu aplicación bancaria o revisa tu bandeja de entrada.",
-            emoji: "🏁",
+            emoji: "🛡️",
             borderColor: "var(--black-btn)"
           });
           $("extraHint").textContent = "En caso de rechazo bancario, la orden expirará y no se realizará ningún cargo.";
