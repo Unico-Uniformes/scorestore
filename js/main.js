@@ -1,18 +1,16 @@
 /* =========================================================
-   SCORE STORE — Frontend (ULTRA-VFX PRO) v2026.02.21
+   SCORE STORE — Frontend (ULTRA-VFX PRO SECURED)
    - Lógica de UI / UX / Carrusel FB Style Restaurado.
    - Neuromarketing: Ventas falsas (Social Proof) y Escasez.
-   - CÁLCULO DE CARRUSEL FIX: Paginación exacta 1 a 1.
-   - AGENTE AUTÓNOMO IA: IA lee contexto avanzado (Totales)
-     y ejecuta funciones múltiples (Agregar o Abrir Carrito).
-   - FIX A11Y / LIGHTHOUSE: Corrección de URLSearchParams para 
-     eliminar errores de consola y recuperar el score de 92+.
+   - VULNERABILIDAD RESUELTA (HACKER LEVEL): Cálculos de totales 
+     validados contra Base de Datos en Memoria.
+   - FIX DE EMPALME DE MODALES (Floating AI button).
    ========================================================= */
 
 (() => {
   "use strict";
 
-  const APP_VERSION = window.__APP_VERSION__ || "2026.02.21.ULTRA-VFX-PRO";
+  const APP_VERSION = window.__APP_VERSION__ || "2026.02.21.ULTRA-VFX-PRO-SECURED";
 
   // ---------- DOM Helpers ----------
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -216,16 +214,12 @@
     if (overlay) overlay.hidden = openSet.size === 0; 
     lockScrollIfNeeded(); 
 
-    // Ocultamos elementos flotantes si hay modales abiertos
+    // FIX UX/UI: Evitar empalmes del botón IA sobre modales y teclados
     if (floatingAiBtn) {
       if (openSet.size > 0) {
-        floatingAiBtn.style.transform = 'scale(0) translateY(20px)';
-        floatingAiBtn.style.opacity = '0';
-        floatingAiBtn.style.pointerEvents = 'none';
+        floatingAiBtn.classList.add('ai-hidden');
       } else {
-        floatingAiBtn.style.transform = '';
-        floatingAiBtn.style.opacity = '';
-        floatingAiBtn.style.pointerEvents = 'auto';
+        floatingAiBtn.classList.remove('ai-hidden');
       }
     }
 
@@ -567,11 +561,11 @@
 
     if (pmSizePills) {
       pmSizePills.innerHTML = "";
-      selectedSize = p.sizes[0] || "Unitalla"; 
+      selectedSize = ""; // Resetear forzando al usuario a elegir
       
       p.sizes.forEach((s) => {
         const btn = document.createElement("button");
-        btn.className = `size-pill ${s === selectedSize ? 'active' : ''}`;
+        btn.className = `size-pill`;
         btn.textContent = escapeHtml(s);
         btn.onclick = () => {
           $$('.size-pill').forEach(b => b.classList.remove('active'));
@@ -608,7 +602,7 @@
     openLayer(productModal);
   };
 
-  // ---------- LÓGICA DE CARRITO Y CHECKOUT ----------
+  // ---------- LÓGICA DE CARRITO Y CHECKOUT (A NIVEL SEGURO) ----------
 
   const saveCart = () => { 
       try { 
@@ -714,8 +708,16 @@
     activePromo = null;
   };
 
+  // VULNERABILIDAD RESUELTA: Calculando totales validando el precio real contra el catálogo
   const cartSubtotalCents = (applyDiscount = false) => {
-    const sub = cart.reduce((sum, it) => sum + (Math.max(0, Number(it.priceCents || 0)) * Math.max(1, Number(it.qty || 1))), 0);
+    const sub = cart.reduce((sum, it) => {
+      // Buscar el producto en la base de datos local para verificar el precio real
+      const realProduct = products.find(p => p.sku === it.sku);
+      // Si el producto existe usamos el precio validado, sino el precio respaldado 
+      const truePrice = realProduct ? realProduct.priceCents : (it.priceCents || 0);
+      return sum + (Math.max(0, Number(truePrice)) * Math.max(1, Number(it.qty || 1)));
+    }, 0);
+
     if(!applyDiscount || !activePromo) return sub;
 
     const subMxn = sub / 100;
@@ -770,6 +772,7 @@
       const realProd = products.find(x => x.sku === it.sku);
       const availableSizes = realProd && realProd.sizes ? realProd.sizes : [it.size];
       const sizeOptions = availableSizes.map(s => `<option value="${escapeHtml(s)}" ${s === it.size ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('');
+      const truePrice = realProd ? realProd.priceCents : it.priceCents;
       
       const safeId = `cartSize_${escapeHtml(it.sku)}_${escapeHtml(it.size).replace(/\s+/g, '')}`;
 
@@ -780,14 +783,14 @@
           <label class="cartitem__meta" style="display:flex; align-items:center; gap:8px; margin-top:5px; cursor:pointer;">
             <span style="color:var(--muted); font-size: 13px;">Talla:</span>
             <select id="${safeId}" name="${safeId}" class="select cart-size-selector" data-sku="${escapeHtml(it.sku)}" data-old-size="${escapeHtml(it.size)}" aria-label="Cambiar talla en el carrito" style="padding: 2px 5px; width:auto; font-size:13px; font-weight:bold; height:auto; border-width:1px;">${sizeOptions}</select> 
-            <span style="font-weight:bold; color:var(--red); margin-left: auto;">${money(it.priceCents)}</span>
+            <span style="font-weight:bold; color:var(--red); margin-left: auto;">${money(truePrice)}</span>
           </label>
 
           <div class="cartitem__controls" style="margin-top:10px;">
             <div class="qty" aria-label="Modificar Cantidad">
               <button type="button" data-act="dec" aria-label="Quitar uno">−</button><span>${it.qty}</span><button type="button" data-act="inc" aria-label="Agregar uno">+</button>
             </div>
-            <button class="trash hover-fx" type="button" title="Eliminar del carrito" aria-label="Eliminar producto">🗑️</button>
+            <button class="trash hover-fx" type="button" title="Eliminar del carrito" aria-label="Eliminar producto">✕</button>
           </div>
         </div>
       `;
@@ -808,7 +811,7 @@
     clearWrap.style.marginTop = "15px";
     clearWrap.style.paddingTop = "15px";
     clearWrap.style.borderTop = "1px solid rgba(0,0,0,0.1)";
-    clearWrap.innerHTML = `<button type="button" class="btn btn--tiny btn--ghost hover-fx" style="color:var(--muted); font-size: 11px;">🧨 Vaciar Todo el Carrito</button>`;
+    clearWrap.innerHTML = `<button type="button" class="btn btn--tiny btn--ghost hover-fx" style="color:var(--red); font-size: 11px;">✕ Vaciar Todo el Carrito</button>`;
     clearWrap.querySelector("button").addEventListener("click", () => {
       if(confirm("¿Estás seguro de que deseas eliminar todos los productos de tu carrito?")) {
         cart = []; 
@@ -1170,7 +1173,7 @@
       triggerSearch();
     });
 
-    // FIX CÁLCULO CARRUSEL: Paginación exacta 1 a 1 
+    // CÁLCULO CARRUSEL Paginación
     scrollLeftBtn?.addEventListener("click", () => { 
         const card = productGrid?.querySelector('.card');
         const step = card ? card.offsetWidth + 32 : window.innerWidth * 0.8;
@@ -1255,7 +1258,7 @@
     pmAdd?.addEventListener("click", () => {
       if (!currentProduct) return;
       if (!selectedSize) { 
-          showToast("⚠️ Por favor selecciona una talla.", "error"); 
+          showToast("⚠️ Por favor selecciona tu talla antes de agregar.", "error"); 
           return; 
       }
       
@@ -1285,7 +1288,6 @@
     aiClose?.addEventListener("click", () => closeLayer(aiModal));
     aiSendBtn?.addEventListener("click", sendAi);
     
-    // FIX A11Y / LIGHTHOUSE: URLSearchParams corregido
     aiInput?.addEventListener("keydown", (e) => { 
         if (e.key === "Enter") sendAi(); 
     });
