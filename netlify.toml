@@ -20,7 +20,7 @@
   to = "/index.html"
   status = 200
 
-# ========= Headers de Seguridad y CORS Avanzado =========
+# ========= Headers de Seguridad Nivel NASA =========
 [[headers]]
   for = "/*"
   [headers.values]
@@ -29,6 +29,8 @@
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+    # HACKER FIX: Política de Contenido Estricta para mitigar inyecciones XSS externas
+    Content-Security-Policy = "default-src 'self' https://js.stripe.com https://generativelanguage.googleapis.com; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' https://js.stripe.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co https://api.envia.com;"
     Access-Control-Allow-Origin = "*"
 
 # Cache agresivo para assets visuales estáticos
