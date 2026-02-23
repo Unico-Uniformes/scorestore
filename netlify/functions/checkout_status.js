@@ -1,136 +1,126 @@
 "use strict";
 
-/**
- * =========================================================
- * checkout_status.js (Netlify Function)
- *
- * PRO FIXES: 
- * - Validación cruzada estricta de Session_ID (Prevención DoS)
- * =========================================================
- */
-
 const {
-  jsonResponse,
-  handleOptions,
-  initStripe,
-  isSupabaseConfigured,
-  supabaseAdmin,
+  jsonResponse, handleOptions, safeJsonParse, normalizeQty, getBaseUrl, readJsonFile, getCatalogIndex,
+  getEnviaQuote, getFallbackShipping, initStripe, validateZip, makeCheckoutIdempotencyKey
 } = require("./_shared");
-
-const safeUpper = (v) => String(v || "").toUpperCase().trim();
-
-const normalizeLineItems = (lineItems) => {
-  const arr = Array.isArray(lineItems) ? lineItems : [];
-  return arr
-    .map((li) => {
-      const productObj = li?.price?.product && typeof li.price.product === "object" ? li.price.product : null;
-      const meta = productObj?.metadata || {};
-      return {
-        sku: meta.sku || meta.SKU || null,
-        size: meta.size || meta.talla || null,
-        name: productObj?.name || li?.description || null,
-        qty: Number(li?.quantity || 0) || 0,
-        amount_total_mxn: Number(li?.amount_total || 0) / 100,
-        currency: safeUpper(li?.currency || "mxn"),
-      };
-    })
-    .filter((x) => x.qty > 0);
-};
 
 exports.handler = async (event) => {
   const origin = event?.headers?.origin || event?.headers?.Origin || "*";
 
   try {
     if (event.httpMethod === "OPTIONS") return handleOptions(event);
-    if (event.httpMethod !== "GET") return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
-
-    const qs = event.queryStringParameters || {};
-    
-    // FIX: Sanitización estricta de regex para evitar inyecciones a la API de Stripe
-    const session_id = String(qs.session_id || "").trim();
-    if (!/^cs_(test|live)_[a-zA-Z0-9]+$/.test(session_id)) {
-        return jsonResponse(400, { ok: false, error: "ID de sesión inválido" }, origin);
-    }
+    if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
 
     const stripe = initStripe();
+    const baseUrl = getBaseUrl(event);
+    const body = safeJsonParse(event.body) || {};
+    
+    // Extracción de variables + FIX Idempotencia Front-to-Back
+    const items = normalizeQty(body.items);
+    const shipping_mode = String(body.shipping_mode || "pickup").trim().substring(0, 20);
+    const postal_code_raw = String(body.postal_code || "").trim().substring(0, 15).replace(/[^a-zA-Z0-9-]/g, '');
+    const promo_code_input = String(body.promo_code || "").trim().toUpperCase().substring(0, 30).replace(/[^A-Z0-9_-]/g, '');
+    const front_req_id = String(body.req_id || "").trim().substring(0, 50); // <--- NUEVO
 
-    const session = await stripe.checkout.sessions.retrieve(session_id, {
-      expand: ["customer", "payment_intent", "shipping_details"],
+    if (!items || !items.length) return jsonResponse(400, { ok: false, error: "El carrito está vacío." }, origin);
+
+    const { index: catalogIndex } = getCatalogIndex();
+    if (!catalogIndex || catalogIndex.size === 0) return jsonResponse(500, { ok: false, error: "Catálogo maestro no disponible." }, origin);
+
+    let subtotal_cents = 0;
+    const items_qty = items.reduce((sum, item) => sum + item.qty, 0);
+
+    if (items_qty <= 0 || items_qty > 200) return jsonResponse(400, { ok: false, error: "Cantidad excedida." }, origin);
+
+    const validatedItems = items.map((item) => {
+      const dbItem = catalogIndex.get(item.sku);
+      if (!dbItem) throw new Error(`SKU no reconocido: ${item.sku}`);
+      const realPriceCents = Number(dbItem.price_cents || 0) || 0;
+      subtotal_cents += realPriceCents * item.qty;
+      return { ...item, realPriceCents, title: dbItem.title || item.sku, size: String(item.size || "Unitalla").substring(0, 20) };
     });
 
-    let items = [];
-    try {
-      const li = await stripe.checkout.sessions.listLineItems(session_id, { limit: 100, expand: ["data.price.product"] });
-      items = normalizeLineItems(li?.data || []);
-    } catch {}
+    const subtotal_mxn = subtotal_cents / 100;
 
-    const td = session.total_details || {};
-    const amount_total_mxn = Number(session.amount_total || 0) / 100;
-    const amount_subtotal_mxn = Number(session.amount_subtotal || 0) / 100;
-    const amount_shipping_mxn = Number(td.amount_shipping || 0) / 100;
-    const amount_discount_mxn = Number(td.amount_discount || 0) / 100;
+    let discountMultiplier = 1;
+    let freeShippingActive = false;
+    let promoApplied = "Ninguno";
 
-    const payment_status = String(session.payment_status || "");
-    const status =
-      payment_status === "paid"
-        ? "paid"
-        : payment_status === "unpaid"
-          ? "pending_payment"
-          : "pending";
-
-    // Backup Save
-    if (isSupabaseConfigured() && items.length > 0) {
-      const sb = supabaseAdmin();
-      if (sb) {
-        try {
-          await sb.from("orders").upsert(
-            {
-              stripe_session_id: session.id,
-              stripe_payment_intent_id: session.payment_intent ? (typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id) : null,
-              stripe_customer_id: session.customer ? (typeof session.customer === "string" ? session.customer : session.customer.id) : null,
-              email: session.customer_details?.email || session.customer_email || null,
-              customer_name: session.customer_details?.name || session.shipping_details?.name || "Cliente",
-              phone: session.customer_details?.phone || null,
-              currency: safeUpper(session.currency || "mxn"),
-              amount_total_mxn,
-              amount_subtotal_mxn,
-              amount_shipping_mxn,
-              amount_discount_mxn,
-              status,
-              updated_at: new Date().toISOString(),
-              items: items || [],
-              metadata: {
-                shipping_address: session.shipping_details?.address || null,
-              },
-            },
-            { onConflict: "stripe_session_id" }
-          );
-        } catch (e) {
-          console.warn("[checkout_status] warn upsert:", e?.message);
+    if (promo_code_input) {
+      const promosData = readJsonFile("data/promos.json");
+      if (promosData && Array.isArray(promosData.rules)) {
+        const promo = promosData.rules.find((p) => p.code === promo_code_input && p.active);
+        if (promo && (!promo.expires_at || new Date() <= new Date(promo.expires_at)) && subtotal_mxn >= (promo.min_amount_mxn || 0)) {
+          promoApplied = promo.code;
+          if (promo.type === "percent") discountMultiplier = Math.max(0, 1 - (Number(promo.value) || 0));
+          else if (promo.type === "free_shipping") freeShippingActive = true;
+          else if (promo.type === "fixed_mxn") discountMultiplier = Math.max(0, (subtotal_mxn - Number(promo.value)) / subtotal_mxn);
         }
       }
     }
 
-    return jsonResponse(
-      200,
-      {
-        ok: true,
-        session_id: session.id,
-        payment_status,
-        status,
-        currency: safeUpper(session.currency || "mxn"),
-        amount_total_mxn,
-        amount_subtotal_mxn,
-        amount_shipping_mxn,
-        amount_discount_mxn,
-        customer_email: session.customer_details?.email || session.customer_email || null,
-        customer_name: session.customer_details?.name || session.shipping_details?.name || null,
-        items,
+    const lineItems = validatedItems.map((item) => {
+      const discountedPrice = Math.max(0, Math.round(item.realPriceCents * discountMultiplier));
+      return {
+        price_data: { currency: "mxn", product_data: { name: `${item.title} (Talla: ${item.size})`, metadata: { sku: item.sku, size: item.size } }, unit_amount: discountedPrice },
+        quantity: item.qty,
+      };
+    });
+
+    const shipping_country = shipping_mode === "envia_us" ? "US" : "MX";
+    const needsZip = shipping_mode === "envia_mx" || shipping_mode === "envia_us";
+    const postal_code = needsZip ? validateZip(postal_code_raw, shipping_country) : "";
+
+    let shipping_amount_cents = 0;
+    let shipping_display_name = "";
+
+    if (shipping_mode === "pickup") {
+      shipping_display_name = "Pickup (Recolección en Fábrica TJ)";
+    } else if (freeShippingActive) {
+      shipping_display_name = shipping_country === "US" ? "Envío Internacional (CUPÓN GRATIS)" : "Envío Nacional (CUPÓN GRATIS)";
+    } else {
+      try {
+        const quote = await getEnviaQuote({ zip: postal_code, country: shipping_country, items_qty });
+        shipping_amount_cents = quote.amount_cents; shipping_display_name = quote.label;
+      } catch (err) {
+        const fallback = getFallbackShipping(shipping_country, items_qty);
+        shipping_amount_cents = fallback.amount_cents; shipping_display_name = fallback.label;
+      }
+    }
+
+    const orderSummary = validatedItems.map((i) => `${i.qty}x ${i.sku}[${i.size}]`).join(" | ").substring(0, 450);
+    const allowedPaymentMethods = process.env.STRIPE_ENABLE_OXXO === "1" ? ["card", "oxxo"] : ["card"];
+
+    // Se pasa el front_req_id para forzar Idempotencia Real
+    const idempotencyKey = makeCheckoutIdempotencyKey({
+      items, shipping_mode, postal_code: postal_code || "", promo_code: promo_code_input || ""
+    }, front_req_id);
+
+    const sessionPayload = {
+      payment_method_types: allowedPaymentMethods,
+      line_items: lineItems,
+      mode: "payment",
+      success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/cancel.html`,
+      phone_number_collection: { enabled: true },
+      metadata: {
+        source: "score_store_v2", shipping_mode, shipping_country, postal_code: postal_code || "",
+        items_qty: String(items_qty), shipping_amount_cents: String(shipping_amount_cents),
+        promo_code: promoApplied, items_summary: orderSummary,
       },
-      origin
-    );
-  } catch (e) {
-    console.error("[checkout_status] error:", e?.message);
-    return jsonResponse(200, { ok: false, error: "No se pudo recuperar el estado del pedido." }, origin);
+    };
+
+    if (shipping_mode !== "pickup") {
+      sessionPayload.shipping_address_collection = { allowed_countries: [shipping_country] };
+      sessionPayload.shipping_options = [{ shipping_rate_data: { type: "fixed_amount", fixed_amount: { amount: Math.max(0, shipping_amount_cents), currency: "mxn" }, display_name: shipping_display_name || "Envío Asegurado" } }];
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionPayload, { idempotencyKey });
+    return jsonResponse(200, { ok: true, url: session.url }, origin);
+
+  } catch (error) {
+    console.error("Stripe Checkout Error:", error);
+    return jsonResponse(500, { ok: false, error: "Interrupción en pasarela segura." }, origin);
   }
 };
