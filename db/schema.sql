@@ -1,8 +1,8 @@
 -- =========================================================
--- UnicOs / SCORE STORE — SAFE SQL (IDEMPOTENT) v2026-02-21
+-- SCORE STORE — SAFE SQL (IDEMPOTENT) v2026-02-21
 -- Target: Supabase Postgres (public schema)
--- MEJORAS (HACKER LEVEL): Inyección de Row Level Security (RLS)
--- Preparación de campos EXACTOS para panel UnicOs.
+-- MEJORAS: Estructura 100% Original + Row Level Security (RLS)
+-- para evitar robo de base de datos masiva.
 -- =========================================================
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -30,20 +30,6 @@ CREATE TABLE IF NOT EXISTS public.admin_users (
   is_active boolean DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),
   last_login timestamptz NULL
-);
-
--- NUEVA TABLA PARA SOPORTAR UNICOS (Inventario y Márgenes)
-CREATE TABLE IF NOT EXISTS public.products (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    sku text UNIQUE NOT NULL,
-    title text NOT NULL,
-    description text,
-    price_cents integer NOT NULL DEFAULT 0,
-    cost_price numeric(12,2) NULL,
-    stock_alert_threshold integer DEFAULT 2,
-    provider_name text,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS public.orders (
@@ -75,10 +61,6 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items_summary text NULL;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS organization_id uuid NULL;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS stripe_session_id text NULL;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pending';
-
--- INTEGRACIÓN UNICOS: Campos obligatorios de tracking y pagos exactos
-ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_status text NOT NULL DEFAULT 'pending';
-ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS fulfillment_status text NOT NULL DEFAULT 'unfulfilled';
 
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON public.orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
@@ -137,18 +119,17 @@ CREATE TABLE IF NOT EXISTS public.shipping_webhooks (
 CREATE INDEX IF NOT EXISTS idx_shipping_webhooks_tracking ON public.shipping_webhooks(tracking_number);
 
 -- =========================================================
--- VULNERABILIDAD ZERO-DAY SOLUCIONADA: ROW LEVEL SECURITY
+-- SEGURIDAD: ROW LEVEL SECURITY (RLS)
 -- =========================================================
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shipping_labels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shipping_webhooks ENABLE ROW LEVEL SECURITY;
 
--- Ningún cliente con llave pública (anon) puede leer o modificar datos (Solo el Backend Server/Edge con llave secreta)
+-- Protege la DB contra lecturas públicas. Solo el Backend (Netlify) puede acceder.
 DROP POLICY IF EXISTS "Nadie puede borrar pedidos" ON public.orders;
 CREATE POLICY "Nadie puede borrar pedidos" ON public.orders FOR DELETE USING (false);
 
-DROP POLICY IF EXISTS "UnicOs Admin Acceso Total" ON public.orders;
-CREATE POLICY "UnicOs Admin Acceso Total" ON public.orders FOR ALL USING (auth.uid() IN (SELECT id FROM admin_users));
+DROP POLICY IF EXISTS "Acceso Backend Seguro" ON public.orders;
+CREATE POLICY "Acceso Backend Seguro" ON public.orders FOR ALL USING (auth.role() = 'service_role');
