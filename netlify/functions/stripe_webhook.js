@@ -6,7 +6,7 @@
  *
  * SECURE V2026-02-21 PRO (NIVEL NASA / META):
  * - Resiliencia Absoluta: Upsert a DB garantizado aunque falle Envía.
- * - Buffer de lectura seguro contra firmas corruptas.
+ * - Estructura de Datos 100% Original para Score Store.
  * =========================================================
  */
 
@@ -102,6 +102,7 @@ const upsertOrder = async (sb, session, status, items) => {
 
   const normalizedItems = Array.isArray(items) ? items : [];
 
+  // DATOS ORIGINALES EXACTOS - Sin inyecciones de UnicOs
   const row = {
     stripe_session_id: session.id,
     stripe_payment_intent_id:
