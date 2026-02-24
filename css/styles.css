@@ -390,3 +390,83 @@ button, input, select, textarea { font: inherit; }
   .sales-toast { bottom: max(90px, calc(90px + var(--safe-bottom))); left: 16px; right: auto; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+/* =========================================================
+   PATCH FINAL — FIXES REALES (móvil + clases usadas en HTML)
+   ========================================================= */
+
+/* FIX TOPBAR MÓVIL (evita overlaps / tap targets Lighthouse) */
+@media (max-width: 768px) {
+  .topbar {
+    position: sticky;
+    top: 0;
+  }
+
+  .topbar__inner {
+    position: relative;
+    min-height: 64px;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 0;
+  }
+
+  .brand {
+    position: static;
+    left: auto;
+    transform: none;
+    margin-right: auto;
+    order: 1;
+  }
+
+  .brand__logo {
+    height: 34px;
+  }
+
+  .topbar__actions {
+    order: 2;
+    margin-left: 0;
+    gap: 8px;
+  }
+
+  .search {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .iconbtn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .badge {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+
+  .carousel-header {
+    gap: 10px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .carousel-controls {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* ALIASES / CLASES QUE YA USA EL HTML */
+.hero { position: relative; }
+.icon { line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.carousel-wrapper { position: relative; }
+.carousel-controls { display: inline-flex; align-items: center; gap: 10px; }
+.checkout-loader__text { max-width: 360px; line-height: 1.45; font-weight: 700; }
+.footer__brand-col, .footer__socials { min-width: 0; }
+.pm__price-wrap, .pm__row { width: 100%; }
+.glass-mobile-cta { box-shadow: 0 -8px 20px rgba(0,0,0,0.05); }
+.vfx-nav-btn { box-shadow: 0 8px 18px rgba(0,0,0,.35); }
+.vfx-modal-panel { border: 1px solid rgba(255,255,255,0.5); }
+.tech-swipe-hint { animation: pulseNeonRed 3s ease-in-out infinite; }
+.tooltip-wrap { position: relative; }
+.partners__inner { width: min(var(--wrap), calc(100% - 32px)); margin: 0 auto; }
