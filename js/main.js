@@ -176,8 +176,8 @@
   const triggerSalesNotification = async () => {
     if (!salesNotification || openSet.size > 0 || (checkoutLoader && !checkoutLoader.hidden)) return;
     const event = await fetchActivityFeed(); if (!event) return; 
-    if (salesName) salesName.textContent = escapeHtml(event.buyer_name || "Un fan off-road");
-    if (salesAction) salesAction.textContent = `acaba de comprar ${escapeHtml(event.item_name || "mercancía oficial")}`;
+    if (salesName) salesName.textContent = String(event.buyer_name || "Un fan off-road");
+    if (salesAction) salesAction.textContent = `acaba de comprar ${String(event.item_name || "mercancía oficial")}`;
     salesNotification.hidden = false; void salesNotification.offsetWidth; salesNotification.classList.add("show");
     setTimeout(() => { salesNotification.classList.remove("show"); setTimeout(() => salesNotification.hidden = true, 500); }, 5000);
   };
@@ -246,7 +246,7 @@
       const logoUrl = getLogoForSection(p.uiSection); const logoPill = `<span class="pill pill--logo"><img src="${safeUrl(logoUrl)}" alt="Logo Score"></span>`;
       const colPill = p.collection ? `<span class="pill pill--red">${escapeHtml(p.collection)}</span>` : ""; const scarcity = getScarcityText(p.sku);
       const imgs = p.images.length ? p.images : (p.img ? [p.img] : []);
-      let trackHtml = imgs.map((src) => `<img loading="lazy" decoding="async" src="${safeUrl(src)}" alt="${escapeHtml(p.title)}">`).join("");
+      let trackHtml = imgs.map((src) => `<img loading="lazy" decoding="async" sizes="(max-width: 768px) 90vw, 310px" src="${safeUrl(src)}" alt="${escapeHtml(p.title)}">`).join("");
       
       card.innerHTML = `
         <div class="card__media">
@@ -501,7 +501,7 @@
     const msg = String(assistantInput?.value || "").trim(); if (!msg) return;
     if (assistantInput) assistantInput.value = ""; addChatMsg("me", msg);
     if (assistantSendBtn) { assistantSendBtn.disabled = true; assistantSendBtn.innerHTML = "<span class='spinner-mini'></span>"; }
-    const ctx = { currentProduct: currentProduct ? currentProduct.sku : null, cartItems: cart.length > 0 ? cart.map(i => `${i.qty}x ${i.title}`).join(', ') : "Vacío", cartTotal: money(cartSubtotalCents() / 100) };
+    const ctx = { currentProduct: currentProduct ? currentProduct.sku : null, cartItems: cart.length > 0 ? cart.map(i => `${i.qty}x ${i.title}`).join(', ') : "Vacío", cartTotal: money(cartSubtotalCents()) };
 
     try {
       const res = await fetch("/.netlify/functions/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: msg, context: ctx }) });
@@ -597,10 +597,15 @@
     cookieAccept?.addEventListener("click", () => { try { localStorage.setItem(STORAGE_KEYS.consent, "accept"); } catch {} if(cookieBanner) cookieBanner.hidden = true; });
     cookieReject?.addEventListener("click", () => { try { localStorage.setItem(STORAGE_KEYS.consent, "reject"); } catch {} if(cookieBanner) cookieBanner.hidden = true; });
     
-    // REGISTRO DE SERVICE WORKER PARA LIGHTHOUSE
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(err => console.error('SW reg falló:', err));
+    // REGISTRO DE SERVICE WORKER (PWA / Lighthouse)
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", async () => {
+        try {
+          const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+          if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        } catch (err) {
+          console.error("SW reg falló:", err);
+        }
       });
     }
   };
