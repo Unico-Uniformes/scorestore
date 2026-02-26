@@ -2,7 +2,6 @@
 const CACHE_VERSION = "scorestore-vfx-pro-v2.1";
 const CACHE_NAME = CACHE_VERSION;
 
-// Agregadas las vistas de éxito, cancelación y legales para experiencia PWA completa
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -49,7 +48,6 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    // Destruye cualquier caché que no sea la nueva versión
     await Promise.all(keys.map((key) => (key !== CACHE_NAME ? caches.delete(key) : Promise.resolve())));
     if ("navigationPreload" in self.registration) {
       try { await self.registration.navigationPreload.enable(); } catch (_) {}
@@ -85,8 +83,6 @@ self.addEventListener("fetch", (event) => {
         }
         return fresh;
       } catch (_) {
-        // FIX ESTRICTO: { ignoreSearch: true } permite cargar success.html en modo offline
-        // ignorando los query strings (?session_id=...) de Stripe.
         const cachedPage = await caches.match(req, { ignoreSearch: true });
         if (cachedPage) return cachedPage;
         return (await caches.match("/index.html", { ignoreSearch: true })) || Response.error();
@@ -98,7 +94,6 @@ self.addEventListener("fetch", (event) => {
   if (isSafeToCache(req.url)) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
-      // ignoreSearch protege la lectura general de recursos
       const cached = await cache.match(req, { ignoreSearch: true });
       const networkPromise = fetch(req)
         .then(async (res) => {
