@@ -48,7 +48,14 @@
   [headers.values]
     Content-Type = "application/manifest+json; charset=utf-8"
 
-# NUEVO: Forzar actualización inmediata de Service Worker y HTML
+# 🔴 BLOQUEO DE CACHÉ ESTRICTO (INCLUYENDO LA RAÍZ)
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, proxy-revalidate"
+    Pragma = "no-cache"
+    Expires = "0"
+
 [[headers]]
   for = "/sw.js"
   [headers.values]
