@@ -19,13 +19,27 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Consulta a Supabase: Últimas 10 órdenes pagadas
-    const { data, error } = await supabase
+    // ==========================================
+    // 🔥 FIX ARQUITECTURA MULTI-TENANT (Privacidad)
+    // ==========================================
+    // 1. Buscamos el ID exacto de la empresa para no fugar datos de otros negocios
+    let orgId = null;
+    const { data: org } = await supabase.from("organizations").select("id").eq("slug", "score-store").limit(1).maybeSingle();
+    if (org) orgId = org.id;
+
+    // 2. Armamos la consulta restringida a esa única empresa
+    let query = supabase
       .from("orders")
       .select("customer_name, items_summary, created_at")
       .eq("status", "paid")
       .order("created_at", { ascending: false })
       .limit(10);
+      
+    if (orgId) {
+      query = query.eq("organization_id", orgId);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
