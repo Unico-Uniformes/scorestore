@@ -130,7 +130,6 @@
   const escapeHtml = (s) => String(s || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
   const money = (cents) => { const n = Number(cents || 0) / 100; try { return n.toLocaleString("es-MX", { style: "currency", currency: "MXN" }); } catch { return `$${n.toFixed(2)}`; } };
   
-  // FIX: Prevenir doble encodeURI para archivos que ya tienen %20 o tienen espacios.
   const safeUrl = (p) => { 
     try { 
       let raw = String(p || "").trim();
@@ -219,7 +218,7 @@
       card.addEventListener("click", () => {
         $$('.catcard').forEach(c => c.classList.remove('active')); card.classList.add('active'); activeCategory = cat.uiId;
         if (categoryHint) categoryHint.hidden = true;
-        if (carouselTitle) carouselTitle.innerHTML = `<img src="${safeUrl(cat.logo)}" alt="${escapeHtml(cat.name)}" style="height:28px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">`;
+        if (carouselTitle) carouselTitle.innerHTML = `<img src="${safeUrl(cat.logo)}" alt="${escapeHtml(cat.name)}" width="40" height="28" style="height:28px; width:auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">`;
         updateFilterUI(); renderProducts();
         if (catalogCarouselSection) { catalogCarouselSection.hidden = false; scrollToEl("#catalogCarouselSection"); if (productGrid) productGrid.scrollLeft = 0; }
       });
@@ -229,7 +228,7 @@
 
   const updateFilterUI = () => {
     const pieces = [];
-    if (activeCategory) { const c = CATEGORY_CONFIG.find((x) => x.uiId === activeCategory); if (c) pieces.push(`<img src="${safeUrl(c.logo)}" style="height: 18px;" alt="Logo">`); }
+    if (activeCategory) { const c = CATEGORY_CONFIG.find((x) => x.uiId === activeCategory); if (c) pieces.push(`<img src="${safeUrl(c.logo)}" width="40" height="18" style="height: 18px; width: auto;" alt="Logo ${escapeHtml(c.name)}">`); }
     if (searchQuery) pieces.push(`“${escapeHtml(searchQuery)}”`);
     if (activeFilterRow && activeFilterLabel) { activeFilterRow.hidden = pieces.length === 0; activeFilterLabel.innerHTML = pieces.join(" · "); }
   };
@@ -256,10 +255,10 @@
 
     for (const p of list) {
       const card = document.createElement("article"); card.className = "card"; card.setAttribute("data-sku", escapeHtml(p.sku));
-      const logoUrl = getLogoForSection(p.uiSection); const logoPill = `<span class="pill pill--logo"><img src="${safeUrl(logoUrl)}" alt="Logo Score"></span>`;
+      const logoUrl = getLogoForSection(p.uiSection); const logoPill = `<span class="pill pill--logo"><img src="${safeUrl(logoUrl)}" width="30" height="16" alt="Logo Score"></span>`;
       const colPill = p.collection ? `<span class="pill pill--red">${escapeHtml(p.collection)}</span>` : ""; const scarcity = getScarcityText(p.sku);
       const imgs = p.images.length ? p.images : (p.img ? [p.img] : []);
-      let trackHtml = imgs.map((src) => `<img loading="lazy" decoding="async" sizes="(max-width: 768px) 90vw, 310px" src="${safeUrl(src)}" alt="${escapeHtml(p.title)}">`).join("");
+      let trackHtml = imgs.map((src) => `<img width="310" height="387" loading="lazy" decoding="async" sizes="(max-width: 768px) 90vw, 310px" src="${safeUrl(src)}" alt="${escapeHtml(p.title)}">`).join("");
       
       card.innerHTML = `
         <div class="card__media">
@@ -298,7 +297,7 @@
     if (pmTitle) pmTitle.textContent = p.title;
     if (pmPrice) pmPrice.textContent = money(p.priceCents);
     if (pmDesc) { const scarcity = getScarcityText(p.sku); pmDesc.innerHTML = `<p>${escapeHtml(p.description || "Merch oficial Score Store.")}</p>${scarcity ? `<p style="color:var(--red); font-weight:bold; margin-top:10px;">${scarcity}</p>` : ''}`; }
-    if (pmChips) { pmChips.innerHTML = `<span class="pill pill--logo"><img src="${safeUrl(getLogoForSection(p.uiSection))}" alt="Logo"></span>`; if (p.collection) pmChips.innerHTML += `<span class="pill pill--red">${escapeHtml(p.collection)}</span>`; }
+    if (pmChips) { pmChips.innerHTML = `<span class="pill pill--logo"><img src="${safeUrl(getLogoForSection(p.uiSection))}" width="30" height="16" alt="Logo"></span>`; if (p.collection) pmChips.innerHTML += `<span class="pill pill--red">${escapeHtml(p.collection)}</span>`; }
 
     if (pmSizePills) {
       pmSizePills.innerHTML = ""; selectedSize = ""; 
@@ -319,7 +318,7 @@
 
     if (pmCarousel) {
       const imgs = p.images.length ? p.images : (p.img ? [p.img] : []);
-      pmCarousel.innerHTML = `<div class="pm__track" id="pmTrack">${imgs.map((src) => `<img src="${safeUrl(src)}" loading="lazy">`).join("")}</div>${imgs.length > 1 ? `<div class="pm__dots">${imgs.map((_,i)=>`<span class="pm__dot ${i===0?'active':''}"></span>`).join('')}</div>` : ''}`;
+      pmCarousel.innerHTML = `<div class="pm__track" id="pmTrack">${imgs.map((src) => `<img src="${safeUrl(src)}" width="400" height="500" loading="lazy" alt="${escapeHtml(p.title)}">`).join("")}</div>${imgs.length > 1 ? `<div class="pm__dots">${imgs.map((_,i)=>`<span class="pm__dot ${i===0?'active':''}"></span>`).join('')}</div>` : ''}`;
       const track = pmCarousel.querySelector('#pmTrack'); const dots = pmCarousel.querySelectorAll('.pm__dot');
       if(track && dots.length > 0) {
         track.addEventListener('scroll', debounce(() => { let idx = Math.round(track.scrollLeft / track.clientWidth); dots.forEach((d, i) => d.classList.toggle('active', i === idx)); }, 50));
@@ -392,7 +391,7 @@
       const safeId = `cartSize_${escapeHtml(it.sku)}_${escapeHtml(it.size).replace(/\s+/g, '')}`;
 
       row.innerHTML = `
-        <div class="cartitem__img">${it.img ? `<img src="${safeUrl(it.img)}" alt="Item">` : ""}</div>
+        <div class="cartitem__img">${it.img ? `<img src="${safeUrl(it.img)}" width="80" height="80" alt="${escapeHtml(it.title)}">` : ""}</div>
         <div style="flex-grow:1; display:flex; flex-direction:column; justify-content:center;">
           <h4 class="cartitem__title">${escapeHtml(it.title)}</h4>
           <label class="cartitem__meta" style="display:flex; align-items:center; gap:8px; margin-top:5px; cursor:pointer;">
@@ -606,17 +605,14 @@
     cookieAccept?.addEventListener("click", () => { try { localStorage.setItem(STORAGE_KEYS.consent, "accept"); } catch {} if(cookieBanner) cookieBanner.hidden = true; });
     cookieReject?.addEventListener("click", () => { try { localStorage.setItem(STORAGE_KEYS.consent, "reject"); } catch {} if(cookieBanner) cookieBanner.hidden = true; });
     
-    // FIX PWA: RECARGA AUTOMÁTICA OBLIGATORIA
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", async () => {
         try {
           const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
           
-          // Agresivo: Detectar si hay un Service Worker nuevo descargándose
           reg.addEventListener('updatefound', () => {
             const newWorker = reg.installing;
             newWorker.addEventListener('statechange', () => {
-              // Si el nuevo SW se instaló y ya tenemos un controlador viejo
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                 newWorker.postMessage({ type: 'SKIP_WAITING' });
               }
@@ -629,7 +625,6 @@
         }
       });
 
-      // Refresco mandatorio para limpiar la "memoria" del viejo intro
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!refreshing) {
