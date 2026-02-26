@@ -6,7 +6,7 @@
 (() => {
   "use strict";
 
-  const APP_VERSION = window.__APP_VERSION__ || "2026.02.25.SCORE STORE.V3";
+  const APP_VERSION = window.__APP_VERSION__ || "2026.02.21.SCORE STORE.V2";
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -130,6 +130,7 @@
   const escapeHtml = (s) => String(s || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
   const money = (cents) => { const n = Number(cents || 0) / 100; try { return n.toLocaleString("es-MX", { style: "currency", currency: "MXN" }); } catch { return `$${n.toFixed(2)}`; } };
   
+  // FIX: Previene la rotura de enlaces al decodificar primero los "%20" y espacios.
   const safeUrl = (p) => { 
     try { 
       let raw = String(p || "").trim();
@@ -218,7 +219,8 @@
       card.addEventListener("click", () => {
         $$('.catcard').forEach(c => c.classList.remove('active')); card.classList.add('active'); activeCategory = cat.uiId;
         if (categoryHint) categoryHint.hidden = true;
-        if (carouselTitle) carouselTitle.innerHTML = `<img src="${safeUrl(cat.logo)}" alt="${escapeHtml(cat.name)}" width="40" height="28" style="height:28px; width:auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">`;
+        // FIX LIGHTHOUSE: Width/Height para evitar saltos.
+        if (carouselTitle) carouselTitle.innerHTML = `<img src="${safeUrl(cat.logo)}" alt="${escapeHtml(cat.name)}" width="40" height="18" style="height:28px; width:auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">`;
         updateFilterUI(); renderProducts();
         if (catalogCarouselSection) { catalogCarouselSection.hidden = false; scrollToEl("#catalogCarouselSection"); if (productGrid) productGrid.scrollLeft = 0; }
       });
@@ -228,7 +230,7 @@
 
   const updateFilterUI = () => {
     const pieces = [];
-    if (activeCategory) { const c = CATEGORY_CONFIG.find((x) => x.uiId === activeCategory); if (c) pieces.push(`<img src="${safeUrl(c.logo)}" width="40" height="18" style="height: 18px; width: auto;" alt="Logo ${escapeHtml(c.name)}">`); }
+    if (activeCategory) { const c = CATEGORY_CONFIG.find((x) => x.uiId === activeCategory); if (c) pieces.push(`<img src="${safeUrl(c.logo)}" width="40" height="18" style="height: 18px; width: auto;" alt="Logo">`); }
     if (searchQuery) pieces.push(`“${escapeHtml(searchQuery)}”`);
     if (activeFilterRow && activeFilterLabel) { activeFilterRow.hidden = pieces.length === 0; activeFilterLabel.innerHTML = pieces.join(" · "); }
   };
@@ -258,6 +260,7 @@
       const logoUrl = getLogoForSection(p.uiSection); const logoPill = `<span class="pill pill--logo"><img src="${safeUrl(logoUrl)}" width="30" height="16" alt="Logo Score"></span>`;
       const colPill = p.collection ? `<span class="pill pill--red">${escapeHtml(p.collection)}</span>` : ""; const scarcity = getScarcityText(p.sku);
       const imgs = p.images.length ? p.images : (p.img ? [p.img] : []);
+      // FIX LIGHTHOUSE: Atributos Width y Height explícitos
       let trackHtml = imgs.map((src) => `<img width="310" height="387" loading="lazy" decoding="async" sizes="(max-width: 768px) 90vw, 310px" src="${safeUrl(src)}" alt="${escapeHtml(p.title)}">`).join("");
       
       card.innerHTML = `
@@ -318,6 +321,7 @@
 
     if (pmCarousel) {
       const imgs = p.images.length ? p.images : (p.img ? [p.img] : []);
+      // FIX LIGHTHOUSE: Width y Height para prevenir Layout Shifts.
       pmCarousel.innerHTML = `<div class="pm__track" id="pmTrack">${imgs.map((src) => `<img src="${safeUrl(src)}" width="400" height="500" loading="lazy" alt="${escapeHtml(p.title)}">`).join("")}</div>${imgs.length > 1 ? `<div class="pm__dots">${imgs.map((_,i)=>`<span class="pm__dot ${i===0?'active':''}"></span>`).join('')}</div>` : ''}`;
       const track = pmCarousel.querySelector('#pmTrack'); const dots = pmCarousel.querySelectorAll('.pm__dot');
       if(track && dots.length > 0) {
@@ -605,31 +609,14 @@
     cookieAccept?.addEventListener("click", () => { try { localStorage.setItem(STORAGE_KEYS.consent, "accept"); } catch {} if(cookieBanner) cookieBanner.hidden = true; });
     cookieReject?.addEventListener("click", () => { try { localStorage.setItem(STORAGE_KEYS.consent, "reject"); } catch {} if(cookieBanner) cookieBanner.hidden = true; });
     
+    // REGISTRO DE SERVICE WORKER (PWA / Lighthouse)
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", async () => {
         try {
           const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-          
-          reg.addEventListener('updatefound', () => {
-            const newWorker = reg.installing;
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                newWorker.postMessage({ type: 'SKIP_WAITING' });
-              }
-            });
-          });
-
           if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
         } catch (err) {
           console.error("SW reg falló:", err);
-        }
-      });
-
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
-          refreshing = true;
-          window.location.reload();
         }
       });
     }
