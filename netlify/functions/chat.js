@@ -5,135 +5,136 @@
  * chat.js (Netlify Function)
  *
  * SECURE V2026-02-26 (PRO)
- * - Prompt injection: contexto sanitizado (sin llaves/brackets/saltos).
- * - Gemini 1.0/1.5 ya está retirado (responde 404). Default actualizado.
- * - Implementación alineada con endpoint oficial `models:generateContent`.
- *   https://generativelanguage.googleapis.com/v1beta/models/*:generateContent
+ * - Gemini auth correcta: x-goog-api-key header
+ * - Default model actualizado: gemini-2.5-flash-lite
+ * - Manejo de error "model not found" con fallback automático
  * =========================================================
  */
 
 const { jsonResponse, handleOptions, safeJsonParse } = require("./_shared");
 
-// Sanitización para reducir prompt-injection (quita caracteres de control)
-const sanitizeContext = (str) =>
-  String(str || "Ninguno")
+const sanitizeContext = (str) => {
+  return String(str || "Ninguno")
     .replace(/[\[\]{}<>\\\n\r]/g, " ")
-    .replace(/\s+/g, " ")
     .trim()
-    .substring(0, 180);
+    .substring(0, 150);
+};
 
-// Feb 2026: default robusto (2.5) para evitar 404 por modelos retirados.
-const DEFAULT_MODEL = "gemini-2.5-flash-lite";
+async function callGemini({ apiKey, model, systemText, userText }) {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    model
+  )}:generateContent`;
+
+  const payload = {
+    systemInstruction: { parts: [{ text: systemText }] },
+    contents: [{ role: "user", parts: [{ text: userText }] }],
+    generationConfig: { temperature: 0.4, maxOutputTokens: 400 },
+  };
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
+}
 
 exports.handler = async (event) => {
   const origin = event?.headers?.origin || event?.headers?.Origin || "*";
 
   try {
     if (event.httpMethod === "OPTIONS") return handleOptions(event);
-    if (event.httpMethod !== "POST") {
+    if (event.httpMethod !== "POST")
       return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
-    }
 
     const body = safeJsonParse(event.body) || {};
     const message = String(body.message || "").trim().substring(0, 1000);
     const context = body.context || {};
 
-    if (!message) {
+    if (!message)
       return jsonResponse(400, { ok: false, error: "Se requiere un mensaje válido." }, origin);
-    }
 
-    const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
-    if (!apiKey) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey)
       return jsonResponse(200, { ok: false, error: "El módulo de inteligencia no está conectado." }, origin);
-    }
 
-    const model = String(process.env.GEMINI_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
+    // Default actualizado (Feb 2026)
+    const preferredModel = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+    const fallbackModel = "gemini-2.5-flash";
 
-    // Contexto del usuario (sanitizado)
     const safeProduct = sanitizeContext(context.currentProduct);
     const safeCartItems = sanitizeContext(context.cartItems);
     const safeTotal = sanitizeContext(context.cartTotal);
 
     const sys = `Eres SCORE AI, el Agente Comercial Autónomo y Experto de Score Store (Merch Oficial SCORE International).
-Tu objetivo principal es VENDER, asistir premium y cerrar transacciones.
-Tono: Tech Off-Road, cinematográfico, seguro, persuasivo, elegante y directo.
+Tu objetivo principal es VENDER, asistir de forma premium y cerrar transacciones usando psicología del consumidor (escasez, prueba social, autoridad de marca).
+Tono: "Tech Off-Road", cinematográfico, seguro, persuasivo, elegante y directo.
 
-[DATOS OFICIALES]
+[DATOS OFICIALES DE CONTACTO CORPORATIVO]
 - Correo Soporte/Ventas: ventas.unicotextil@gmail.com
-- WhatsApp Oficial: 6642368701
+- WhatsApp Oficial: 6642368701 (664 236 8701). Entrégalo si el usuario exige contacto humano, mayoreo o soporte complejo.
 
-[TELEMETRÍA]
-- Viendo: SKU (${safeProduct})
-- Carrito: ${safeCartItems}
-- Total: ${safeTotal}
+[TELEMETRÍA ACTUAL DEL USUARIO]
+- Viendo actualmente: SKU (${safeProduct})
+- En su carrito tiene: ${safeCartItems}
+- Total en su carrito: ${safeTotal}
 
-[COMANDOS]
-Si el usuario quiere comprar el SKU que está viendo (${safeProduct}), termina tu respuesta con:
-[ACTION:ADD_TO_CART:${safeProduct}]
-Si el usuario quiere pagar o ver carrito, termina con:
-[ACTION:OPEN_CART]
+[CAPACIDADES DE AGENTE AUTÓNOMO - EJECUCIÓN EN VIVO]
+TIENES EL PODER DE CONTROLAR LA PANTALLA DEL USUARIO MEDIANTE COMANDOS.
+Si detectas intenciones claras, debes incluir EXACTAMENTE la etiqueta correspondiente al FINAL de tu respuesta.
+- Si el usuario te pide: "agrega esto", "quiero comprar este", "dame una" (y sabes el SKU que está viendo: ${safeProduct}), usa: [ACTION:ADD_TO_CART:${safeProduct}]
+- Si el usuario dice: "quiero pagar", "ver mi carrito", "dónde pago", "proceder", usa: [ACTION:OPEN_CART]
 
-Reglas:
-- No inventes precios.
-- Envíos por Envía (MX/USA) y Pickup gratis en Tijuana.
-- Responde siempre en español, conciso.`;
+REGLAS DE ORO:
+- NUNCA inventes precios.
+- Envíos por Envía.com a MX/USA. Pickup gratis en fábrica en Tijuana.
+- Responde siempre en español, elegante y conciso.`;
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      model
-    )}:generateContent`;
-
-    const payload = {
-      systemInstruction: { parts: [{ text: sys }] },
-      contents: [{ role: "user", parts: [{ text: message }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 420 },
-    };
-
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // recomendado: header en lugar de query param
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify(payload),
+    // 1) intento con modelo preferido
+    let r = await callGemini({
+      apiKey,
+      model: preferredModel,
+      systemText: sys,
+      userText: message,
     });
 
-    const data = await res.json().catch(() => ({}));
+    // Si el modelo no existe / falla por modelo, hacemos fallback
+    if (!r.ok) {
+      const errMsg = String(r?.data?.error?.message || "");
+      const looksLikeModelIssue = r.status === 404 || /model.*not found/i.test(errMsg);
 
-    if (!res.ok) {
-      const msg = String(data?.error?.message || "");
-
-      if (res.status === 404) {
-        return jsonResponse(
-          200,
-          {
-            ok: false,
-            error:
-              "La IA está configurada con un modelo que ya no existe. Ajusta GEMINI_MODEL (recomendado: gemini-2.5-flash-lite).",
-            detail: msg.slice(0, 240) || "Model not found",
-          },
-          origin
-        );
+      if (looksLikeModelIssue && preferredModel !== fallbackModel) {
+        r = await callGemini({
+          apiKey,
+          model: fallbackModel,
+          systemText: sys,
+          userText: message,
+        });
       }
-
-      return jsonResponse(
-        200,
-        {
-          ok: false,
-          error: "SCORE AI no respondió. Intenta otra vez.",
-          detail: msg.slice(0, 240) || `HTTP ${res.status}`,
-        },
-        origin
-      );
     }
 
+    if (!r.ok) {
+      const msg = r?.data?.error?.message || "Error conectando con el clúster de IA.";
+      return jsonResponse(200, { ok: false, error: String(msg) }, origin);
+    }
+
+    const data = r.data || {};
     const reply =
       data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "SCORE AI está ocupado. Intenta otra vez en un momento.";
+      "SCORE AI no pudo generar respuesta. Intenta de nuevo.";
 
     return jsonResponse(200, { ok: true, reply: String(reply).trim() }, origin);
-  } catch (_e) {
-    return jsonResponse(200, { ok: false, error: "Sistemas tácticos de IA temporalmente fuera de línea." }, origin);
+  } catch (e) {
+    return jsonResponse(
+      200,
+      { ok: false, error: "Sistemas tácticos de IA temporalmente fuera de línea." },
+      origin
+    );
   }
 };
