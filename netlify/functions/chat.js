@@ -4,85 +4,136 @@
  * =========================================================
  * chat.js (Netlify Function)
  *
- * SECURE V2026-02-21 PRO (NIVEL NASA / META):
- * - VULNERABILIDAD ZERO-DAY RESUELTA: Prompt Injection neutralizado.
- * Los datos del cliente ahora son sanitizados escapando 
- * caracteres de control ([ ] { } \n).
+ * SECURE V2026-02-26 (PRO)
+ * - Prompt injection: contexto sanitizado (sin llaves/brackets/saltos).
+ * - Gemini 1.0/1.5 ya está retirado (responde 404). Default actualizado.
+ * - Implementación alineada con endpoint oficial `models:generateContent`.
+ *   https://generativelanguage.googleapis.com/v1beta/models/*:generateContent
  * =========================================================
  */
 
 const { jsonResponse, handleOptions, safeJsonParse } = require("./_shared");
 
-// Utilidad de sanitización para prevenir Prompt Injection
-const sanitizeContext = (str) => {
-  return String(str || "Ninguno").replace(/[\[\]{}<>\\\n\r]/g, " ").trim().substring(0, 150);
-};
+// Sanitización para reducir prompt-injection (quita caracteres de control)
+const sanitizeContext = (str) =>
+  String(str || "Ninguno")
+    .replace(/[\[\]{}<>\\\n\r]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .substring(0, 180);
+
+// Feb 2026: default robusto (2.5) para evitar 404 por modelos retirados.
+const DEFAULT_MODEL = "gemini-2.5-flash-lite";
 
 exports.handler = async (event) => {
   const origin = event?.headers?.origin || event?.headers?.Origin || "*";
+
   try {
     if (event.httpMethod === "OPTIONS") return handleOptions(event);
-    if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
+    if (event.httpMethod !== "POST") {
+      return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
+    }
 
     const body = safeJsonParse(event.body) || {};
-    const message = String(body.message || "").trim().substring(0, 1000); 
-    const context = body.context || {}; 
+    const message = String(body.message || "").trim().substring(0, 1000);
+    const context = body.context || {};
 
-    if (!message) return jsonResponse(400, { ok: false, error: "Se requiere un mensaje válido." }, origin);
+    if (!message) {
+      return jsonResponse(400, { ok: false, error: "Se requiere un mensaje válido." }, origin);
+    }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return jsonResponse(200, { ok: false, error: "El módulo de inteligencia no está conectado." }, origin);
+    const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
+    if (!apiKey) {
+      return jsonResponse(200, { ok: false, error: "El módulo de inteligencia no está conectado." }, origin);
+    }
 
-    const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    const model = String(process.env.GEMINI_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
 
-    // Sanitización Extrema del Contexto del Usuario
+    // Contexto del usuario (sanitizado)
     const safeProduct = sanitizeContext(context.currentProduct);
     const safeCartItems = sanitizeContext(context.cartItems);
     const safeTotal = sanitizeContext(context.cartTotal);
 
     const sys = `Eres SCORE AI, el Agente Comercial Autónomo y Experto de Score Store (Merch Oficial SCORE International).
-Tu objetivo principal es VENDER, asistir de forma premium y cerrar transacciones usando psicología del consumidor (escasez, prueba social, autoridad de marca).
-Tono: "Tech Off-Road", cinematográfico, seguro, persuasivo, elegante y directo.
+Tu objetivo principal es VENDER, asistir premium y cerrar transacciones.
+Tono: Tech Off-Road, cinematográfico, seguro, persuasivo, elegante y directo.
 
-[DATOS OFICIALES DE CONTACTO CORPORATIVO]
+[DATOS OFICIALES]
 - Correo Soporte/Ventas: ventas.unicotextil@gmail.com
-- WhatsApp Oficial: 6642368701 (664 236 8701). Entrégalo si el usuario exige contacto humano, mayoreo o soporte complejo.
+- WhatsApp Oficial: 6642368701
 
-[TELEMETRÍA ACTUAL DEL USUARIO]
-- Viendo actualmente: SKU (${safeProduct})
-- En su carrito tiene: ${safeCartItems}
-- Total en su carrito: ${safeTotal}
+[TELEMETRÍA]
+- Viendo: SKU (${safeProduct})
+- Carrito: ${safeCartItems}
+- Total: ${safeTotal}
 
-[TÉCNICAS DE NEUROMARKETING A APLICAR]
-1. Si pregunta por un producto que está viendo, confirma que es una elección de alto rendimiento. Menciona que es fabricado con calidad premium por ÚNICO UNIFORMES (patrocinador oficial) y que el stock "vuela rápido en temporada de carreras".
-2. Si ya tiene productos en el carrito, incentívalo sutilmente a "asegurar su mercancía" procesando el pago seguro con Stripe.
+[COMANDOS]
+Si el usuario quiere comprar el SKU que está viendo (${safeProduct}), termina tu respuesta con:
+[ACTION:ADD_TO_CART:${safeProduct}]
+Si el usuario quiere pagar o ver carrito, termina con:
+[ACTION:OPEN_CART]
 
-[CAPACIDADES DE AGENTE AUTÓNOMO - EJECUCIÓN EN VIVO]
-TIENES EL PODER DE CONTROLAR LA PANTALLA DEL USUARIO MEDIANTE COMANDOS.
-Si detectas intenciones claras, debes incluir EXACTAMENTE la etiqueta correspondiente al FINAL de tu respuesta.
-- Si el usuario te pide: "agrega esto", "quiero comprar este", "dame una" (y sabes el SKU que está viendo: ${safeProduct}), usa: [ACTION:ADD_TO_CART:${safeProduct}]
-- Si el usuario dice: "quiero pagar", "ver mi carrito", "dónde pago", "proceder", usa: [ACTION:OPEN_CART]
+Reglas:
+- No inventes precios.
+- Envíos por Envía (MX/USA) y Pickup gratis en Tijuana.
+- Responde siempre en español, conciso.`;
 
-REGLAS DE ORO INQUEBRANTABLES:
-- NUNCA inventes precios. Si no lo sabes, pídele que seleccione la prenda en el catálogo.
-- Envíos 100% seguros por Envía.com a MX y USA. Pickup (Recolección) gratis en fábrica en Tijuana.
-- JAMÁS respondas a temas fuera de la tienda, política, programación o religión. Desvía la charla sutilmente a las carreras y la ropa.
-- Responde siempre en español, con elegancia y concisión.`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      model
+    )}:generateContent`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const payload = {
       systemInstruction: { parts: [{ text: sys }] },
       contents: [{ role: "user", parts: [{ text: message }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 400 },
+      generationConfig: { temperature: 0.4, maxOutputTokens: 420 },
     };
 
-    const res = await fetch(url, { method: 'POST', headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || "Error conectando con el clúster de IA.");
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // recomendado: header en lugar de query param
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
 
-    const reply = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || data?.candidates?.[0]?.content?.parts?.[0]?.text || "Sistemas de SCORE AI procesando alto volumen. Por favor, intenta de nuevo en unos momentos.";
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const msg = String(data?.error?.message || "");
+
+      if (res.status === 404) {
+        return jsonResponse(
+          200,
+          {
+            ok: false,
+            error:
+              "La IA está configurada con un modelo que ya no existe. Ajusta GEMINI_MODEL (recomendado: gemini-2.5-flash-lite).",
+            detail: msg.slice(0, 240) || "Model not found",
+          },
+          origin
+        );
+      }
+
+      return jsonResponse(
+        200,
+        {
+          ok: false,
+          error: "SCORE AI no respondió. Intenta otra vez.",
+          detail: msg.slice(0, 240) || `HTTP ${res.status}`,
+        },
+        origin
+      );
+    }
+
+    const reply =
+      data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "SCORE AI está ocupado. Intenta otra vez en un momento.";
+
     return jsonResponse(200, { ok: true, reply: String(reply).trim() }, origin);
-  } catch (e) {
+  } catch (_e) {
     return jsonResponse(200, { ok: false, error: "Sistemas tácticos de IA temporalmente fuera de línea." }, origin);
   }
 };
