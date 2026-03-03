@@ -1,66 +1,103 @@
-/* css/override.css
-   SCORE STORE — Overrides NO destructivos (no rompen tu styles.css)
-   Objetivo: icono de Asistente siempre visible + accesibilidad + micro ajustes mobile.
-*/
+/* override.css */
+/* =========================================================
+   Override NO destructivo (iconos + fixes móviles)
+   ========================================================= */
 
-:root{
-  --ai-white: #ffffff;
-}
-
-/* El SVG siempre visible y consistente */
+/* icono Asistente */
 .assistant-icon{
-  width: 28px;
-  height: 28px;
-  display: inline-block;
-  fill: var(--ai-white);
-  filter: drop-shadow(0 10px 18px rgba(0,0,0,0.35));
-  transform: translateZ(0);
-}
-
-.assistant-icon--small{
-  width: 22px;
-  height: 22px;
-}
-
-.assistant-icon--menu{
   width: 18px;
   height: 18px;
-  margin-right: 8px;
-  fill: var(--red);
-  filter: drop-shadow(0 6px 12px rgba(225,6,0,0.25));
+  fill: currentColor;
+  stroke: none;
+  display: inline-block;
+}
+.assistant-icon--small{ width:16px; height:16px; }
+.assistant-icon--menu{ width:18px; height:18px; margin-right:10px; }
+.pulse-svg{ animation: pulseGlow 2.4s ease-in-out infinite; }
+
+@keyframes pulseGlow{
+  0%,100%{ filter: drop-shadow(0 0 0 rgba(225,6,0,0)); opacity:.9; transform: scale(1);}
+  50%{ filter: drop-shadow(0 0 10px rgba(225,6,0,.55)); opacity:1; transform: scale(1.06);}
 }
 
-/* Animación tipo “pulse” pero para SVG */
-.pulse-svg{
-  animation: pulseNeonRed 2s infinite;
+/* =========================================================
+   Performance + Promo Bar (Lighthouse + UX)
+   - Reduce blur on low-end / mobile
+   - content-visibility para secciones fuera de vista
+   - Promo bar (controlado por UnicOs)
+   ========================================================= */
+
+:root{
+  --topbar-h: 74px;
+  --glass-blur: 16px;
+  --glass-blur-strong: 22px;
 }
 
-/* Asegura contraste en el botón flotante */
-.floating-assistant .assistant-icon{
-  fill: #ffffff;
+@media (max-width: 768px){
+  :root{ --topbar-h: 66px; --glass-blur: 12px; --glass-blur-strong: 16px; }
 }
 
-/* Hover conserva tu vibe original */
-.floating-assistant.hover-fx:hover .assistant-icon{
-  fill: var(--red);
-  filter: drop-shadow(0 10px 18px rgba(225,6,0,0.25));
+/* Promo bar */
+.promo-bar{
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 1900;
+  background: linear-gradient(135deg, rgba(225,6,0,0.95), rgba(0,0,0,0.92));
+  color: #fff;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+.promo-bar__inner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+.promo-bar__text{
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: .2px;
+  line-height: 1.35;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.35);
 }
 
-/* Botón de la topbar (openAssistantBtn) */
-#openAssistantBtn .assistant-icon{
-  fill: var(--red);
-  filter: drop-shadow(0 10px 18px rgba(225,6,0,0.25));
+/* Reduce expensive blur/shadows (keeps the aesthetic) */
+.glass-panel,
+.vfx-glass-container,
+.topbar,
+.glass-drawer,
+.glass-header,
+.modal,
+.overlay,
+.checkout-loader,
+.sticky-mobile-cta,
+.sales-toast{
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
-/* Focus accesible sin arruinar tu estética */
-:where(button, a, input, select, textarea):focus-visible{
-  outline: 3px solid rgba(225,6,0,0.35);
-  outline-offset: 3px;
-  border-radius: 14px;
+.vfx-glass-container{
+  backdrop-filter: blur(var(--glass-blur-strong));
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong));
 }
 
-/* Mobile: evita choque entre floatingAssistant y scrollTop en pantallas chicas */
+/* content-visibility: reduce initial render cost */
+#catalogCarouselSection,
+.partners,
+.footer{
+  content-visibility: auto;
+  contain-intrinsic-size: 900px;
+}
+
+/* Avoid expensive paint on mobile */
 @media (max-width: 520px){
-  .floating-assistant{ width: 62px; height: 62px; right: 18px; }
-  .floating-scroll{ right: 18px; bottom: max(104px, calc(104px + var(--safe-bottom))); }
+  .catcard,
+  .card{
+    box-shadow: 0 10px 24px rgba(0,0,0,0.10) !important;
+  }
+  .hero__particles{ display:none; } /* keeps hero copy intact, reduces paint */
 }
+
+/* Prevent image distortion in partner row (layout-stable) */
+.partners__row img{ height: 36px; width: auto; }
