@@ -1,7 +1,10 @@
-/* SCORE STORE — Service Worker (PWA producción, resiliente v2.2.2)
-   Objetivo: evitar “se queda en versión vieja” sin romper offline */
-
-const CACHE_VERSION = "scorestore-vfx-pro-v2.2.2";
+/* SCORE STORE — Service Worker (PWA producción, resiliente v2.2.4)
+   Objetivo:
+   - Evitar “se queda en versión vieja”
+   - No cachear /data/*.json (catálogo/promos dinámicos)
+   - Lighthouse/DevTools: NO interceptar navegación (evita error Network.getResponseBody / charset)
+*/
+const CACHE_VERSION = "scorestore-vfx-pro-v2.2.4";
 const CACHE_NAME = CACHE_VERSION;
 
 const CORE_ASSETS = [
@@ -28,7 +31,8 @@ const isSafeToCache = (requestUrl) => {
 
   if (url.pathname.startsWith("/api/")) return false;
   if (url.pathname.includes("/.netlify/")) return false;
-
+  if (url.pathname.startsWith("/admin/")) return false;
+  if (url.pathname.endsWith(".json")) return false;
   return true;
 };
 
@@ -37,7 +41,11 @@ async function reloadAllClients() {
     const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     await Promise.all(
       clients.map((client) => {
-        try { return client.navigate(client.url); } catch { return null; }
+        try {
+          return client.navigate(client.url);
+        } catch {
+          return null;
+        }
       })
     );
   } catch {}
@@ -45,6 +53,7 @@ async function reloadAllClients() {
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
+
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
@@ -66,13 +75,9 @@ self.addEventListener("activate", (event) => {
       const keys = await caches.keys();
       await Promise.all(keys.map((key) => (key !== CACHE_NAME ? caches.delete(key) : null)));
 
-      if ("navigationPreload" in self.registration) {
-        try { await self.registration.navigationPreload.enable(); } catch {}
-      }
-
       await self.clients.claim();
 
-      // ✅ aplica assets nuevos en caliente
+      // ✅ Cuando un SW nuevo activa, recarga clientes para aplicar assets nuevos.
       await reloadAllClients();
     })()
   );
@@ -89,44 +94,18 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
 
   // Nunca interceptar proveedores
-  if (
-    url.origin.includes("stripe.com") ||
-    url.origin.includes("supabase.co") ||
-    url.origin.includes("envia.com")
-  ) {
+  if (url.origin.includes("stripe.com") || url.origin.includes("supabase.co") || url.origin.includes("envia.com")) {
     return;
   }
 
-  // 🔥 data dinámica: siempre red (NO SW)
-  if (url.origin === self.location.origin && url.pathname.startsWith("/data/")) {
-    return;
-  }
+  // 🔥 Navegación: NO interceptamos (Lighthouse/DevTools estable)
+  if (req.mode === "navigate") return;
 
-  // Navegación: network-first (con preload) + fallback cache
-  if (req.mode === "navigate") {
-    event.respondWith(
-      (async () => {
-        try {
-          const preload = await event.preloadResponse;
-          if (preload) return preload;
-
-          const fresh = await fetch(req);
-          if (fresh && fresh.ok && fresh.type === "basic") {
-            const cache = await caches.open(CACHE_NAME);
-            await cache.put(req, fresh.clone());
-          }
-          return fresh;
-        } catch {
-          const cached = await caches.match(req);
-          return cached || caches.match("/index.html") || new Response("Offline", { status: 503 });
-        }
-      })()
-    );
-    return;
-  }
+  // 🔥 data dinámica: siempre red
+  if (url.origin === self.location.origin && url.pathname.startsWith("/data/")) return;
 
   // CORE: cache-first
-  if (CORE_ASSETS.includes(url.pathname)) {
+  if (url.origin === self.location.origin && CORE_ASSETS.includes(url.pathname)) {
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE_NAME);
@@ -141,6 +120,26 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // JS/CSS: network-first (mitiga “versión vieja”)
+  if (url.origin === self.location.origin && (url.pathname.startsWith("/js/") || url.pathname.startsWith("/css/"))) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(CACHE_NAME);
+        try {
+          const fresh = await fetch(new Request(req.url, { cache: "reload" }));
+          if (fresh && fresh.ok && (fresh.type === "basic" || fresh.type === "cors")) {
+            await cache.put(req, fresh.clone());
+          }
+          return fresh;
+        } catch {
+          const cached = await cache.match(req, { ignoreSearch: true });
+          return cached || Response.error();
+        }
+      })()
+    );
+    return;
+  }
+
   // Resto: stale-while-revalidate
   if (isSafeToCache(req.url)) {
     event.respondWith(
@@ -150,7 +149,9 @@ self.addEventListener("fetch", (event) => {
 
         const networkPromise = fetch(req)
           .then(async (fresh) => {
-            if (fresh && fresh.ok) await cache.put(req, fresh.clone());
+            if (fresh && fresh.ok && (fresh.type === "basic" || fresh.type === "cors")) {
+              await cache.put(req, fresh.clone());
+            }
             return fresh;
           })
           .catch(() => null);
