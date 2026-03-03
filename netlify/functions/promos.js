@@ -3,7 +3,21 @@
 const { jsonResponse, handleOptions, supabaseAdmin, readJsonFile } = require("./_shared");
 
 const DEFAULT_SCORE_ORG_ID = "1f3b9980-a1c5-4557-b4eb-a75bb9a8aaa6";
-const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || "").trim());
+const isUuid = (s) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || "").trim());
+
+const withNoStore = (resp) => {
+  resp.headers = resp.headers || {};
+  resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate";
+  resp.headers["Pragma"] = "no-cache";
+  resp.headers["Expires"] = "0";
+  return resp;
+};
+
+const num = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
 
 const resolveOrgId = async (sb) => {
   const envId = process.env.SCORE_ORG_ID || process.env.DEFAULT_ORG_ID;
@@ -27,19 +41,6 @@ const resolveOrgId = async (sb) => {
   } catch {}
 
   return orgId;
-};
-
-const withNoStore = (resp) => {
-  resp.headers = resp.headers || {};
-  resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate";
-  resp.headers["Pragma"] = "no-cache";
-  resp.headers["Expires"] = "0";
-  return resp;
-};
-
-const num = (v) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
 };
 
 exports.handler = async (event) => {
@@ -68,6 +69,7 @@ exports.handler = async (event) => {
     }
 
     const now = Date.now();
+
     const rules = data
       .map((r) => ({
         code: String(r?.code || "").trim().toUpperCase(),
