@@ -135,3 +135,70 @@
   color: rgba(255,255,255,0.82);
   font-weight: 800;
 }
+
+/* =========================================================
+   Carruseles: más control + más claro que hay swipe
+   - "Quieto" al soltar (snap-stop)
+   - Hint elegante que desaparece al primer scroll
+   ========================================================= */
+
+/* Evita que el swipe se quede entre 2 imágenes */
+.card__track{
+  scroll-snap-stop: always;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+/* Hint de swipe para el carrusel de productos (no invade el diseño) */
+.product-swipe-hint{
+  position:absolute;
+  right: 10px;
+  top: 12px;
+  z-index: 6;
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.60);
+  color: #fff;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: .2px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  pointer-events:none;
+  opacity: .98;
+  transform: translateY(0);
+  transition: opacity .25s ease, transform .25s ease;
+}
+.product-swipe-hint__arr{
+  display:inline-block;
+  font-size: 14px;
+}
+.product-swipe-hint.is-hide{
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.product-swipe-hint.is-pulse .product-swipe-hint__arr{
+  animation: hintArrow 1.2s ease-in-out infinite;
+}
+@keyframes hintArrow{
+  0%,100%{ transform: translateX(0); opacity: .85; }
+  50%{ transform: translateX(6px); opacity: 1; }
+}
+
+/* Un poquito de "peek" visual del carrusel (sin cambiar layout) */
+.carousel-track{
+  scroll-snap-stop: always;
+  overscroll-behavior-x: contain;
+  scroll-padding-left: 8px;
+  scroll-padding-right: 72px;
+  padding-right: 72px;
+}
+@media (max-width: 520px){
+  .product-swipe-hint{ font-size: 11px; padding: 7px 10px; }
+}
