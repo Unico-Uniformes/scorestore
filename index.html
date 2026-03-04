@@ -7,7 +7,7 @@
   <meta name="description" content="Merch Oficial de Score International. Pago cifrado seguro con Stripe + Logística Envía.com." />
   <meta name="facebook-domain-verification" content="wuo7x5sxsjcer1t0epn1id5xgjp8su" />
   
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' https://js.stripe.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.stripe.com https://*.supabase.co; manifest-src 'self'; worker-src 'self'; frame-src https://js.stripe.com https://hooks.stripe.com;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https: https://www.facebook.com; script-src 'self' 'unsafe-inline' https://js.stripe.com https://connect.facebook.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.stripe.com https://*.supabase.co wss://*.supabase.co https://www.facebook.com https://connect.facebook.net; manifest-src 'self'; worker-src 'self'; frame-src https://js.stripe.com https://hooks.stripe.com;" />
   
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -37,6 +37,7 @@
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
 
   <link rel="preconnect" href="https://js.stripe.com" crossorigin />
+  <link rel="preconnect" href="https://connect.facebook.net" crossorigin />
   <link rel="preload" href="css/styles.css" as="style" />
   <link rel="preload" href="assets/fondo-pagina-score.webp" as="image" type="image/webp" />
   <link rel="preload" href="assets/hero.webp" as="image" type="image/webp" fetchpriority="high" />
@@ -122,6 +123,14 @@
     </div>
   </header>
 
+  <!-- Promo Bar (controlado por UnicOs / site_settings) -->
+  <div id="promoBar" class="promo-bar" role="status" aria-live="polite" hidden>
+    <div class="wrap promo-bar__inner">
+      <span id="promoBarText" class="promo-bar__text"></span>
+      <button id="promoBarClose" class="iconbtn iconbtn--dark hover-fx" type="button" aria-label="Cerrar aviso" title="Cerrar">✕</button>
+    </div>
+  </div>
+
   <section class="hero cinematic-hero" aria-label="Presentación Principal">
     <div class="hero__bg" aria-hidden="true"></div>
     <div class="hero__overlay" aria-hidden="true"></div>
@@ -198,6 +207,7 @@
         <img src="assets/logo-ford.webp" alt="Socio comercial: Ford" width="90" height="35" loading="lazy" />
         <img src="assets/logo-rzr.webp" alt="Socio comercial: Polaris RZR" width="90" height="35" loading="lazy" />
         <img src="assets/logo-bfgodrich.webp" alt="Socio comercial: BFGoodrich Tires" width="90" height="35" loading="lazy" />
+        <img src="assets/logo-bfgodrich.webp" alt="Socio comercial: BFGoodrich Tires" width="90" height="35" loading="lazy" />
       </div>
     </div>
   </section>
@@ -211,8 +221,8 @@
           Pago cifrado vía Stripe. Aceptamos OXXO Pay.<br>
           Logística inteligente internacional con Envía.com.<br><br>
           <div style="margin-top: 15px; font-weight: 600; display: flex; flex-direction: column; gap: 8px;">
-            <a href="mailto:ceo@hockerads.com" class="footer-contact-link" style="color: #ffffff;" aria-label="Enviar correo a soporte"><span class="footer-icon">✉️</span> ceo@hockerads.com</a>
-            <a href="https://wa.me/5216643011271" target="_blank" rel="noopener noreferrer" class="footer-contact-link" style="color: #ffffff;" aria-label="Contactar por WhatsApp"><span class="footer-icon" style="color:#25D366;">💬</span> 664 301 1271</a>
+            <a href="mailto:ventas.unicotextil@gmail.com" class="footer-contact-link" style="color: #ffffff;" aria-label="Enviar correo a soporte"><span class="footer-icon">✉️</span> ventas.unicotextil@gmail.com</a>
+            <a href="https://wa.me/5216642368701" target="_blank" rel="noopener noreferrer" class="footer-contact-link" style="color: #ffffff;" aria-label="Contactar por WhatsApp"><span class="footer-icon" style="color:#25D366;">💬</span> 664 236 8701</a>
           </div>
         </div>
       </div>
@@ -220,9 +230,9 @@
       <div class="footer__socials">
         <div class="social-title" style="color: #ffffff;">SÍGUENOS EN LA PISTA</div>
         <div class="social-links">
-          <a href="#" target="_blank" rel="noopener noreferrer" aria-label="Facebook Oficial" style="color: #d1d1d1;">Facebook</a>
-          <a href="#" target="_blank" rel="noopener noreferrer" aria-label="Instagram Oficial" style="color: #d1d1d1;">Instagram</a>
-          <a href="#" target="_blank" rel="noopener noreferrer" aria-label="YouTube Oficial" style="color: #d1d1d1;">YouTube</a>
+          <a href="https://www.facebook.com/uniforme.unico/" target="_blank" rel="noopener noreferrer" aria-label="Facebook Oficial" style="color: #d1d1d1;">Facebook</a>
+          <a href="https://www.instagram.com/uniformes.unico" target="_blank" rel="noopener noreferrer" aria-label="Instagram Oficial" style="color: #d1d1d1;">Instagram</a>
+          <a href="https://youtu.be/F4lw1EcehIA?si=jFBT9skFLs566g8N" target="_blank" rel="noopener noreferrer" aria-label="YouTube Oficial" style="color: #d1d1d1;">YouTube</a>
         </div>
       </div>
 
@@ -294,9 +304,6 @@
       <div class="muted">SCORE STORE OS v<span id="appVersionLabel">—</span></div>
     </div>
   </aside>
-
-  <!-- (TODO lo demás se queda IGUAL: cartDrawer, modals, etc.) -->
-  <!-- IMPORTANTE: dejo intacto el resto del archivo original para no romper tu CSS/JS -->
 
   <aside id="cartDrawer" class="drawer drawer--right glass-drawer" aria-label="Panel de tu carrito de compras" hidden>
     <div class="drawer__head">
@@ -386,9 +393,6 @@
     </div>
   </aside>
 
-  <!-- Mantengo todos tus modales exactamente igual.
-       Solo cambié el icono del header del asistente a SVG para que no desaparezca. -->
-
   <section id="assistantModal" class="modal" role="dialog" aria-modal="true" aria-label="Interfaz del Asistente SCORE" hidden>
     <div class="modal__panel modal__panel--tall vfx-modal-panel ai-panel-fx" style="border-radius: 12px; overflow: hidden; display: flex; flex-direction: column;">
       <div class="modal__head glass-header" style="background: var(--black-btn); color: white; border-bottom: none; padding: 15px 20px; flex-shrink: 0;">
@@ -416,8 +420,105 @@
     </div>
   </section>
 
-  <!-- El resto del HTML ORIGINAL sigue igual; si tu archivo real incluye más secciones,
-       pégalas aquí sin cambios. -->
+  <!-- Product Modal (RESTORED: requerido por js/main.js) -->
+  <section id="productModal" class="modal" role="dialog" aria-modal="true" aria-label="Detalles del producto" hidden>
+    <div class="modal__panel vfx-modal-panel">
+      <div class="modal__head sticky-header glass-header">
+        <button id="pmBackBtn" class="iconbtn hover-fx" type="button" aria-label="Regresar">←</button>
+        <h3 id="pmTitle" class="modal__title tech-text" style="text-align:center; flex:1; margin:0;">Producto</h3>
+        <button id="pmClose" class="iconbtn hover-fx tech-close" type="button" aria-label="Cerrar">✕</button>
+      </div>
+
+      <div class="modal__body">
+        <div class="pm__media">
+          <div id="pmCarousel" style="position:relative; width:100%; height:100%;"></div>
+        </div>
+
+        <div class="pm__info">
+          <div id="pmChips" class="pm__chips" aria-label="Etiquetas del producto"></div>
+
+          <div class="pm__row" style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom: 12px;">
+            <div class="pm__price-wrap">
+              <span class="ux-label" style="margin-bottom:6px;">Precio</span>
+              <div id="pmPrice" class="price" style="font-size: 28px; line-height: 1;"></div>
+            </div>
+            <span id="pmStockBadge" class="pill pill--logo" style="gap:6px; align-self:flex-end;" hidden></span>
+          </div>
+
+          <div id="pmDesc" class="pm__desc"></div>
+
+          <div class="pm__row" style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom: 10px;">
+            <span class="ux-label" style="margin:0;">Talla</span>
+            <button id="openSizeGuideBtn" class="btn btn--tiny btn--ghost hover-fx tech-ghost-btn" type="button" aria-label="Abrir guía de tallas">Guía de tallas</button>
+          </div>
+
+          <div id="pmSizePills" class="size-pill-container" aria-label="Selecciona talla"></div>
+
+          <div class="pm__row" style="margin-top: 16px;">
+            <span class="ux-label">Cantidad</span>
+            <div class="qty-stepper-large" aria-label="Selector de cantidad">
+              <button id="pmQtyDec" type="button" aria-label="Disminuir cantidad">−</button>
+              <span id="pmQtyDisplay" aria-live="polite">1</span>
+              <button id="pmQtyInc" type="button" aria-label="Aumentar cantidad">+</button>
+            </div>
+          </div>
+
+          <div class="pm__row" style="display:flex; gap:10px; margin-top: 18px; flex-wrap: wrap;">
+            <button id="pmShareBtn" class="btn btn--ghost hover-fx tech-ghost-btn" type="button" aria-label="Compartir producto">Compartir</button>
+          </div>
+
+          <div class="sticky-mobile-cta glass-mobile-cta">
+            <div class="ux-trust-badges" style="margin-bottom: 12px;">
+              <div class="trust-item">🔒 Pago cifrado Stripe</div>
+              <div class="trust-item">📦 Tracking automático</div>
+            </div>
+
+            <button id="pmAdd" class="btn btn--primary btn--block btn--large cinematic-btn neon-border" type="button" aria-label="Agregar al carrito">
+              Agregar al carrito
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Size Guide Modal (RESTORED) -->
+  <section id="sizeGuideModal" class="modal" role="dialog" aria-modal="true" aria-label="Guía de tallas" hidden>
+    <div class="modal__panel vfx-modal-panel">
+      <div class="modal__head sticky-header glass-header">
+        <h3 class="modal__title tech-text" style="margin:0;">Guía de tallas</h3>
+        <button id="closeSizeGuideBtn" class="iconbtn hover-fx tech-close" type="button" aria-label="Cerrar guía">✕</button>
+      </div>
+
+      <div class="modal__body" style="padding: 20px;">
+        <div class="glass-panel" style="padding:14px; border-radius: 14px; margin: 14px 0;">
+          <p style="margin:0; font-weight:800;">Cómo medir:</p>
+          <ol style="margin: 8px 0 0 18px; line-height:1.6; font-weight:600; color: var(--muted);">
+            <li><b>Pecho:</b> mide alrededor del torso, a la altura del pecho.</li>
+            <li><b>Largo:</b> mide desde el hombro hasta el final de la prenda.</li>
+          </ol>
+          <p class="hint" style="margin: 10px 0 0 0;">
+            Para medidas exactas por modelo, escríbenos por WhatsApp y te confirmamos la talla ideal.
+          </p>
+        </div>
+
+        <button id="understandSizeBtn" class="btn btn--primary btn--block btn--large cinematic-btn neon-border hover-fx" type="button">
+          Entendido
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Cookie banner (RESTORED: requerido por js/main.js) -->
+  <div id="cookieBanner" class="cookie glass-panel" role="dialog" aria-label="Preferencias de cookies" hidden>
+    <div class="cookie__text">
+      Usamos cookies para funcionamiento básico del carrito y para mejorar la experiencia. Puedes aceptar o rechazar.
+    </div>
+    <div class="cookie__actions">
+      <button id="cookieReject" class="btn btn--ghost hover-fx tech-ghost-btn" type="button">Rechazar</button>
+      <button id="cookieAccept" class="btn btn--primary hover-fx neon-border" type="button">Aceptar</button>
+    </div>
+  </div>
 
   <div id="toast" class="toast glass-panel" role="status" aria-live="polite" hidden></div>
 
