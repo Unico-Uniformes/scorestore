@@ -46,7 +46,25 @@ exports.handler = async (event) => {
 
   const defaults = {
     ok: true,
-    hero_title: null,
+    season_key: "default",
+    theme: {
+      accent: "#e10600",
+      accent2: "#111827",
+      vfx_level: 0.8,
+      particles: true,
+      bg_glow: true,
+      hero_bg_url: "",
+      logo_url: "",
+      season_badge_url: "",
+    },
+    copy: {
+      hero_title: null,
+      hero_subtitle: "",
+      cta_primary: "Explorar Colecciones",
+      cta_secondary: "Abrir Carrito",
+      section_categories: "Colecciones",
+      section_catalog: "Catálogo",
+    },
     promo_active: false,
     promo_text: "",
     pixel_id: "",
@@ -69,7 +87,7 @@ exports.handler = async (event) => {
 
     const { data } = await sb
       .from("site_settings")
-      .select("hero_title,promo_active,promo_text,pixel_id,updated_at")
+      .select("season_key,theme,copy,promo_active,promo_text,pixel_id,updated_at")
       .eq("organization_id", orgId)
       .limit(1)
       .maybeSingle();
@@ -77,14 +95,20 @@ exports.handler = async (event) => {
     if (!data) return withNoStore(jsonResponse(200, defaults, origin));
 
     return withNoStore(
-      jsonResponse(200, {
-        ...defaults,
-        hero_title: data.hero_title || null,
-        promo_active: !!data.promo_active,
-        promo_text: data.promo_text || "",
-        pixel_id: data.pixel_id || "",
-        updated_at: data.updated_at || null,
-      }, origin)
+      jsonResponse(
+        200,
+        {
+          ...defaults,
+          season_key: data.season_key || "default",
+          theme: typeof data.theme === "object" && data.theme ? { ...defaults.theme, ...data.theme } : defaults.theme,
+          copy: typeof data.copy === "object" && data.copy ? { ...defaults.copy, ...data.copy } : defaults.copy,
+          promo_active: !!data.promo_active,
+          promo_text: data.promo_text || "",
+          pixel_id: data.pixel_id || "",
+          updated_at: data.updated_at || null,
+        },
+        origin
+      )
     );
   } catch {
     return withNoStore(jsonResponse(200, defaults, origin));
