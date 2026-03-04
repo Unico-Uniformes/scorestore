@@ -69,7 +69,7 @@ const getProductsFromDB = async (sb, orgId, skus) => {
   const { data, error } = await sb
     .from("products")
     .select("sku,name,description,price_cents,price_mxn,images,sizes,image_url,stock,is_active,deleted_at")
-    .eq("organization_id", orgId)
+    .or(`org_id.eq.${orgId},organization_id.eq.${orgId}`)
     .in("sku", skus)
     .is("deleted_at", null)
     .eq("is_active", true)
@@ -148,14 +148,13 @@ const getPromoFromLocal = (promosData, code) => {
   };
 };
 
-// Aplica descuento modificando precios (Stripe no acepta unit_amount negativo)
+// Stripe no acepta unit_amount negativo -> descuento por reducción de unit_amount
 function cloneLineItem(li, unitAmount, qty) {
   const out = JSON.parse(JSON.stringify(li));
   out.price_data.unit_amount = Math.max(0, Math.floor(Number(unitAmount) || 0));
   out.quantity = Math.max(1, Math.floor(Number(qty) || 1));
   return out;
 }
-
 function sumLineItemsCents(items) {
   let s = 0;
   for (const li of Array.isArray(items) ? items : []) {
@@ -165,7 +164,6 @@ function sumLineItemsCents(items) {
   }
   return s;
 }
-
 function applyFixedDiscount(lineItems, discountCents) {
   let remaining = Math.max(0, Math.floor(Number(discountCents) || 0));
   if (!remaining) return { lineItems, discountApplied: 0 };
@@ -174,18 +172,11 @@ function applyFixedDiscount(lineItems, discountCents) {
   let applied = 0;
 
   for (const li of lineItems) {
-    if (remaining <= 0) {
-      out.push(li);
-      continue;
-    }
+    if (remaining <= 0) { out.push(li); continue; }
 
     const u = Number(li?.price_data?.unit_amount || 0) || 0;
     const q = Number(li?.quantity || 0) || 0;
-
-    if (u <= 0 || q <= 0) {
-      out.push(li);
-      continue;
-    }
+    if (u <= 0 || q <= 0) { out.push(li); continue; }
 
     const maxReduce = u * q;
     const take = Math.min(remaining, maxReduce);
@@ -209,15 +200,11 @@ function applyFixedDiscount(lineItems, discountCents) {
 
   return { lineItems: out, discountApplied: applied };
 }
-
 function applyPromoToLineItems(lineItems, promo, subtotalCents) {
   if (!promo) return { lineItems, discountApplied: 0, freeShipping: false };
 
   const type = String(promo.type || "").toLowerCase();
-
-  if (type === "free_shipping") {
-    return { lineItems, discountApplied: 0, freeShipping: true };
-  }
+  if (type === "free_shipping") return { lineItems, discountApplied: 0, freeShipping: true };
 
   if (type === "percent") {
     const raw = num(promo.value);
@@ -240,15 +227,11 @@ exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return handleOptions(event);
   if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
 
-  // CORS: solo origins confiables (si existe Origin)
   const reqOrigin = event?.headers?.origin || event?.headers?.Origin || "";
-  if (reqOrigin && !isAllowedOrigin(reqOrigin)) {
-    return jsonResponse(403, { ok: false, error: "Origin no permitido" }, origin);
-  }
+  if (reqOrigin && !isAllowedOrigin(reqOrigin)) return jsonResponse(403, { ok: false, error: "Origin no permitido" }, origin);
 
   try {
     const body = JSON.parse(event.body || "{}");
-
     const items = Array.isArray(body?.items) ? body.items : [];
     if (!items.length) return jsonResponse(400, { ok: false, error: "Carrito vacío" }, origin);
 
@@ -271,7 +254,6 @@ exports.handler = async (event) => {
 
     const skuList = Array.from(new Set(normalizedItems.map((i) => i.sku))).slice(0, 80);
 
-    // Data source: Supabase (si existe) -> fallback JSON local
     const sb = supabaseAdmin();
     let orgId = DEFAULT_SCORE_ORG_ID;
     let productsIndex = null;
@@ -286,7 +268,6 @@ exports.handler = async (event) => {
     if (!productsIndex) productsIndex = loadLocalCatalogIndex();
     if (!promoRule && promo_code) promoRule = getPromoFromLocal(loadLocalPromos(), promo_code);
 
-    // Build base line items
     let line_items = [];
     let itemsQty = 0;
 
@@ -298,11 +279,8 @@ exports.handler = async (event) => {
       const unitPrice = Math.max(0, Number(p.priceCents || p.price_cents || 0));
       if (!unitPrice) return jsonResponse(400, { ok: false, error: `Precio inválido: ${it.sku}` }, origin);
 
-      // Stock: solo si está definido (si no trackeas stock, no bloqueamos)
       const stock = Number(p.stock);
-      if (Number.isFinite(stock) && stock <= 0) {
-        return jsonResponse(409, { ok: false, error: `Sin stock: ${it.sku}` }, origin);
-      }
+      if (Number.isFinite(stock) && stock <= 0) return jsonResponse(409, { ok: false, error: `Sin stock: ${it.sku}` }, origin);
 
       itemsQty += it.qty;
 
@@ -321,18 +299,15 @@ exports.handler = async (event) => {
 
     const subtotalCents = sumLineItemsCents(line_items);
 
-    // Promo min check (sobre subtotal original)
     if (promoRule) {
       const min = num(promoRule.min_amount_mxn) || 0;
       const subtotalMXN = subtotalCents / 100;
       if (subtotalMXN < min) promoRule = null;
     }
 
-    // Apply promo to prices
     const promoApplied = applyPromoToLineItems(line_items, promoRule, subtotalCents);
     line_items = promoApplied.lineItems;
 
-    // Shipping
     const needsZip = shipping_mode === "envia_mx" || shipping_mode === "envia_us";
     let shippingCents = 0;
     let shippingCountry = "MX";
@@ -352,12 +327,10 @@ exports.handler = async (event) => {
     const freeShipping = !!promoApplied.freeShipping;
     const finalShippingCents = freeShipping ? 0 : shippingCents;
 
-    // Stripe payment methods
     const pmTypes = ["card"];
     if (String(process.env.STRIPE_ENABLE_OXXO || "0") === "1") pmTypes.push("oxxo");
 
     const SITE_URL = String(process.env.SITE_URL || "https://scorestore.netlify.app").replace(/\/+$/, "");
-
     const stripe = getStripe();
 
     const sessionParams = {
