@@ -23,13 +23,11 @@
 /* =========================================================
    Performance + Promo Bar
    ========================================================= */
-
 :root{
   --topbar-h: 74px;
   --glass-blur: 16px;
   --glass-blur-strong: 22px;
 }
-
 @media (max-width: 768px){
   :root{ --topbar-h: 66px; --glass-blur: 12px; --glass-blur-strong: 16px; }
 }
@@ -59,47 +57,32 @@
   text-shadow: 0 2px 10px rgba(0,0,0,0.35);
 }
 
-/* Reduce expensive blur/shadows (keeps aesthetic) */
-.glass-panel,
-.vfx-glass-container,
-.topbar,
-.glass-drawer,
-.glass-header,
-.modal,
-.overlay,
-.checkout-loader,
-.sticky-mobile-cta,
-.sales-toast{
+/* Reduce expensive blur/shadows */
+.glass-panel, .vfx-glass-container, .topbar, .glass-drawer, .glass-header, .modal, .overlay, .checkout-loader, .sticky-mobile-cta, .sales-toast{
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
 }
-
 .vfx-glass-container{
   backdrop-filter: blur(var(--glass-blur-strong));
   -webkit-backdrop-filter: blur(var(--glass-blur-strong));
 }
 
-/* content-visibility: reduce initial render cost */
-#catalogCarouselSection,
-.partners,
-.footer{
+/* content-visibility for perf */
+#catalogCarouselSection, .partners, .footer{
   content-visibility: auto;
   contain-intrinsic-size: 900px;
 }
 
-/* Avoid expensive paint on mobile */
+/* Mobile: reduce paint */
 @media (max-width: 520px){
-  .catcard,
-  .card{
-    box-shadow: 0 10px 24px rgba(0,0,0,0.10) !important;
-  }
+  .catcard, .card{ box-shadow: 0 10px 24px rgba(0,0,0,0.10) !important; }
   .hero__particles{ display:none; }
 }
 
-/* Prevent image distortion in partner row */
+/* Partner logos stable */
 .partners__row img{ height: 36px; width: auto; }
 
-/* ✅ Fix Lighthouse: image-aspect-ratio on category logos */
+/* ✅ Fix Lighthouse: image-aspect-ratio */
 .catcard__logo{
   height: auto !important;
   width: auto;
@@ -108,9 +91,8 @@
 }
 
 /* =========================================================
-   Carrusel: que se entienda que es deslizable + "snap" visual
+   Carrusel: que se entienda que es deslizable + “snap”
    ========================================================= */
-
 .carousel-hint{
   display:inline-flex;
   align-items:center;
@@ -124,25 +106,23 @@
   border: 1px solid rgba(255,255,255,0.12);
   box-shadow: 0 10px 25px rgba(0,0,0,0.25);
 }
-
 .carousel-hint__arrow{
   display:inline-block;
   animation: hintSwipe 1.4s ease-in-out infinite;
 }
-
 @keyframes hintSwipe{
   0%,100%{ transform: translateX(0); opacity: .85; }
   50%{ transform: translateX(8px); opacity: 1; }
 }
 
-/* Make the carousel show a bit of the next card */
+/* track peek */
 .carousel-track{
   scroll-padding-left: 14px;
   padding-left: 14px;
   padding-right: 14px;
 }
 
-/* Edge fade to scream "hay más" */
+/* Edge fade */
 .carousel-fade{
   pointer-events:none;
   position: absolute;
@@ -153,18 +133,3 @@
 }
 .carousel-fade--left{ left: 0; background: linear-gradient(90deg, rgba(0,0,0,0.28), rgba(0,0,0,0)); }
 .carousel-fade--right{ right: 0; background: linear-gradient(270deg, rgba(0,0,0,0.28), rgba(0,0,0,0)); }
-
-/* =========================================================
-   Season presets (suaves, sin romper)
-   Se activan con <html data-season="...">
-   ========================================================= */
-
-html[data-season="navidad"]{
-  --red: #ef4444;
-}
-html[data-season="halloween"]{
-  --red: #f97316;
-}
-html[data-season="verano"]{
-  --red: #06b6d4;
-}
