@@ -42,46 +42,29 @@ exports.handler = async (event) => {
   const origin = event?.headers?.origin || event?.headers?.Origin || "*";
 
   if (event.httpMethod === "OPTIONS") return handleOptions(event);
-  if (event.httpMethod !== "GET") {
-    return withNoStore(jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
-  }
+  if (event.httpMethod !== "GET") return withNoStore(jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
 
   const defaults = {
     ok: true,
-    org_id: DEFAULT_SCORE_ORG_ID,
-    season_key: "default",
-    maintenance_mode: false,
     hero_title: null,
     hero_image: null,
     promo_active: false,
     promo_text: "",
     pixel_id: "",
-    contact_email: process.env.SUPPORT_EMAIL || "ventas.unicotextil@gmail.com",
-    theme: {
-      accent: "#e10600",
-      accent2: "#111827",
-      vfx_level: 0.8,
-      particles: true,
-      bg_glow: true,
-      hero_bg_url: "",
-      logo_url: "",
-      season_badge_url: "",
-    },
-    home: {
-      hero_subtitle: "",
-      cta_primary: "Explorar Colecciones",
-      cta_secondary: "Abrir Carrito",
-      section_categories: "Colecciones",
-      section_catalog: "Catálogo",
-    },
-    socials: {
+    maintenance_mode: false,
+    season_key: "default",
+    theme: {},
+    home: {},
+    socials: {},
+    updated_at: null,
+    contact: {
+      email: process.env.SUPPORT_EMAIL || "ventas.unicotextil@gmail.com",
+      whatsapp_e164: process.env.SUPPORT_WHATSAPP_E164 || "5216642368701",
+      whatsapp_display: process.env.SUPPORT_WHATSAPP_DISPLAY || "664 236 8701",
       facebook: process.env.SOCIAL_FACEBOOK || "https://www.facebook.com/uniforme.unico/",
       instagram: process.env.SOCIAL_INSTAGRAM || "https://www.instagram.com/uniformes.unico",
       youtube: process.env.SOCIAL_YOUTUBE || "https://youtu.be/F4lw1EcehIA?si=jFBT9skFLs566g8N",
-      whatsapp_e164: process.env.SUPPORT_WHATSAPP_E164 || "5216642368701",
-      whatsapp_display: process.env.SUPPORT_WHATSAPP_DISPLAY || "664 236 8701",
     },
-    updated_at: null,
   };
 
   const sb = supabaseAdmin();
@@ -90,42 +73,39 @@ exports.handler = async (event) => {
   try {
     const orgId = await resolveOrgId(sb);
 
-    const { data, error } = await sb
+    // Tu tabla real trae org_id NOT NULL (y también existe organization_id nullable en varios schemas),
+    // así que leemos por ambas rutas sin romper.
+    const { data } = await sb
       .from("site_settings")
-      .select(
-        "org_id, season_key, maintenance_mode, hero_title, hero_image, promo_active, promo_text, pixel_id, contact_email, theme, home, socials, updated_at"
-      )
-      .eq("org_id", orgId)
+      .select("hero_title,hero_image,promo_active,promo_text,pixel_id,maintenance_mode,season_key,theme,home,socials,updated_at,contact_email")
+      .or(`org_id.eq.${orgId},organization_id.eq.${orgId}`)
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (error || !data) {
-      return withNoStore(jsonResponse(200, { ...defaults, org_id: orgId }, origin));
-    }
-
-    const safeJson = (v, fallback) => {
-      if (!v || typeof v !== "object") return fallback;
-      return v;
-    };
+    if (!data) return withNoStore(jsonResponse(200, defaults, origin));
 
     return withNoStore(
       jsonResponse(
         200,
         {
           ...defaults,
-          org_id: data.org_id || orgId,
-          season_key: String(data.season_key || "default"),
-          maintenance_mode: !!data.maintenance_mode,
           hero_title: data.hero_title || null,
           hero_image: data.hero_image || null,
           promo_active: !!data.promo_active,
           promo_text: data.promo_text || "",
           pixel_id: data.pixel_id || "",
-          contact_email: data.contact_email || defaults.contact_email,
-          theme: safeJson(data.theme, defaults.theme),
-          home: safeJson(data.home, defaults.home),
-          socials: safeJson(data.socials, defaults.socials),
+          maintenance_mode: !!data.maintenance_mode,
+          season_key: data.season_key || "default",
+          theme: data.theme || {},
+          home: data.home || {},
+          socials: data.socials || {},
           updated_at: data.updated_at || null,
+          contact: {
+            ...defaults.contact,
+            email: data.contact_email || defaults.contact.email,
+          },
         },
         origin
       )
