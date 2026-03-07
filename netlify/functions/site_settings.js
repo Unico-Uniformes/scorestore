@@ -48,13 +48,36 @@ const resolveOrgId = async (sb) => {
 };
 
 function buildDefaults() {
+  const fallbackEmail =
+    process.env.SUPPORT_EMAIL ||
+    process.env.ORIGIN_MX_EMAIL ||
+    "ventas.unicotextil@gmail.com";
+
+  const fallbackPhone =
+    process.env.SUPPORT_PHONE ||
+    process.env.ORIGIN_MX_PHONE ||
+    "";
+
+  const fallbackWaE164 =
+    process.env.SUPPORT_WHATSAPP_E164 ||
+    String(process.env.WHATSAPP_TO || "")
+      .replace(/[^\d]/g, "")
+      .trim() ||
+    "5216642368701";
+
+  const fallbackWaDisplay =
+    process.env.SUPPORT_WHATSAPP_DISPLAY ||
+    process.env.WHATSAPP_PHONE_NUMBER_ID ||
+    process.env.ORIGIN_MX_PHONE ||
+    "664 236 8701";
+
   return {
     ok: true,
     hero_title: null,
     hero_image: null,
     promo_active: false,
     promo_text: "",
-    pixel_id: "",
+    pixel_id: process.env.META_PIXEL_ID || "",
     maintenance_mode: false,
     season_key: "default",
     theme: {
@@ -63,7 +86,7 @@ function buildDefaults() {
       particles: true,
     },
     home: {
-      footer_note: "",
+      footer_note: "Merch oficial de SCORE International.",
       shipping_note: "",
       returns_note: "",
       support_hours: "",
@@ -75,10 +98,10 @@ function buildDefaults() {
       tiktok: process.env.SOCIAL_TIKTOK || "",
     },
     contact: {
-      email: process.env.SUPPORT_EMAIL || "ventas.unicotextil@gmail.com",
-      phone: process.env.SUPPORT_PHONE || "",
-      whatsapp_e164: process.env.SUPPORT_WHATSAPP_E164 || "5216642368701",
-      whatsapp_display: process.env.SUPPORT_WHATSAPP_DISPLAY || "664 236 8701",
+      email: fallbackEmail,
+      phone: fallbackPhone,
+      whatsapp_e164: fallbackWaE164,
+      whatsapp_display: fallbackWaDisplay,
     },
     updated_at: null,
   };
@@ -146,7 +169,7 @@ exports.handler = async (event) => {
           hero_image: safeStr(data.hero_image) || defaults.hero_image,
           promo_active: !!data.promo_active,
           promo_text: safeStr(data.promo_text),
-          pixel_id: safeStr(data.pixel_id),
+          pixel_id: safeStr(data.pixel_id) || defaults.pixel_id,
           maintenance_mode: !!data.maintenance_mode,
           season_key: safeStr(data.season_key || "default"),
           theme: {
