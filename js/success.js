@@ -1,108 +1,235 @@
-<!doctype html>
-<html lang="es-MX">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0f0f0f" />
-  <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
+(() => {
+  "use strict";
 
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  const $ = (sel, root = document) => root.querySelector(sel);
 
-  <title>Estado de Pedido — SCORE STORE</title>
+  const heroEmoji = $("#heroEmoji");
+  const heroTitle = $("#heroTitle");
+  const heroText = $("#heroText");
 
-  <link rel="manifest" href="site.webmanifest" />
-  <link rel="icon" href="assets/icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+  const orderId = $("#orderId");
+  const orderTotal = $("#orderTotal");
+  const orderStatusText = $("#orderStatusText");
+  const orderEmail = $("#orderEmail");
+  const orderShipMode = $("#orderShipMode");
 
-  <link rel="stylesheet" href="css/styles.css" />
-</head>
-<body style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; overflow: hidden; background-color: #0f0f0f;">
+  const extraHint = $("#extraHint");
+  const copyBtn = $("#copyBtn");
 
-  <div class="hero__bg" style="position:fixed; inset:0; z-index:-2; animation: slowPan 30s linear infinite alternate; filter: brightness(0.3) blur(2px);"></div>
+  const money = (value) => {
+    const n = Number(value);
+    const safe = Number.isFinite(n) ? n : 0;
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      maximumFractionDigits: 2,
+    }).format(safe);
+  };
 
-  <main class="wrap section vfx-glass-container" style="max-width: 680px; position: relative; z-index: 10; padding: 40px; margin-top: 20px;">
-    <img src="assets/logo-score.webp" alt="Score Store" style="height: 60px; margin: 0 auto 20px auto; filter: drop-shadow(0 5px 15px rgba(225,6,0,0.5)); animation: float 3s infinite ease-in-out;">
+  const safeStr = (v, d = "—") =>
+    typeof v === "string" && v.trim() ? v.trim() : d;
 
-    <div id="heroEmoji" style="font-size: 60px; margin-bottom: 10px; animation: scaleIn 0.5s ease; filter: drop-shadow(0 0 10px rgba(255,255,255,0.4));">🏁</div>
-    <h1 id="heroTitle" class="tech-text" style="color: var(--black-btn); font-weight: 900; margin-bottom: 12px; font-size: 32px;">Cargando estado…</h1>
+  const getSessionId = () => {
+    const url = new URL(window.location.href);
+    return String(url.searchParams.get("session_id") || "").trim();
+  };
 
-    <p id="heroText" class="hint" style="max-width: 560px; margin: 0 auto 18px; font-size: 16px; color: var(--text);">
-      Estableciendo conexión encriptada para verificar tu pago con Stripe.
-    </p>
+  function setHero(type, title, text) {
+    if (type === "paid") {
+      if (heroEmoji) heroEmoji.textContent = "✅";
+      if (heroTitle) heroTitle.textContent = title || "Pago confirmado";
+      if (heroText) {
+        heroText.textContent =
+          text ||
+          "Tu compra quedó registrada correctamente. Ya estamos preparando tu pedido oficial.";
+      }
+      return;
+    }
 
-    <div class="glass-panel" style="text-align:left; margin: 25px 0; padding: 20px; border-radius: 12px;">
-      <div style="display:flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
-        <div>
-          <div class="muted" style="font-size: 12px; font-weight: bold;">ID de Pedido Oficial</div>
-          <div id="orderId" style="font-weight: 900; font-family: monospace; color: var(--red); font-size: 15px;">—</div>
-        </div>
-        <div style="text-align:right;">
-          <div class="muted" style="font-size: 12px; font-weight: bold;">Total Pagado</div>
-          <div id="orderTotal" class="tech-price" style="font-weight: 900; font-size: 20px; color: var(--black-btn);">—</div>
-        </div>
-      </div>
+    if (type === "pending") {
+      if (heroEmoji) heroEmoji.textContent = "⏳";
+      if (heroTitle) heroTitle.textContent = title || "Pago pendiente";
+      if (heroText) {
+        heroText.textContent =
+          text ||
+          "Tu orden fue creada, pero el pago todavía está en proceso de confirmación.";
+      }
+      return;
+    }
 
-      <div id="orderMetaBox" style="margin-top: 18px; display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 10px;">
-        <div class="glass-panel" style="padding:12px;">
-          <div class="muted" style="font-size:12px; font-weight: bold;">Estado</div>
-          <div id="orderStatusText" style="font-weight:900; color: var(--black-btn);">—</div>
-        </div>
-        <div class="glass-panel" style="padding:12px;">
-          <div class="muted" style="font-size:12px; font-weight: bold;">Correo</div>
-          <div id="orderEmail" style="font-weight:900; color: var(--black-btn); word-break: break-word;">—</div>
-        </div>
-        <div class="glass-panel" style="padding:12px;">
-          <div class="muted" style="font-size:12px; font-weight: bold;">Entrega</div>
-          <div id="orderShipMode" style="font-weight:900; color: var(--black-btn);">—</div>
-        </div>
-      </div>
+    if (type === "error") {
+      if (heroEmoji) heroEmoji.textContent = "⚠️";
+      if (heroTitle) heroTitle.textContent = title || "No pude verificar tu pedido";
+      if (heroText) {
+        heroText.textContent =
+          text ||
+          "No logramos recuperar el estado de tu compra en este momento. Intenta de nuevo en unos minutos.";
+      }
+      return;
+    }
 
-      <div style="margin-top: 20px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
-        <button id="copyBtn" class="btn btn--black btn--tiny hover-fx neon-border" type="button">Copiar ID</button>
-        <a class="btn btn--primary btn--tiny cinematic-btn" href="index.html">← Volver a la Tienda</a>
-      </div>
-    </div>
+    if (heroEmoji) heroEmoji.textContent = "🏁";
+    if (heroTitle) heroTitle.textContent = title || "Estado del pedido";
+    if (heroText) {
+      heroText.textContent =
+        text ||
+        "Estamos verificando tu información de compra.";
+    }
+  }
 
-    <div id="extraHint" class="hint" style="font-size: 13px; color: var(--muted); font-weight: bold; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;">
-      Si pagaste en efectivo vía OXXO, la confirmación puede tardar hasta 1 día hábil. Te enviaremos actualizaciones a tu correo.
-    </div>
+  function normalizeShipMode(mode) {
+    const m = String(mode || "").toLowerCase().trim();
+    if (m === "pickup") return "Recolección en fábrica";
+    if (m === "envia_mx") return "Envío nacional MX";
+    if (m === "envia_us") return "Envío USA";
+    return "No definido";
+  }
 
-    <div class="glass-panel" style="margin-top:18px; padding:16px; border-radius: 12px;">
-      <div style="font-size: 12px; font-weight: 900; color: var(--muted); text-transform: uppercase; letter-spacing: .08em;">Soporte</div>
-      <div style="margin-top: 8px; font-weight:700; color: var(--text); line-height:1.8;">
-        Correo: <a id="successSupportEmail" href="mailto:ventas.unicotextil@gmail.com">ventas.unicotextil@gmail.com</a><br>
-        WhatsApp: <a id="successSupportWa" href="https://wa.me/5216642368701" target="_blank" rel="noopener">664 236 8701</a>
-      </div>
-    </div>
-  </main>
+  function applyOrderData(data) {
+    const paymentStatus = String(data?.payment_status || "").toLowerCase().trim();
+    const status = String(data?.status || "").toLowerCase().trim();
 
-  <script src="js/success.js"></script>
-  <script>
-    (async () => {
+    if (paymentStatus === "paid" || status === "paid") {
+      setHero(
+        "paid",
+        "Pago confirmado",
+        "Tu compra fue aprobada y quedó registrada correctamente. Ya estamos preparando tu pedido oficial."
+      );
+    } else if (
+      paymentStatus === "unpaid" ||
+      status === "pending_payment" ||
+      status === "pending"
+    ) {
+      setHero(
+        "pending",
+        "Pago pendiente",
+        "Tu pedido fue generado, pero el pago aún no termina de reflejarse. Si usaste OXXO Pay, esto puede tardar un poco más."
+      );
+    } else {
+      setHero(
+        "default",
+        "Estado del pedido",
+        "Estamos mostrando la información más reciente disponible para tu orden."
+      );
+    }
+
+    if (orderId) {
+      orderId.textContent = safeStr(data?.session_id || "");
+    }
+
+    if (orderTotal) {
+      orderTotal.textContent = money(data?.amount_total_mxn || 0);
+    }
+
+    if (orderStatusText) {
+      const readable =
+        paymentStatus === "paid" || status === "paid"
+          ? "Pagado"
+          : status === "pending_payment" || paymentStatus === "unpaid"
+            ? "Pendiente"
+            : safeStr(status || paymentStatus || "Desconocido");
+      orderStatusText.textContent = readable;
+    }
+
+    if (orderEmail) {
+      orderEmail.textContent = safeStr(data?.customer_email || "No disponible");
+    }
+
+    if (orderShipMode) {
+      orderShipMode.textContent = normalizeShipMode(data?.shipping_mode);
+    }
+
+    if (extraHint) {
+      if (String(data?.shipping_mode || "").toLowerCase() === "pickup") {
+        extraHint.textContent =
+          "Elegiste recolección en fábrica. Te contactaremos para coordinar entrega o confirmación.";
+      } else if (
+        String(data?.payment_status || "").toLowerCase() === "paid" ||
+        String(data?.status || "").toLowerCase() === "paid"
+      ) {
+        extraHint.textContent =
+          "Tu pago ya fue confirmado. Cuando tu guía quede generada, recibirás actualización por correo.";
+      } else {
+        extraHint.textContent =
+          "Si pagaste en efectivo vía OXXO, la confirmación puede tardar hasta 1 día hábil. Te enviaremos actualizaciones a tu correo.";
+      }
+    }
+  }
+
+  async function loadStatus() {
+    const sessionId = getSessionId();
+
+    if (!sessionId) {
+      setHero(
+        "error",
+        "Falta el ID del pedido",
+        "No encontramos un identificador de sesión para consultar tu compra."
+      );
+
+      if (orderId) orderId.textContent = "No disponible";
+      if (orderTotal) orderTotal.textContent = "—";
+      if (orderStatusText) orderStatusText.textContent = "No disponible";
+      if (orderEmail) orderEmail.textContent = "No disponible";
+      if (orderShipMode) orderShipMode.textContent = "No disponible";
+
+      return;
+    }
+
+    try {
+      setHero(
+        "default",
+        "Verificando pedido",
+        "Estamos consultando el estado más reciente de tu orden con Stripe."
+      );
+
+      const res = await fetch(
+        `/.netlify/functions/checkout_status?session_id=${encodeURIComponent(sessionId)}`,
+        { cache: "no-store" }
+      );
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "No se pudo consultar el pedido.");
+      }
+
+      applyOrderData(data);
+    } catch (e) {
+      setHero(
+        "error",
+        "No pude verificar tu pedido",
+        String(e?.message || "Ocurrió un problema al consultar el estado del pedido.")
+      );
+
+      if (orderId) orderId.textContent = sessionId || "—";
+      if (orderStatusText) orderStatusText.textContent = "Error";
+    }
+  }
+
+  function bindCopy() {
+    if (!copyBtn) return;
+
+    copyBtn.addEventListener("click", async () => {
+      const text = (orderId?.textContent || "").trim();
+      if (!text || text === "—") return;
+
       try {
-        const res = await fetch("/.netlify/functions/site_settings", { cache: "no-store" });
-        const data = await res.json();
-        if (!data || !data.ok) return;
-        const contact = data.contact || {};
-        const email = String(contact.email || "").trim();
-        const waE164 = String(contact.whatsapp_e164 || "").trim();
-        const waDisplay = String(contact.whatsapp_display || "").trim();
+        await navigator.clipboard.writeText(text);
+        copyBtn.textContent = "Copiado";
+        setTimeout(() => {
+          copyBtn.textContent = "Copiar ID";
+        }, 1600);
+      } catch {
+        copyBtn.textContent = "No se pudo copiar";
+        setTimeout(() => {
+          copyBtn.textContent = "Copiar ID";
+        }, 1600);
+      }
+    });
+  }
 
-        const emailEl = document.getElementById("successSupportEmail");
-        const waEl = document.getElementById("successSupportWa");
-
-        if (email && emailEl) {
-          emailEl.href = `mailto:${email}`;
-          emailEl.textContent = email;
-        }
-        if (waEl) {
-          if (waE164) waEl.href = `https://wa.me/${encodeURIComponent(waE164)}`;
-          if (waDisplay) waEl.textContent = waDisplay;
-        }
-      } catch {}
-    })();
-  </script>
-</body>
-</html>
+  document.addEventListener("DOMContentLoaded", () => {
+    bindCopy();
+    loadStatus();
+  });
+})();
