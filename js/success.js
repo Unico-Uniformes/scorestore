@@ -1,104 +1,108 @@
-"use strict";
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f0f0f" />
+  <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
 
-document.addEventListener("DOMContentLoaded", () => {
-  try {
-    localStorage.removeItem("scorestore_cart_v2_pro");
-    localStorage.removeItem("scorestore_ship_v2");
-    window.history.replaceState(null, '', window.location.href);
-  } catch (e) { console.warn("Aviso: No se pudo limpiar la caché local", e); }
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  const qs = new URLSearchParams(location.search);
-  const sessionId = qs.get("session_id") || "";
-  const $ = (id) => document.getElementById(id);
+  <title>Estado de Pedido — SCORE STORE</title>
 
-  const setUI = ({ title, text, emoji, borderColor }) => {
-    if ($("heroTitle")) $("heroTitle").textContent = title;
-    if ($("heroText")) $("heroText").innerHTML = text; 
-    if ($("heroEmoji")) $("heroEmoji").textContent = emoji;
-    if (borderColor) document.querySelector("main").style.setProperty('--red', borderColor);
-  };
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="icon" href="assets/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
 
-  const fmtMoney = (n) => {
-    try { return Number(n).toLocaleString("es-MX", { style: "currency", currency: "MXN" }); }
-    catch { return "$" + Number(n).toFixed(2); }
-  };
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; overflow: hidden; background-color: #0f0f0f;">
 
-  const loadStatus = async () => {
-    if (!sessionId) {
-      if($("orderId")) $("orderId").textContent = "No detectado";
-      if($("orderTotal")) $("orderTotal").textContent = "—";
-      setUI({
-        title: "Sesión Finalizada",
-        text: "El proceso de compra terminó. Si no recibes un correo de confirmación en breve, vuelve a intentar el pago.",
-        emoji: "🏁"
-      });
-      return;
-    }
+  <div class="hero__bg" style="position:fixed; inset:0; z-index:-2; animation: slowPan 30s linear infinite alternate; filter: brightness(0.3) blur(2px);"></div>
 
-    if($("orderId")) $("orderId").textContent = sessionId;
+  <main class="wrap section vfx-glass-container" style="max-width: 680px; position: relative; z-index: 10; padding: 40px; margin-top: 20px;">
+    <img src="assets/logo-score.webp" alt="Score Store" style="height: 60px; margin: 0 auto 20px auto; filter: drop-shadow(0 5px 15px rgba(225,6,0,0.5)); animation: float 3s infinite ease-in-out;">
 
-    try {
-      const res = await fetch(`/.netlify/functions/checkout_status?session_id=${encodeURIComponent(sessionId)}`, { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
+    <div id="heroEmoji" style="font-size: 60px; margin-bottom: 10px; animation: scaleIn 0.5s ease; filter: drop-shadow(0 0 10px rgba(255,255,255,0.4));">🏁</div>
+    <h1 id="heroTitle" class="tech-text" style="color: var(--black-btn); font-weight: 900; margin-bottom: 12px; font-size: 32px;">Cargando estado…</h1>
 
-      if (!data || !data.ok) throw new Error(data && data.error ? data.error : "Error de verificación en pasarela.");
+    <p id="heroText" class="hint" style="max-width: 560px; margin: 0 auto 18px; font-size: 16px; color: var(--text);">
+      Estableciendo conexión encriptada para verificar tu pago con Stripe.
+    </p>
 
-      if($("orderTotal")) $("orderTotal").textContent = fmtMoney(data.amount_total_mxn || 0);
+    <div class="glass-panel" style="text-align:left; margin: 25px 0; padding: 20px; border-radius: 12px;">
+      <div style="display:flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+        <div>
+          <div class="muted" style="font-size: 12px; font-weight: bold;">ID de Pedido Oficial</div>
+          <div id="orderId" style="font-weight: 900; font-family: monospace; color: var(--red); font-size: 15px;">—</div>
+        </div>
+        <div style="text-align:right;">
+          <div class="muted" style="font-size: 12px; font-weight: bold;">Total Pagado</div>
+          <div id="orderTotal" class="tech-price" style="font-weight: 900; font-size: 20px; color: var(--black-btn);">—</div>
+        </div>
+      </div>
 
-      const ps = String(data.payment_status || "").toLowerCase();
+      <div id="orderMetaBox" style="margin-top: 18px; display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 10px;">
+        <div class="glass-panel" style="padding:12px;">
+          <div class="muted" style="font-size:12px; font-weight: bold;">Estado</div>
+          <div id="orderStatusText" style="font-weight:900; color: var(--black-btn);">—</div>
+        </div>
+        <div class="glass-panel" style="padding:12px;">
+          <div class="muted" style="font-size:12px; font-weight: bold;">Correo</div>
+          <div id="orderEmail" style="font-weight:900; color: var(--black-btn); word-break: break-word;">—</div>
+        </div>
+        <div class="glass-panel" style="padding:12px;">
+          <div class="muted" style="font-size:12px; font-weight: bold;">Entrega</div>
+          <div id="orderShipMode" style="font-weight:900; color: var(--black-btn);">—</div>
+        </div>
+      </div>
 
-      if (ps === "paid") {
-        setUI({
-          title: "¡PAGO EXITOSO!",
-          text: "Tu compra ha sido procesada de manera segura por Stripe. <br><br>Si seleccionaste entrega a domicilio, el sistema de Envía.com está generando tu guía y la recibirás por correo electrónico.",
-          emoji: "🏆",
-          borderColor: "#28a745"
-        });
-        if($("extraHint")) $("extraHint").textContent = "Tip: Copia tu ID de pedido por si necesitas soporte técnico. ¡Gracias por adquirir mercancía oficial!";
-      } else if (ps === "unpaid") {
-        setUI({
-          title: "Pedido en Espera de Pago",
-          text: "Tu orden ya está registrada en nuestros servidores. <br><br><b>Si elegiste OXXO Pay:</b> Stripe te generó un voucher. Paga en tu sucursal más cercana para que podamos enviar tu paquete.",
-          emoji: "⏳",
-          borderColor: "var(--black-btn)"
-        });
-        if($("extraHint")) $("extraHint").textContent = "El inventario se reserva temporalmente. Tu guía logística se generará automáticamente en cuanto el sistema detecte tu pago.";
-      } else {
-        setUI({
-          title: "Pedido Registrado",
-          text: "Tu orden está en el sistema. Si el pago aún no se refleja como confirmado, verifica tu aplicación bancaria o revisa tu bandeja de entrada.",
-          emoji: "🛡️",
-          borderColor: "var(--black-btn)"
-        });
-        if($("extraHint")) $("extraHint").textContent = "En caso de rechazo bancario, la orden expirará y no se realizará ningún cargo.";
-      }
-    } catch (e) {
-      setUI({
-        title: "Procesando Orden...",
-        text: "Estamos experimentando latencia para verificar el estado en vivo. <br><br>Tu transacción está segura. Si se cobró, recibirás un recibo oficial en tu correo.",
-        emoji: "🛡️",
-        borderColor: "var(--black-btn)"
-      });
-    }
-  };
+      <div style="margin-top: 20px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+        <button id="copyBtn" class="btn btn--black btn--tiny hover-fx neon-border" type="button">Copiar ID</button>
+        <a class="btn btn--primary btn--tiny cinematic-btn" href="index.html">← Volver a la Tienda</a>
+      </div>
+    </div>
 
-  const copyBtn = $("copyBtn");
-  if(copyBtn) {
-      copyBtn.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(sessionId || "");
-          const originalText = copyBtn.textContent;
-          copyBtn.textContent = "¡Copiado! ✅";
-          copyBtn.style.backgroundColor = "#28a745";
-          setTimeout(() => {
-            copyBtn.textContent = originalText;
-            copyBtn.style.backgroundColor = "var(--black-btn)";
-          }, 2000);
-        } catch(e) {
-          alert("Tu navegador no soporta copiado automático. Por favor, selecciona y copia el ID manualmente.");
+    <div id="extraHint" class="hint" style="font-size: 13px; color: var(--muted); font-weight: bold; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px;">
+      Si pagaste en efectivo vía OXXO, la confirmación puede tardar hasta 1 día hábil. Te enviaremos actualizaciones a tu correo.
+    </div>
+
+    <div class="glass-panel" style="margin-top:18px; padding:16px; border-radius: 12px;">
+      <div style="font-size: 12px; font-weight: 900; color: var(--muted); text-transform: uppercase; letter-spacing: .08em;">Soporte</div>
+      <div style="margin-top: 8px; font-weight:700; color: var(--text); line-height:1.8;">
+        Correo: <a id="successSupportEmail" href="mailto:ventas.unicotextil@gmail.com">ventas.unicotextil@gmail.com</a><br>
+        WhatsApp: <a id="successSupportWa" href="https://wa.me/5216642368701" target="_blank" rel="noopener">664 236 8701</a>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/success.js"></script>
+  <script>
+    (async () => {
+      try {
+        const res = await fetch("/.netlify/functions/site_settings", { cache: "no-store" });
+        const data = await res.json();
+        if (!data || !data.ok) return;
+        const contact = data.contact || {};
+        const email = String(contact.email || "").trim();
+        const waE164 = String(contact.whatsapp_e164 || "").trim();
+        const waDisplay = String(contact.whatsapp_display || "").trim();
+
+        const emailEl = document.getElementById("successSupportEmail");
+        const waEl = document.getElementById("successSupportWa");
+
+        if (email && emailEl) {
+          emailEl.href = `mailto:${email}`;
+          emailEl.textContent = email;
         }
-      });
-  }
-
-  loadStatus();
-});
+        if (waEl) {
+          if (waE164) waEl.href = `https://wa.me/${encodeURIComponent(waE164)}`;
+          if (waDisplay) waEl.textContent = waDisplay;
+        }
+      } catch {}
+    })();
+  </script>
+</body>
+</html>
