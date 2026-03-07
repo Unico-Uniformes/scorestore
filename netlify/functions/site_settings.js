@@ -24,7 +24,13 @@ const resolveOrgId = async (sb) => {
   let orgId = DEFAULT_SCORE_ORG_ID;
 
   try {
-    const { data: byId } = await sb.from("organizations").select("id").eq("id", orgId).limit(1).maybeSingle();
+    const { data: byId } = await sb
+      .from("organizations")
+      .select("id")
+      .eq("id", orgId)
+      .limit(1)
+      .maybeSingle();
+
     if (byId?.id) return orgId;
 
     const { data: byName } = await sb
@@ -82,14 +88,17 @@ exports.handler = async (event) => {
   const origin = event?.headers?.origin || event?.headers?.Origin || "*";
 
   if (event.httpMethod === "OPTIONS") return handleOptions(event);
+
   if (event.httpMethod !== "GET") {
     return withNoStore(jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
   }
 
   const defaults = buildDefaults();
-
   const sb = supabaseAdmin();
-  if (!sb) return withNoStore(jsonResponse(200, defaults, origin));
+
+  if (!sb) {
+    return withNoStore(jsonResponse(200, defaults, origin));
+  }
 
   try {
     const orgId = await resolveOrgId(sb);
