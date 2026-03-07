@@ -1,342 +1,308 @@
 "use strict";
 
-/**
- * =========================================================
- * stripe_webhook.js (Netlify Function)
- *
- * SECURE V2026-02-21 PRO (NIVEL NASA / META):
- * - Resiliencia Absoluta: Upsert a DB garantizado aunque falle Envía.
- * - Estructura de Datos 100% Original para Score Store.
- * - FIX MULTI-TENANT INCLUIDO PARA COMPATIBILIDAD CON UNICOS
- * =========================================================
- */
+const { initStripe, jsonResponse, supabaseAdmin } = require("./_shared");
 
-const {
-  jsonResponse,
-  readRawBody,
-  initStripe,
-  isSupabaseConfigured,
-  supabaseAdmin,
-  createEnviaLabel,
-  sendTelegram,
-} = require("./_shared");
-
-const safeUpper = (v) => String(v || "").toUpperCase().trim();
-const nowIso = () => new Date().toISOString();
-
-// -----------------------------------------------------------------------------
-// Multi-tenant: Score Store org resolver (NO depende de slug)
-// - Prioridad: ENV SCORE_ORG_ID / DEFAULT_ORG_ID
-// - Fallback: UUID fijo del schema.sql (Score Store default)
-// - Último recurso: buscar por nombre en organizations
-// -----------------------------------------------------------------------------
 const DEFAULT_SCORE_ORG_ID = "1f3b9980-a1c5-4557-b4eb-a75bb9a8aaa6";
-let _cachedScoreOrgId = null;
 
-const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s||"").trim());
+const safeStr = (v, d = "") => (typeof v === "string" ? v : v == null ? d : String(v));
+const safeNum = (v, d = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
+};
 
-const resolveScoreOrgId = async (sb) => {
-  if (_cachedScoreOrgId) return _cachedScoreOrgId;
-
-  const envId = process.env.SCORE_ORG_ID || process.env.DEFAULT_ORG_ID;
-  if (envId && isUuid(envId)) {
-    _cachedScoreOrgId = String(envId).trim();
-    return _cachedScoreOrgId;
+function rawBodyFromEvent(event) {
+  if (event.isBase64Encoded) {
+    return Buffer.from(event.body || "", "base64");
   }
+  return Buffer.from(event.body || "", "utf8");
+}
 
-  // Fallback garantizado (mismo ID del schema.sql)
-  _cachedScoreOrgId = DEFAULT_SCORE_ORG_ID;
+function pickOrgId(metadata) {
+  const orgId = safeStr(metadata?.org_id || metadata?.organization_id || "").trim();
+  return orgId || DEFAULT_SCORE_ORG_ID;
+}
 
-  // Si la tabla tiene este ID, perfecto. Si no, intentamos buscar por nombre.
+function pickShippingMode(sessionOrMeta) {
+  return safeStr(
+    sessionOrMeta?.metadata?.shipping_mode ||
+    sessionOrMeta?.metadata?.ship_mode ||
+    sessionOrMeta?.shipping_mode ||
+    ""
+  ).trim();
+}
+
+function pickPostalCode(sessionOrMeta) {
+  return safeStr(
+    sessionOrMeta?.metadata?.postal_code ||
+    sessionOrMeta?.postal_code ||
+    ""
+  ).trim();
+}
+
+function normalizeAddress(address) {
+  if (!address || typeof address !== "object") return null;
+  return {
+    line1: safeStr(address.line1 || ""),
+    line2: safeStr(address.line2 || ""),
+    city: safeStr(address.city || ""),
+    state: safeStr(address.state || ""),
+    postal_code: safeStr(address.postal_code || ""),
+    country: safeStr(address.country || ""),
+  };
+}
+
+function normalizeCustomer(session) {
+  return {
+    email: safeStr(session?.customer_details?.email || session?.customer_email || ""),
+    name: safeStr(session?.customer_details?.name || session?.shipping_details?.name || "Cliente"),
+    phone: safeStr(session?.customer_details?.phone || ""),
+  };
+}
+
+function normalizeCurrency(v) {
+  return safeStr(v || "mxn").toUpperCase();
+}
+
+async function listLineItems(stripe, sessionId) {
   try {
-    const { data: byId } = await sb.from("organizations").select("id").eq("id", _cachedScoreOrgId).limit(1).maybeSingle();
-    if (byId?.id) return _cachedScoreOrgId;
-
-    const { data: byName } = await sb
-      .from("organizations")
-      .select("id")
-      .ilike("name", "%score%")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (byName?.id) _cachedScoreOrgId = byName.id;
-  } catch (e) {
-    // Mantén el fallback fijo.
-  }
-
-  return _cachedScoreOrgId;
-};
-
-const shouldFulfillNow = (eventType, session) => {
-  if (eventType === "checkout.session.async_payment_succeeded") return true;
-  if (eventType === "checkout.session.completed") return String(session.payment_status) === "paid";
-  return false;
-};
-
-const fetchAllLineItems = async (stripe, sessionId) => {
-  const out = [];
-  let starting_after = undefined;
-
-  for (let i = 0; i < 20; i++) {
-    const resp = await stripe.checkout.sessions.listLineItems(sessionId, {
+    const li = await stripe.checkout.sessions.listLineItems(sessionId, {
       limit: 100,
-      ...(starting_after ? { starting_after } : {}),
       expand: ["data.price.product"],
     });
 
-    if (Array.isArray(resp?.data)) out.push(...resp.data);
-    if (!resp?.has_more) break;
+    return (Array.isArray(li?.data) ? li.data : [])
+      .map((row) => {
+        const productObj = row?.price?.product && typeof row.price.product === "object" ? row.price.product : null;
+        const meta = productObj?.metadata || {};
 
-    const last = resp.data?.[resp.data.length - 1];
-    starting_after = last?.id;
-    if (!starting_after) break;
+        return {
+          sku: safeStr(meta.sku || meta.SKU || ""),
+          size: safeStr(meta.size || meta.talla || ""),
+          name: safeStr(productObj?.name || row?.description || "Producto Oficial"),
+          qty: safeNum(row?.quantity, 0),
+          unit_amount_mxn: safeNum(row?.price?.unit_amount, 0) / 100,
+          amount_total_mxn: safeNum(row?.amount_total, 0) / 100,
+          currency: normalizeCurrency(row?.currency || "mxn"),
+        };
+      })
+      .filter((x) => x.qty > 0);
+  } catch {
+    return [];
   }
+}
 
-  return out;
-};
+async function upsertOrderFromSession(sb, stripe, session, extra = {}) {
+  const orgId = pickOrgId(session?.metadata);
+  const paymentIntentId =
+    typeof session?.payment_intent === "string"
+      ? session.payment_intent
+      : safeStr(session?.payment_intent?.id || "");
 
-const normalizeOrderItems = (lineItems) => {
-  const arr = Array.isArray(lineItems) ? lineItems : [];
-  return arr
-    .map((li) => {
-      const productObj = li?.price?.product && typeof li.price.product === "object" ? li.price.product : null;
-      const meta = productObj?.metadata || {};
-      const sku = meta.sku || meta.SKU || null;
-      const size = meta.size || meta.talla || null;
+  const customerId =
+    typeof session?.customer === "string"
+      ? session.customer
+      : safeStr(session?.customer?.id || "");
 
-      return {
-        sku,
-        size,
-        name: productObj?.name || li?.description || null,
-        description: li?.description || productObj?.description || null,
-        qty: Number(li?.quantity || 0) || 0,
-        amount_subtotal_mxn: Number(li?.amount_subtotal || 0) / 100,
-        amount_total_mxn: Number(li?.amount_total || 0) / 100,
-        currency: safeUpper(li?.currency || "mxn"),
-        price_id: li?.price?.id || null,
-        product_id: productObj?.id || (typeof li?.price?.product === "string" ? li.price.product : null),
-        metadata: meta || {},
-      };
-    })
-    .filter((x) => x.qty > 0);
-};
+  const totals = session?.total_details || {};
+  const customer = normalizeCustomer(session);
+  const items = await listLineItems(stripe, session.id);
 
-const buildItemsSummary = (items) =>
-  (Array.isArray(items) ? items : [])
-    .map((i) => `${i.qty}x ${(i.sku || i.name || "ITEM")}[${i.size || "N/A"}]`)
-    .join(" | ")
-    .substring(0, 450);
+  let amountRefundedMXN = 0;
+  let stripeFeeMXN = null;
+  let stripeNetMXN = null;
+  let chargeId = null;
+  let disputed = false;
 
-const upsertOrder = async (sb, session, status, items) => {
-  const meta = session.metadata || {};
-  const customer = session.customer_details || {};
-  const shipping = session.shipping_details || {};
-  const addr = shipping.address || {};
+  try {
+    if (paymentIntentId) {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+        expand: ["latest_charge.balance_transaction"],
+      });
 
-  const totalDetails = session.total_details || {};
-  const amount_discount_mxn =
-    Number(totalDetails.amount_discount || 0) / 100 ||
-    (Number(session.amount_subtotal || 0) - Number(session.amount_total || 0)) / 100 ||
-    0;
+      const charge = pi?.latest_charge || null;
+      const bt = charge?.balance_transaction || null;
 
-  const amount_shipping_mxn =
-    Number(totalDetails.amount_shipping || 0) / 100 ||
-    Number(meta.shipping_amount_cents || 0) / 100 ||
-    0;
+      chargeId = safeStr(charge?.id || "");
+      amountRefundedMXN = safeNum(charge?.amount_refunded, 0) / 100;
+      stripeFeeMXN = bt ? safeNum(bt?.fee, 0) / 100 : null;
+      stripeNetMXN = bt ? safeNum(bt?.net, 0) / 100 : null;
+      disputed = !!charge?.disputed;
+    }
+  } catch {}
 
-  const normalizedItems = Array.isArray(items) ? items : [];
+  const paymentStatus = safeStr(session?.payment_status || "").toLowerCase();
+  const currentStatus =
+    extra?.forced_status ||
+    (paymentStatus === "paid" ? "paid" : paymentStatus === "unpaid" ? "pending_payment" : "pending");
 
-  // ==========================================
-  // 🔥 FIX MULTI-TENANT (UnicOs)
-  // ==========================================
-  // OrgId real de Score Store (no depende de 'slug')
-  const orgId = await resolveScoreOrgId(sb);
-
-  // DATOS ORIGINALES EXACTOS con la inyección de la organización
-  const row = {
+  const payload = {
     organization_id: orgId,
-    stripe_session_id: session.id,
-    stripe_payment_intent_id:
-      typeof session.payment_intent === "string" ? session.payment_intent : (session.payment_intent?.id || null),
-    stripe_customer_id:
-      typeof session.customer === "string" ? session.customer : (session.customer?.id || null),
+    stripe_session_id: safeStr(session?.id || ""),
+    stripe_payment_intent_id: paymentIntentId || null,
+    stripe_customer_id: customerId || null,
+    stripe_charge_id: chargeId || null,
 
-    email: customer.email || session.customer_email || null,
-    customer_name: customer.name || shipping.name || "Cliente",
+    email: customer.email || null,
+    customer_name: customer.name || "Cliente",
     phone: customer.phone || null,
 
-    currency: safeUpper(session.currency || "mxn"),
-    amount_total_mxn: Number(session.amount_total || 0) / 100,
-    amount_subtotal_mxn: Number(session.amount_subtotal || 0) / 100,
-    amount_shipping_mxn,
-    amount_discount_mxn,
-    promo_code: meta.promo_code || "Ninguno",
-    items_summary: meta.items_summary || buildItemsSummary(normalizedItems) || "Sin detalles",
-    items: normalizedItems,
+    currency: normalizeCurrency(session?.currency || "mxn"),
+    amount_total_mxn: safeNum(session?.amount_total, 0) / 100,
+    amount_subtotal_mxn: safeNum(session?.amount_subtotal, 0) / 100,
+    amount_shipping_mxn: safeNum(totals?.amount_shipping, 0) / 100,
+    amount_discount_mxn: safeNum(totals?.amount_discount, 0) / 100,
+    amount_tax_mxn: safeNum(totals?.amount_tax, 0) / 100,
 
-    shipping_mode: meta.shipping_mode || null,
-    postal_code: meta.postal_code || addr.postal_code || null,
+    refunded_mxn: amountRefundedMXN,
+    stripe_fee_mxn: stripeFeeMXN,
+    stripe_net_mxn: stripeNetMXN,
+    disputed,
 
-    status,
-    updated_at: nowIso(),
+    shipping_total_mxn: safeNum(totals?.amount_shipping, 0) / 100,
+    envia_cost_mxn:
+      extra?.envia_cost_mxn != null
+        ? safeNum(extra.envia_cost_mxn, 0)
+        : null,
 
+    shipping_status:
+      extra?.shipping_status != null
+        ? safeStr(extra.shipping_status)
+        : null,
+
+    tracking_number:
+      extra?.tracking_number != null
+        ? safeStr(extra.tracking_number)
+        : null,
+
+    carrier:
+      extra?.carrier != null
+        ? safeStr(extra.carrier)
+        : null,
+
+    shipment_status:
+      extra?.shipment_status != null
+        ? safeStr(extra.shipment_status)
+        : null,
+
+    status: currentStatus,
+    items,
     metadata: {
-      shipping_address: addr || null,
-      raw_session: session,
+      ...(session?.metadata || {}),
+      shipping_mode: pickShippingMode(session),
+      postal_code: pickPostalCode(session),
+      shipping_address: normalizeAddress(session?.shipping_details?.address),
+      shipping_name: safeStr(session?.shipping_details?.name || ""),
     },
+    updated_at: new Date().toISOString(),
   };
 
-  await sb.from("orders").upsert(row, { onConflict: "stripe_session_id" });
-};
+  const { error } = await sb.from("orders").upsert(payload, {
+    onConflict: "stripe_session_id",
+  });
 
-const getExistingLabel = async (sb, sessionId) => {
-  try {
-    const { data, error } = await sb
-      .from("shipping_labels")
-      .select("id, tracking_number, label_url, status")
-      .eq("stripe_session_id", sessionId)
-      .limit(1)
-      .maybeSingle();
-
-    if (error) return null;
-    return data || null;
-  } catch {
-    return null;
-  }
-};
-
-const upsertLabel = async (sb, orgId, sessionId, labelData, status = "created") => {
-  const row = {
-    org_id: orgId,
-    stripe_session_id: sessionId,
-    carrier: "envia",
-    tracking_number: labelData.trackingNumber || labelData[0]?.trackingNumber || null,
-    label_url: labelData.labelUrl || labelData[0]?.label || null,
-    status,
-    updated_at: nowIso(),
-    raw: labelData || {},
-  };
-
-  await sb.from("shipping_labels").upsert(row, { onConflict: "stripe_session_id" });
-};
+  if (error) throw error;
+}
 
 exports.handler = async (event) => {
   try {
-    if (event.httpMethod !== "POST") return jsonResponse(405, { received: false }, "*");
+    if (event.httpMethod !== "POST") {
+      return { statusCode: 405, body: "Method Not Allowed" };
+    }
 
     const stripe = initStripe();
-
-    const whSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!whSecret) {
-      return jsonResponse(500, { received: false, error: "Missing STRIPE_WEBHOOK_SECRET" }, "*");
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      return { statusCode: 500, body: "Missing STRIPE_WEBHOOK_SECRET" };
     }
 
     const sig = event.headers["stripe-signature"] || event.headers["Stripe-Signature"];
-    if (!sig) return jsonResponse(400, { received: false, error: "Missing signature" }, "*");
+    if (!sig) {
+      return { statusCode: 400, body: "Missing stripe-signature" };
+    }
 
-    const buf = readRawBody(event);
+    const rawBody = rawBodyFromEvent(event);
 
-    let payload;
+    let stripeEvent;
     try {
-      payload = JSON.parse(buf.toString("utf8"));
+      stripeEvent = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
     } catch (err) {
-      return jsonResponse(400, { received: false, error: "Malformed payload body" }, "*");
+      return { statusCode: 400, body: `Webhook Error: ${err.message}` };
     }
 
-    let evt;
-    try {
-      evt = stripe.webhooks.constructEvent(buf, sig, whSecret);
-    } catch (err) {
-      console.error("[stripe_webhook] Invalid signature:", err?.message);
-      return jsonResponse(400, { received: false, error: "Invalid signature" }, "*");
+    const sb = supabaseAdmin();
+    if (!sb) {
+      return { statusCode: 500, body: "Supabase not configured" };
     }
 
-    const type = String(evt.type || "");
-    const session = evt?.data?.object || {};
-    if (!session?.id) return jsonResponse(200, { received: true }, "*");
+    const type = safeStr(stripeEvent?.type || "");
+    const object = stripeEvent?.data?.object || {};
 
-    const meta = session.metadata || {};
-    const shipping_mode = String(meta.shipping_mode || "pickup");
-    const shipping_country = safeUpper(
-      meta.shipping_country ||
-        session?.shipping_details?.address?.country ||
-        (shipping_mode === "envia_us" ? "US" : "MX")
-    );
-    const items_qty = Number(meta.items_qty || 0) || 0;
+    if (type === "checkout.session.completed" || type === "checkout.session.async_payment_succeeded") {
+      const session = await stripe.checkout.sessions.retrieve(object.id, {
+        expand: ["customer", "payment_intent", "shipping_details"],
+      });
 
-    let orderStatus = "pending";
-    if (type === "checkout.session.async_payment_failed") orderStatus = "payment_failed";
-    else if (type === "checkout.session.async_payment_succeeded") orderStatus = "paid";
-    else if (type === "checkout.session.completed") orderStatus = String(session.payment_status) === "paid" ? "paid" : "pending_payment";
-    else return jsonResponse(200, { received: true, ignored: true }, "*");
-
-    let orderItems = [];
-    try {
-      const lineItems = await fetchAllLineItems(stripe, session.id);
-      orderItems = normalizeOrderItems(lineItems);
-    } catch (e) {
-      console.warn("[stripe_webhook] line_items error:", e?.message);
+      await upsertOrderFromSession(sb, stripe, session, {
+        forced_status: "paid",
+      });
     }
 
-    if (isSupabaseConfigured()) {
-      const sb = supabaseAdmin();
-      if (sb) {
-        try {
-          await upsertOrder(sb, session, orderStatus, orderItems);
-        } catch (e) {
-          console.error("[orders] upsert error:", e?.message);
+    if (type === "checkout.session.async_payment_failed") {
+      const session = await stripe.checkout.sessions.retrieve(object.id, {
+        expand: ["customer", "payment_intent", "shipping_details"],
+      });
+
+      await upsertOrderFromSession(sb, stripe, session, {
+        forced_status: "payment_failed",
+      });
+    }
+
+    if (type === "charge.refunded") {
+      const charge = object;
+      const paymentIntentId = safeStr(charge?.payment_intent || "");
+      if (paymentIntentId) {
+        const { data: order } = await sb
+          .from("orders")
+          .select("stripe_session_id")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .limit(1)
+          .maybeSingle();
+
+        if (order?.stripe_session_id) {
+          const session = await stripe.checkout.sessions.retrieve(order.stripe_session_id, {
+            expand: ["customer", "payment_intent", "shipping_details"],
+          });
+
+          await upsertOrderFromSession(sb, stripe, session, {
+            forced_status: "refunded",
+          });
         }
       }
     }
 
-    const shouldFulfill = shouldFulfillNow(type, session);
-    const needsLabel = shipping_mode === "envia_mx" || shipping_mode === "envia_us";
-
-    if (shouldFulfill && needsLabel) {
-      const sb = isSupabaseConfigured() ? supabaseAdmin() : null;
-
-      if (sb) {
-        const existing = await getExistingLabel(sb, session.id);
-        if (existing?.tracking_number || existing?.label_url) {
-          return jsonResponse(200, { received: true, message: "Label already generated" }, "*");
-        }
+    if (type === "charge.dispute.created") {
+      const charge = object;
+      const paymentIntentId = safeStr(charge?.payment_intent || "");
+      if (paymentIntentId) {
+        await sb
+          .from("orders")
+          .update({
+            disputed: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("stripe_payment_intent_id", paymentIntentId);
       }
-
-      try {
-        const labelData = await createEnviaLabel({ shipping_country, stripe_session: session, items_qty });
-        if (sb) {
-          try {
-            const orgId = await resolveScoreOrgId(sb);
-            await upsertLabel(sb, orgId, session.id, labelData, "created");
-          } catch (e) {}
-        }
-        await sendTelegram(`✅ <b>Pago confirmado</b>\nSession: <code>${session.id}</code>\nModo: <b>${shipping_mode}</b>\nGuía generada exitosamente.`);
-      } catch (e) {
-        if (isSupabaseConfigured()) {
-          const sb2 = supabaseAdmin();
-          if (sb2) {
-            try {
-              const orgId2 = await resolveScoreOrgId(sb2);
-              await upsertLabel(sb2, orgId2, session.id, { error: String(e?.message || e) }, "failed");
-            } catch {}
-          }
-        }
-        await sendTelegram(`⚠️ <b>Pago confirmado</b> pero <b>falló guía Envía</b>\nSession: <code>${session.id}</code>\nError: <code>${String(e?.message || e).slice(0, 300)}</code>`);
-      }
-    } else {
-      try {
-        if (orderStatus === "paid" && shipping_mode === "pickup") {
-          await sendTelegram(`✅ <b>Pago confirmado</b>\nSession: <code>${session.id}</code>\nModo: <b>Pickup en fábrica</b>`);
-        } else if (orderStatus === "pending_payment") {
-          await sendTelegram(`🕒 <b>Pedido OXXO / Pendiente</b>\nSession: <code>${session.id}</code>`);
-        }
-      } catch {}
     }
 
-    return jsonResponse(200, { received: true }, "*");
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ received: true }),
+    };
   } catch (e) {
-    console.error("[stripe_webhook] fatal error:", e?.message);
-    return jsonResponse(500, { received: false, error: "Internal Server Error" }, "*");
+    console.error("[stripe_webhook] error:", e?.message || e);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ ok: false, error: "stripe_webhook_failed" }),
+    };
   }
 };
