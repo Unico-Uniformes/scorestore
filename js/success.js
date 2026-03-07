@@ -16,6 +16,9 @@
   const extraHint = $("#extraHint");
   const copyBtn = $("#copyBtn");
 
+  const successSupportEmail = $("#successSupportEmail");
+  const successSupportWa = $("#successSupportWa");
+
   const money = (value) => {
     const n = Number(value);
     const safe = Number.isFinite(n) ? n : 0;
@@ -156,6 +159,29 @@
     }
   }
 
+  async function hydrateSupport() {
+    try {
+      const res = await fetch("/.netlify/functions/site_settings", { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (!data || !data.ok) return;
+
+      const contact = data.contact || {};
+      const email = String(contact.email || "").trim();
+      const waE164 = String(contact.whatsapp_e164 || "").trim();
+      const waDisplay = String(contact.whatsapp_display || "").trim();
+
+      if (email && successSupportEmail) {
+        successSupportEmail.href = `mailto:${email}`;
+        successSupportEmail.textContent = email;
+      }
+
+      if (successSupportWa) {
+        if (waE164) successSupportWa.href = `https://wa.me/${encodeURIComponent(waE164)}`;
+        if (waDisplay) successSupportWa.textContent = waDisplay;
+      }
+    } catch {}
+  }
+
   async function loadStatus() {
     const sessionId = getSessionId();
 
@@ -230,6 +256,7 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     bindCopy();
+    hydrateSupport();
     loadStatus();
   });
 })();
