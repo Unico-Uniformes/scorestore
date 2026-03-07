@@ -1,6 +1,6 @@
 "use strict";
 
-const { initStripe, jsonResponse, supabaseAdmin } = require("./_shared");
+const { initStripe, supabaseAdmin } = require("./_shared");
 
 const DEFAULT_SCORE_ORG_ID = "1f3b9980-a1c5-4557-b4eb-a75bb9a8aaa6";
 
@@ -25,18 +25,14 @@ function pickOrgId(metadata) {
 function pickShippingMode(sessionOrMeta) {
   return safeStr(
     sessionOrMeta?.metadata?.shipping_mode ||
-    sessionOrMeta?.metadata?.ship_mode ||
-    sessionOrMeta?.shipping_mode ||
-    ""
+      sessionOrMeta?.metadata?.ship_mode ||
+      sessionOrMeta?.shipping_mode ||
+      ""
   ).trim();
 }
 
 function pickPostalCode(sessionOrMeta) {
-  return safeStr(
-    sessionOrMeta?.metadata?.postal_code ||
-    sessionOrMeta?.postal_code ||
-    ""
-  ).trim();
+  return safeStr(sessionOrMeta?.metadata?.postal_code || sessionOrMeta?.postal_code || "").trim();
 }
 
 function normalizeAddress(address) {
@@ -136,6 +132,7 @@ async function upsertOrderFromSession(sb, stripe, session, extra = {}) {
     (paymentStatus === "paid" ? "paid" : paymentStatus === "unpaid" ? "pending_payment" : "pending");
 
   const payload = {
+    org_id: orgId,
     organization_id: orgId,
     stripe_session_id: safeStr(session?.id || ""),
     stripe_payment_intent_id: paymentIntentId || null,
@@ -188,6 +185,8 @@ async function upsertOrderFromSession(sb, stripe, session, extra = {}) {
     items,
     metadata: {
       ...(session?.metadata || {}),
+      org_id: orgId,
+      organization_id: orgId,
       shipping_mode: pickShippingMode(session),
       postal_code: pickPostalCode(session),
       shipping_address: normalizeAddress(session?.shipping_details?.address),
