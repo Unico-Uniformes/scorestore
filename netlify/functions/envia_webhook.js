@@ -1,99 +1,242 @@
 "use strict";
 
-const crypto = require("crypto"); // INYECCIÓN: Requerido para Timing Attacks
+const { jsonResponse, handleOptions, supabaseAdmin } = require("./_shared");
 
-/**
- * =========================================================
- * envia_webhook.js (Netlify Function)
- *
- * PRO FIXES: 
- * VULNERABILIDAD ZERO-DAY SOLUCIONADA: Timing Attack predeterminado 
- * en validaciones JS mediante timingSafeEqual.
- * =========================================================
- */
-
-const {
-  jsonResponse,
-  handleOptions,
-  safeJsonParse,
-  isSupabaseConfigured,
-  supabaseAdmin,
-  sendTelegram,
-} = require("./_shared");
-
-const getProvidedToken = (event) => {
-  const h = event?.headers || {};
-  return (
-    h["x-envia-token"] ||
-    h["X-Envia-Token"] ||
-    h["x-webhook-token"] ||
-    h["X-Webhook-Token"] ||
-    (event?.queryStringParameters ? event.queryStringParameters.token : null) ||
-    null
-  );
+const safeStr = (v, d = "") => (typeof v === "string" ? v : v == null ? d : String(v));
+const safeNum = (v, d = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
 };
+
+function getSecretFromHeaders(headers) {
+  return (
+    headers["x-envia-token"] ||
+    headers["X-Envia-Token"] ||
+    headers["x-webhook-secret"] ||
+    headers["X-Webhook-Secret"] ||
+    ""
+  );
+}
+
+function normalizeTracking(payload) {
+  return (
+    safeStr(payload?.tracking_number) ||
+    safeStr(payload?.trackingNumber) ||
+    safeStr(payload?.tracking) ||
+    safeStr(payload?.guideNumber) ||
+    safeStr(payload?.shipment_number) ||
+    ""
+  ).trim();
+}
+
+function normalizeCarrier(payload) {
+  return (
+    safeStr(payload?.carrier) ||
+    safeStr(payload?.carrier_name) ||
+    safeStr(payload?.carrierName) ||
+    safeStr(payload?.provider) ||
+    ""
+  ).trim();
+}
+
+function normalizeStatus(payload) {
+  return (
+    safeStr(payload?.status) ||
+    safeStr(payload?.shipment_status) ||
+    safeStr(payload?.shipping_status) ||
+    safeStr(payload?.event) ||
+    ""
+  ).trim();
+}
+
+function bucketStatus(raw) {
+  const s = safeStr(raw).toLowerCase();
+
+  if (!s) return "unknown";
+  if (["delivered", "entregado"].includes(s)) return "delivered";
+  if (
+    [
+      "in_transit",
+      "transit",
+      "shipped",
+      "picked_up",
+      "out_for_delivery",
+      "label_created",
+      "guia_generada",
+      "en_transito",
+    ].includes(s)
+  ) return "in_transit";
+  if (["returned", "failed", "exception", "cancelled", "canceled", "error"].includes(s)) return "issue";
+  return "other";
+}
+
+function normalizeCost(payload) {
+  return (
+    safeNum(payload?.envia_cost_mxn, NaN) ||
+    safeNum(payload?.shipping_cost_mxn, NaN) ||
+    safeNum(payload?.cost_mxn, NaN) ||
+    safeNum(payload?.amount_mxn, NaN) ||
+    NaN
+  );
+}
+
+function normalizeSessionId(payload) {
+  return (
+    safeStr(payload?.stripe_session_id) ||
+    safeStr(payload?.session_id) ||
+    safeStr(payload?.checkout_session_id) ||
+    ""
+  ).trim();
+}
+
+function normalizePaymentIntentId(payload) {
+  return (
+    safeStr(payload?.stripe_payment_intent_id) ||
+    safeStr(payload?.payment_intent_id) ||
+    ""
+  ).trim();
+}
+
+function normalizeOrderId(payload) {
+  return (
+    safeStr(payload?.order_id) ||
+    safeStr(payload?.id_order) ||
+    ""
+  ).trim();
+}
 
 exports.handler = async (event) => {
   const origin = event?.headers?.origin || event?.headers?.Origin || "*";
 
   try {
     if (event.httpMethod === "OPTIONS") return handleOptions(event);
-    if (event.httpMethod !== "POST") return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
+    if (event.httpMethod !== "POST") {
+      return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
+    }
 
-    const required = String(process.env.ENVIA_WEBHOOK_TOKEN || "").trim();
-    if (required) {
-      const provided = String(getProvidedToken(event) || "").trim();
-      
-      // FIX CRÍTICO: Prevención de Timing Attack comparando buffers
-      if (!provided || provided.length !== required.length || !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(required))) {
-        return jsonResponse(401, { ok: false, error: "Unauthorized access" }, origin);
+    const expectedSecret = safeStr(process.env.ENVIA_WEBHOOK_SECRET || "");
+    const receivedSecret = safeStr(getSecretFromHeaders(event.headers || {}));
+
+    if (expectedSecret && receivedSecret !== expectedSecret) {
+      return jsonResponse(403, { ok: false, error: "Forbidden" }, origin);
+    }
+
+    const payload = (() => {
+      try {
+        return JSON.parse(event.body || "{}");
+      } catch {
+        return {};
+      }
+    })();
+
+    const sb = supabaseAdmin();
+    if (!sb) {
+      return jsonResponse(500, { ok: false, error: "Supabase not configured" }, origin);
+    }
+
+    const trackingNumber = normalizeTracking(payload);
+    const carrier = normalizeCarrier(payload);
+    const rawStatus = normalizeStatus(payload);
+    const shipmentBucket = bucketStatus(rawStatus);
+    const enviaCostMaybe = normalizeCost(payload);
+
+    const stripeSessionId = normalizeSessionId(payload);
+    const paymentIntentId = normalizePaymentIntentId(payload);
+    const orderId = normalizeOrderId(payload);
+
+    let query = null;
+
+    if (stripeSessionId) {
+      query = sb
+        .from("orders")
+        .select("id,status")
+        .eq("stripe_session_id", stripeSessionId)
+        .limit(1)
+        .maybeSingle();
+    } else if (paymentIntentId) {
+      query = sb
+        .from("orders")
+        .select("id,status")
+        .eq("stripe_payment_intent_id", paymentIntentId)
+        .limit(1)
+        .maybeSingle();
+    } else if (trackingNumber) {
+      query = sb
+        .from("orders")
+        .select("id,status")
+        .eq("tracking_number", trackingNumber)
+        .limit(1)
+        .maybeSingle();
+    } else if (orderId) {
+      query = sb
+        .from("orders")
+        .select("id,status")
+        .eq("id", orderId)
+        .limit(1)
+        .maybeSingle();
+    }
+
+    if (!query) {
+      return jsonResponse(200, { ok: true, ignored: true, reason: "no_match_keys" }, origin);
+    }
+
+    const { data: order, error: orderErr } = await query;
+
+    if (orderErr || !order?.id) {
+      return jsonResponse(200, { ok: true, ignored: true, reason: "order_not_found" }, origin);
+    }
+
+    const update = {
+      updated_at: new Date().toISOString(),
+      shipment_status: rawStatus || null,
+      shipping_status: shipmentBucket,
+      tracking_number: trackingNumber || null,
+      carrier: carrier || null,
+    };
+
+    if (Number.isFinite(enviaCostMaybe)) {
+      update.envia_cost_mxn = enviaCostMaybe;
+    }
+
+    const currentStatus = safeStr(order?.status).toLowerCase();
+
+    if (shipmentBucket === "delivered") {
+      update.status = "fulfilled";
+      update.fulfilled_at = new Date().toISOString();
+      update.shipped_at = new Date().toISOString();
+    } else if (shipmentBucket === "in_transit") {
+      if (currentStatus !== "fulfilled") {
+        update.status = currentStatus === "paid" ? "paid" : currentStatus || "paid";
+      }
+      update.shipped_at = new Date().toISOString();
+    } else if (shipmentBucket === "issue") {
+      if (currentStatus !== "refunded" && currentStatus !== "cancelled") {
+        update.status = currentStatus || "paid";
       }
     }
 
-    const payload = safeJsonParse(event.body) || {};
+    const { error: upErr } = await sb
+      .from("orders")
+      .update(update)
+      .eq("id", order.id);
 
-    const trackingNumber = payload?.data?.trackingNumber || payload?.tracking_number || payload?.trackingNumber || null;
-    const status = payload?.data?.status || payload?.status || "UNKNOWN";
-    const carrier = payload?.data?.carrier || payload?.carrier || "envia";
-
-    if (isSupabaseConfigured()) {
-      const sb = supabaseAdmin();
-      if (sb) {
-        try {
-          await sb.from("shipping_webhooks").insert({
-            provider: carrier,
-            tracking_number: trackingNumber,
-            status,
-            raw: payload,
-            created_at: new Date().toISOString(),
-          });
-
-          if (trackingNumber) {
-            await sb
-              .from("shipping_labels")
-              .update({
-                status,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("tracking_number", trackingNumber);
-
-            if (String(status).toUpperCase() === "DELIVERED" || String(status).toUpperCase() === "ENTREGADO") {
-              try {
-                await sendTelegram(
-                  `📦 ✅ <b>Paquete Entregado</b>\nTracking: <code>${trackingNumber}</code>\nCarrier: <b>${String(carrier).toUpperCase()}</b>\n¡El cliente recibió su Merch SCORE!`
-                );
-              } catch {}
-            }
-          }
-        } catch (e) {
-          console.error("[shipping_webhooks] Supabase sync error:", e?.message);
-        }
-      }
+    if (upErr) {
+      throw upErr;
     }
 
-    return jsonResponse(200, { ok: true, received: true }, origin);
+    return jsonResponse(
+      200,
+      {
+        ok: true,
+        updated: true,
+        order_id: order.id,
+        shipment_status: rawStatus,
+        shipping_status: shipmentBucket,
+      },
+      origin
+    );
   } catch (e) {
-    console.error("[envia_webhook] fatal error:", e);
-    return jsonResponse(200, { ok: true, warning: "Processed with minor errors" }, origin);
+    console.error("[envia_webhook] error:", e?.message || e);
+    return jsonResponse(500, { ok: false, error: "envia_webhook_failed" }, origin);
   }
 };
