@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f0f0f" />
-  
+
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  
+
   <title>Políticas y Legal — SCORE STORE</title>
-  
+
   <link rel="manifest" href="site.webmanifest" />
   <link rel="icon" href="assets/icons/icon-192.png" />
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
@@ -36,9 +36,9 @@
     .legal-content ul { margin-bottom: 20px; padding-left: 20px; }
     .legal-content a { color: var(--red); text-decoration: none; font-weight: 700; }
     .legal-content a:hover { text-decoration: underline; text-shadow: 0 0 10px rgba(225,6,0,0.3); }
-    
+
     .legal-box { border: 1px solid var(--border-glass); border-radius: 16px; padding: 30px; margin: 20px 0; background: rgba(255,255,255,0.7); box-shadow: var(--shadow-glass); }
-    
+
     .legal-header-flex { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 10px; }
     @media (max-width: 640px) {
       .legal-header-flex { flex-direction: column-reverse; }
@@ -62,18 +62,18 @@
 
   <main class="wrap">
     <div class="legal-content vfx-glass-container">
-      
+
       <div class="legal-header-flex">
         <h1 class="tech-text">Términos, Condiciones y Privacidad</h1>
         <a href="index.html" class="iconbtn hover-fx tech-close" style="flex-shrink: 0; text-decoration: none; font-weight: bold;" aria-label="Cerrar y volver a la tienda" title="Cerrar">✕</a>
       </div>
 
-      <p class="hint" style="margin-bottom: 30px; color: var(--red);">Última actualización: Febrero de 2026</p>
+      <p class="hint" style="margin-bottom: 30px; color: var(--red);">Última actualización: Marzo de 2026</p>
 
       <div class="legal-box glass-panel">
         <h2 class="tech-text">1. Términos y Condiciones de Uso y Compra</h2>
         <p>Los presentes Términos y Condiciones rigen el uso del sitio web <strong>SCORE Store</strong> y la compra de mercancía oficial. El Sitio es operado legal y comercialmente por <strong>BAJATEX S. de R.L. de C.V.</strong> (Único Uniformes), con domicilio en Tijuana, B.C., México.</p>
-        
+
         <h3>1.1. Información de los Productos</h3>
         <p>Todos los productos son mercancía oficial de SCORE International, fabricada por Único Uniformes. Debido a la naturaleza textil, pueden existir ligeras variaciones entre el producto digital y el físico.</p>
 
@@ -89,25 +89,29 @@
           <li><strong>Envíos Nacionales e Internacionales:</strong> Gestionados vía <strong>Envia.com</strong> (Red DHL, FedEx, USPS). Costo calculado en tiempo real con precisión durante el Checkout.</li>
         </ul>
         <h3>2.2. Tiempos Logísticos</h3>
-        <p>Procesamiento interno de almacén de 1 a 3 días hábiles. El tiempo en tránsito depende exclusivamente de la paquetería seleccionada automáticamente por la plataforma según su Código Postal.</p>
+        <p id="legalShippingNote">Procesamiento interno de almacén de 1 a 3 días hábiles. El tiempo en tránsito depende exclusivamente de la paquetería seleccionada automáticamente por la plataforma según su Código Postal.</p>
       </div>
 
       <div class="legal-box glass-panel">
         <h2 class="tech-text">3. Cambios y Devoluciones</h2>
-        <p>El Cliente cuenta con <strong>7 días naturales</strong> a partir de la recepción para notificar defectos de fábrica. BAJATEX cubre el envío logístico en caso de defecto comprobable. Si el cambio es por error de selección de talla por parte del cliente, el cliente absorbe los costos de la nueva paquetería.</p>
+        <p id="legalReturnsNote">El Cliente cuenta con <strong>7 días naturales</strong> a partir de la recepción para notificar defectos de fábrica. BAJATEX cubre el envío logístico en caso de defecto comprobable. Si el cambio es por error de selección de talla por parte del cliente, el cliente absorbe los costos de la nueva paquetería.</p>
       </div>
 
       <div class="legal-box glass-panel">
         <h2 class="tech-text">4. Aviso de Privacidad Estricto</h2>
         <p>Sus datos (Nombre, Dirección de Envío, Teléfono, Correo) son recabados exclusivamente para el procesamiento logístico, despacho de su pedido y facturación, en estricto cumplimiento con la LFPDPPP de México. Los datos son compartidos únicamente mediante conexión API cifrada con proveedores logísticos (Envia.com) para generar su guía oficial.</p>
-        <p>Para ejercer sus derechos ARCO, envíe una solicitud a <em>ventas.unicotextil@gmail.com</em>.</p>
+        <p>Para ejercer sus derechos ARCO, envíe una solicitud a <em id="legalArcoEmail">ventas.unicotextil@gmail.com</em>.</p>
       </div>
 
       <div style="text-align: center; margin-top: 40px;">
         <p style="margin-bottom: 20px; font-weight: 600;">
           <strong class="tech-text">BAJATEX S. de R.L. de C.V. (Único Uniformes)</strong><br>
-          <a href="mailto:ventas.unicotextil@gmail.com">ventas.unicotextil@gmail.com</a> | Soporte WhatsApp: <a href="https://wa.me/5216642368701" target="_blank" rel="noopener">664 236 8701</a>
+          <a id="legalEmailLink" href="mailto:ventas.unicotextil@gmail.com">ventas.unicotextil@gmail.com</a>
+          |
+          Soporte WhatsApp:
+          <a id="legalWhatsappLink" href="https://wa.me/5216642368701" target="_blank" rel="noopener">664 236 8701</a>
         </p>
+        <p id="legalSupportHours" style="color:#666; font-weight:600;"></p>
       </div>
     </div>
   </main>
@@ -120,16 +124,16 @@
           <strong>Seguridad Total Garantizada</strong><br>
           Pago cifrado vía Stripe. Aceptamos OXXO Pay.<br>
           Logística inteligente internacional con Envía.com.<br><br>
-          Hecho con pasión. Fabricado y Operado por <b style="color: white; text-shadow: 0 0 5px rgba(255,255,255,0.5);">Único Uniformes</b>.
+          <span id="legalFooterNote">Hecho con pasión. Fabricado y Operado por <b style="color: white; text-shadow: 0 0 5px rgba(255,255,255,0.5);">Único Uniformes</b>.</span>
         </div>
       </div>
 
       <div class="footer__socials">
         <div class="social-title">SÍGUENOS EN LA PISTA</div>
         <div class="social-links">
-          <a href="https://www.facebook.com/uniforme.unico/" target="_blank" rel="noopener">Facebook</a>
-          <a href="https://www.instagram.com/uniformes.unico" target="_blank" rel="noopener">Instagram</a>
-          <a href="https://youtu.be/F4lw1EcehIA?si=jFBT9skFLs566g8N" target="_blank" rel="noopener">YouTube</a>
+          <a id="legalFacebookLink" href="https://www.facebook.com/uniforme.unico/" target="_blank" rel="noopener">Facebook</a>
+          <a id="legalInstagramLink" href="https://www.instagram.com/uniformes.unico" target="_blank" rel="noopener">Instagram</a>
+          <a id="legalYoutubeLink" href="https://youtu.be/F4lw1EcehIA?si=jFBT9skFLs566g8N" target="_blank" rel="noopener">YouTube</a>
         </div>
       </div>
 
@@ -138,5 +142,69 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    (async () => {
+      try {
+        const res = await fetch("/.netlify/functions/site_settings");
+        const data = await res.json();
+        if (!data || !data.ok) return;
+
+        const contact = data.contact || {};
+        const socials = data.socials || {};
+        const home = data.home || {};
+
+        const email = String(contact.email || "").trim();
+        const waE164 = String(contact.whatsapp_e164 || "").trim();
+        const waDisplay = String(contact.whatsapp_display || "").trim();
+
+        if (email) {
+          const el1 = document.getElementById("legalArcoEmail");
+          const el2 = document.getElementById("legalEmailLink");
+          if (el1) el1.textContent = email;
+          if (el2) {
+            el2.href = `mailto:${email}`;
+            el2.textContent = email;
+          }
+        }
+
+        if (waE164 || waDisplay) {
+          const wa = document.getElementById("legalWhatsappLink");
+          if (wa) {
+            if (waE164) wa.href = `https://wa.me/${encodeURIComponent(waE164)}`;
+            if (waDisplay) wa.textContent = waDisplay;
+          }
+        }
+
+        if (home.shipping_note) {
+          const el = document.getElementById("legalShippingNote");
+          if (el) el.textContent = String(home.shipping_note);
+        }
+
+        if (home.returns_note) {
+          const el = document.getElementById("legalReturnsNote");
+          if (el) el.textContent = String(home.returns_note);
+        }
+
+        if (home.support_hours) {
+          const el = document.getElementById("legalSupportHours");
+          if (el) el.textContent = String(home.support_hours);
+        }
+
+        if (home.footer_note) {
+          const el = document.getElementById("legalFooterNote");
+          if (el) el.textContent = String(home.footer_note);
+        }
+
+        const fb = document.getElementById("legalFacebookLink");
+        const ig = document.getElementById("legalInstagramLink");
+        const yt = document.getElementById("legalYoutubeLink");
+
+        if (fb && socials.facebook) fb.href = String(socials.facebook);
+        if (ig && socials.instagram) ig.href = String(socials.instagram);
+        if (yt && socials.youtube) yt.href = String(socials.youtube);
+      } catch {}
+    })();
+  </script>
 </body>
 </html>
