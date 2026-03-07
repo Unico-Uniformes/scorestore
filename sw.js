@@ -1,10 +1,11 @@
-/* SCORE STORE — Service Worker (PWA producción, resiliente v2.2.4)
+/* SCORE STORE — Service Worker (PWA producción, resiliente v2.3.0)
    Objetivo:
-   - Evitar “se queda en versión vieja”
-   - No cachear /data/*.json (catálogo/promos dinámicos)
-   - Lighthouse/DevTools: NO interceptar navegación (evita error Network.getResponseBody / charset)
+   - Evitar quedarte pegado a una versión vieja
+   - Mantener control real del start_url
+   - No cachear /data/*.json ni functions dinámicas
+   - Usar navegación network-first con fallback a caché
 */
-const CACHE_VERSION = "scorestore-vfx-pro-v2.2.4";
+const CACHE_VERSION = "scorestore-vfx-pro-v2.3.0";
 const CACHE_NAME = CACHE_VERSION;
 
 const CORE_ASSETS = [
@@ -14,25 +15,26 @@ const CORE_ASSETS = [
   "/cancel.html",
   "/legal.html",
   "/css/styles.css",
+  "/css/override.css",
   "/js/main.js",
   "/js/success.js",
   "/site.webmanifest",
   "/assets/logo-score.webp",
   "/assets/logo-world-desert.webp",
   "/assets/fondo-pagina-score.webp",
+  "/assets/hero.webp",
 ];
 
 const isSafeToCache = (requestUrl) => {
   const url = new URL(requestUrl, self.location.origin);
   if (url.origin !== self.location.origin) return false;
 
-  // 🔥 NO cachear data dinámica
   if (url.pathname.startsWith("/data/")) return false;
-
   if (url.pathname.startsWith("/api/")) return false;
   if (url.pathname.includes("/.netlify/")) return false;
   if (url.pathname.startsWith("/admin/")) return false;
   if (url.pathname.endsWith(".json")) return false;
+
   return true;
 };
 
@@ -75,16 +77,22 @@ self.addEventListener("activate", (event) => {
       const keys = await caches.keys();
       await Promise.all(keys.map((key) => (key !== CACHE_NAME ? caches.delete(key) : null)));
 
-      await self.clients.claim();
+      if ("navigationPreload" in self.registration) {
+        try {
+          await self.registration.navigationPreload.enable();
+        } catch {}
+      }
 
-      // ✅ Cuando un SW nuevo activa, recarga clientes para aplicar assets nuevos.
+      await self.clients.claim();
       await reloadAllClients();
     })()
   );
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {
@@ -93,18 +101,42 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
 
-  // Nunca interceptar proveedores
-  if (url.origin.includes("stripe.com") || url.origin.includes("supabase.co") || url.origin.includes("envia.com")) {
+  if (
+    url.origin.includes("stripe.com") ||
+    url.origin.includes("supabase.co") ||
+    url.origin.includes("envia.com")
+  ) {
     return;
   }
 
-  // 🔥 Navegación: NO interceptamos (Lighthouse/DevTools estable)
-  if (req.mode === "navigate") return;
-
-  // 🔥 data dinámica: siempre red
   if (url.origin === self.location.origin && url.pathname.startsWith("/data/")) return;
 
-  // CORE: cache-first
+  if (req.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(CACHE_NAME);
+
+        try {
+          const preload = await event.preloadResponse;
+          if (preload) {
+            await cache.put(req, preload.clone());
+            return preload;
+          }
+
+          const fresh = await fetch(req);
+          if (fresh && fresh.ok) {
+            await cache.put(req, fresh.clone());
+          }
+          return fresh;
+        } catch {
+          const cached = await cache.match(req, { ignoreSearch: true });
+          return cached || (await cache.match("/index.html")) || Response.error();
+        }
+      })()
+    );
+    return;
+  }
+
   if (url.origin === self.location.origin && CORE_ASSETS.includes(url.pathname)) {
     event.respondWith(
       (async () => {
@@ -113,15 +145,19 @@ self.addEventListener("fetch", (event) => {
         if (cached) return cached;
 
         const fresh = await fetch(req);
-        if (fresh && fresh.ok) await cache.put(req, fresh.clone());
+        if (fresh && fresh.ok) {
+          await cache.put(req, fresh.clone());
+        }
         return fresh;
       })()
     );
     return;
   }
 
-  // JS/CSS: network-first (mitiga “versión vieja”)
-  if (url.origin === self.location.origin && (url.pathname.startsWith("/js/") || url.pathname.startsWith("/css/"))) {
+  if (
+    url.origin === self.location.origin &&
+    (url.pathname.startsWith("/js/") || url.pathname.startsWith("/css/"))
+  ) {
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE_NAME);
@@ -140,7 +176,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Resto: stale-while-revalidate
   if (isSafeToCache(req.url)) {
     event.respondWith(
       (async () => {
