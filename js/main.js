@@ -1,18 +1,18 @@
 /* =========================================================
-   SCORE STORE — Frontend (Repo-alineado + Anti-404 assets + Carousel Snap)
-   Build: 2026-03-04
+   SCORE STORE — Frontend Fusion PRO
+   Base actual + rescate UX del deploy 69a7...
    ========================================================= */
 
 (() => {
   "use strict";
 
-  const APP_VERSION = window.__APP_VERSION__ || "2026.03.04.SCORESTORE";
+  const APP_VERSION = window.__APP_VERSION__ || "2026.03.08.SCORESTORE";
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-  const debounce = (fn, wait = 150) => {
+  const debounce = (fn, wait = 160) => {
     let t = null;
     return (...args) => {
       clearTimeout(t);
@@ -30,6 +30,7 @@
     }).format(v / 100);
   };
 
+  const normCode = (s) => String(s || "").trim().toUpperCase().replace(/\s+/g, "");
   const safeUrl = (u) => {
     const s = String(u || "").trim();
     if (!s) return "";
@@ -68,10 +69,8 @@
   const assistantSendBtn = $("#assistantSendBtn");
 
   const scrollToCategoriesBtn = $("#scrollToCategoriesBtn");
-
   const categoryGrid = $("#categoryGrid");
   const categoryHint = $("#categoryHint");
-
   const catalogCarouselSection = $("#catalogCarouselSection");
   const carouselTitle = $("#carouselTitle");
   const productGrid = $("#productGrid");
@@ -166,7 +165,6 @@
   let currentQty = 1;
   let currentSize = null;
   let activePromo = null;
-
   let shipMode = "pickup";
   let shippingQuoted = 0;
   let shippingMeta = null;
@@ -174,6 +172,25 @@
   let cart = [];
   const CART_KEY = "scorestore_cart_v1";
   const CONSENT_KEY = "scorestore_cookie_consent_v1";
+
+  const siteSettings = {
+    hero_title: null,
+    hero_image: null,
+    promo_active: false,
+    promo_text: "",
+    pixel_id: "",
+    maintenance_mode: false,
+    season_key: "default",
+    theme: { accent: "#e10600", accent2: "#111111", particles: true },
+    home: { footer_note: "", shipping_note: "", returns_note: "", support_hours: "" },
+    socials: { facebook: "", instagram: "", youtube: "", tiktok: "" },
+    contact: {
+      email: "ventas.unicotextil@gmail.com",
+      phone: "",
+      whatsapp_e164: "5216642368701",
+      whatsapp_display: "664 236 8701",
+    },
+  };
 
   const showToast = (msg, type = "ok", timeout = 2400) => {
     if (!toast) return;
@@ -214,7 +231,11 @@
     el.classList.remove("is-open");
     setTimeout(() => {
       el.hidden = true;
-      if (!assistantModal?.classList.contains("is-open") && !productModal?.classList.contains("is-open")) {
+      if (
+        !assistantModal?.classList.contains("is-open") &&
+        !productModal?.classList.contains("is-open") &&
+        !sizeGuideModal?.classList.contains("is-open")
+      ) {
         closeOverlay();
       }
     }, 180);
@@ -232,10 +253,24 @@
     el.classList.remove("is-open");
     setTimeout(() => {
       el.hidden = true;
-      if (!sideMenu?.classList.contains("is-open") && !cartDrawer?.classList.contains("is-open")) {
+      if (
+        !sideMenu?.classList.contains("is-open") &&
+        !cartDrawer?.classList.contains("is-open") &&
+        !assistantModal?.classList.contains("is-open") &&
+        !productModal?.classList.contains("is-open") &&
+        !sizeGuideModal?.classList.contains("is-open")
+      ) {
         closeOverlay();
       }
     }, 180);
+  };
+
+  const closeAll = () => {
+    closeDrawer(sideMenu);
+    closeDrawer(cartDrawer);
+    closeModal(assistantModal);
+    closeModal(productModal);
+    closeModal(sizeGuideModal);
   };
 
   const setCheckoutLoading = (on) => {
@@ -292,25 +327,6 @@
       setCookieConsent("rejected");
       cookieBanner.hidden = true;
     });
-  };
-
-  const siteSettings = {
-    hero_title: null,
-    hero_image: null,
-    promo_active: false,
-    promo_text: "",
-    pixel_id: "",
-    maintenance_mode: false,
-    season_key: "default",
-    theme: { accent: "#e10600", accent2: "#111111", particles: true },
-    home: { footer_note: "", shipping_note: "", returns_note: "", support_hours: "" },
-    socials: { facebook: "", instagram: "", youtube: "", tiktok: "" },
-    contact: {
-      email: "ventas.unicotextil@gmail.com",
-      phone: "",
-      whatsapp_e164: "5216642368701",
-      whatsapp_display: "664 236 8701",
-    },
   };
 
   const applyFooterAndPromo = () => {
@@ -425,7 +441,6 @@
 
   const applySort = (items) => {
     const mode = String(sortSelect?.value || "featured");
-
     const arr = [...items];
     if (mode === "price_asc") arr.sort((a, b) => getProductPriceCents(a) - getProductPriceCents(b));
     else if (mode === "price_desc") arr.sort((a, b) => getProductPriceCents(b) - getProductPriceCents(a));
@@ -557,56 +572,6 @@
     ensureCarouselUX();
   };
 
-  searchInput?.addEventListener(
-    "input",
-    debounce((e) => {
-      searchQuery = String(e.target.value || "").trim();
-      renderProducts();
-    }, 120)
-  );
-
-  mobileSearchInput?.addEventListener(
-    "input",
-    debounce((e) => {
-      searchQuery = String(e.target.value || "").trim();
-      if (searchInput) searchInput.value = searchQuery;
-      renderProducts();
-    }, 120)
-  );
-
-  menuSearchInput?.addEventListener(
-    "input",
-    debounce((e) => {
-      searchQuery = String(e.target.value || "").trim();
-      if (searchInput) searchInput.value = searchQuery;
-      if (mobileSearchInput) mobileSearchInput.value = searchQuery;
-      renderProducts();
-    }, 120)
-  );
-
-  sortSelect?.addEventListener("change", renderProducts);
-
-  clearFilterBtn?.addEventListener("click", () => {
-    activeCategory = null;
-    searchQuery = "";
-    if (searchInput) searchInput.value = "";
-    if (mobileSearchInput) mobileSearchInput.value = "";
-    if (menuSearchInput) menuSearchInput.value = "";
-    renderProducts();
-  });
-
-  scrollToCategoriesBtn?.addEventListener("click", () => smoothScrollTo("#categories"));
-
-  mobileSearchBtn?.addEventListener("click", () => {
-    if (!mobileSearchWrap) return;
-    mobileSearchWrap.hidden = false;
-    mobileSearchInput?.focus();
-  });
-
-  closeMobileSearchBtn?.addEventListener("click", () => {
-    if (mobileSearchWrap) mobileSearchWrap.hidden = true;
-  });
-
   const renderPmSizes = (sizes) => {
     if (!pmSizePills) return;
     pmSizePills.innerHTML = "";
@@ -631,8 +596,8 @@
   const renderPmCarousel = (images, alt) => {
     if (!pmCarousel) return;
     pmCarousel.innerHTML = "";
-
     const list = Array.isArray(images) ? images.filter(Boolean) : [];
+
     if (!list.length) {
       pmCarousel.innerHTML = `<div class="product-card__placeholder" style="height:320px;">🏁</div>`;
       return;
@@ -649,6 +614,37 @@
     });
 
     pmCarousel.appendChild(track);
+  };
+
+  const addToCartItem = (product, size, qty = 1) => {
+    if (!product) return;
+    const sku = String(product.sku || "");
+    const existing = cart.find((x) => x.sku === sku && x.size === size);
+
+    if (existing) {
+      existing.qty += qty;
+    } else {
+      cart.push({
+        sku,
+        name: getProductName(product),
+        title: getProductName(product),
+        price_cents: getProductPriceCents(product),
+        image: getProductImage(product),
+        size,
+        qty,
+      });
+    }
+
+    persistCart();
+    renderCart();
+  };
+
+  const addToCartBySku = (sku, size = null, qty = 1) => {
+    const p = products.find((x) => String(x.sku || "") === String(sku || ""));
+    if (!p) return false;
+    const finalSize = size || getProductSizes(p)[0] || "Única";
+    addToCartItem(p, finalSize, qty);
+    return true;
   };
 
   const openProduct = (sku) => {
@@ -683,10 +679,8 @@
     openModal(productModal);
   };
 
-  const closeProduct = () => closeModal(productModal);
-
-  pmClose?.addEventListener("click", closeProduct);
-  pmBackBtn?.addEventListener("click", closeProduct);
+  pmClose?.addEventListener("click", () => closeModal(productModal));
+  pmBackBtn?.addEventListener("click", () => closeModal(productModal));
 
   pmQtyDec?.addEventListener("click", () => {
     currentQty = clamp(currentQty - 1, 1, 99);
@@ -701,26 +695,20 @@
   pmAdd?.addEventListener("click", () => {
     if (!currentProduct) return;
 
-    const sku = String(currentProduct.sku || "");
-    const existing = cart.find((x) => x.sku === sku && x.size === currentSize);
+    const original = pmAdd.innerHTML;
+    pmAdd.innerHTML = "✅ Agregado";
+    pmAdd.disabled = true;
 
-    if (existing) {
-      existing.qty += currentQty;
-    } else {
-      cart.push({
-        sku,
-        name: getProductName(currentProduct),
-        price_cents: getProductPriceCents(currentProduct),
-        image: getProductImage(currentProduct),
-        size: currentSize,
-        qty: currentQty,
-      });
-    }
+    const finalSize = currentSize || getProductSizes(currentProduct)[0] || "Única";
+    addToCartItem(currentProduct, finalSize, currentQty);
 
-    persistCart();
-    renderCart();
-    closeProduct();
-    showToast("Agregado al carrito.", "ok");
+    setTimeout(() => {
+      pmAdd.innerHTML = original;
+      pmAdd.disabled = false;
+      closeModal(productModal);
+      openDrawer(cartDrawer);
+      showToast("Agregado al carrito.", "ok");
+    }, 500);
   });
 
   pmShareBtn?.addEventListener("click", async () => {
@@ -835,7 +823,7 @@
   };
 
   const applyPromo = async () => {
-    const code = String(promoCode?.value || "").trim();
+    const code = normCode(promoCode?.value || "");
     if (!code) {
       activePromo = null;
       refreshTotals();
@@ -844,9 +832,7 @@
     }
 
     try {
-      const res = await fetch(`/.netlify/functions/promos?code=${encodeURIComponent(code)}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(`/.netlify/functions/promos?code=${encodeURIComponent(code)}`, { cache: "no-store" });
       const data = await res.json().catch(() => null);
 
       if (!res.ok || !data?.ok || !data?.promo) {
@@ -873,9 +859,7 @@
       btn.classList.toggle("is-active", btn.dataset.shipMode === shipMode);
     });
 
-    if (postalWrap) {
-      postalWrap.hidden = shipMode === "pickup";
-    }
+    if (postalWrap) postalWrap.hidden = shipMode === "pickup";
 
     if (shipHint) {
       if (shipMode === "pickup") shipHint.textContent = "Recoge tu pedido en fábrica o punto acordado.";
@@ -896,7 +880,7 @@
     });
   });
 
-  quoteBtn?.addEventListener("click", async () => {
+  const quoteShipping = async () => {
     const postal = String(postalCode?.value || "").trim();
     if (!postal) {
       showToast("Escribe tu CP / ZIP.", "error");
@@ -930,9 +914,11 @@
       refreshTotals();
       showToast(String(e?.message || "No se pudo cotizar envío."), "error");
     }
-  });
+  };
 
-  checkoutBtn?.addEventListener("click", async () => {
+  quoteBtn?.addEventListener("click", quoteShipping);
+
+  const doCheckout = async () => {
     if (!cart.length) {
       showToast("Tu carrito está vacío.", "error");
       return;
@@ -980,8 +966,9 @@
     } finally {
       setCheckoutLoading(false);
     }
-  });
+  };
 
+  checkoutBtn?.addEventListener("click", doCheckout);
   continueShoppingBtn?.addEventListener("click", () => closeDrawer(cartDrawer));
 
   const appendAssistantBubble = (role, text) => {
@@ -993,6 +980,44 @@
     assistantOutput.scrollTop = assistantOutput.scrollHeight;
   };
 
+  const openAssistantChat = () => {
+    closeDrawer(sideMenu);
+    openModal(assistantModal);
+    setTimeout(() => assistantInput?.focus(), 250);
+
+    if (!assistantOutput?.children?.length) {
+      appendAssistantBubble(
+        "assistant",
+        "¡Hola! Soy SCORE AI. Te puedo ayudar a encontrar productos, aclarar envíos, promo, tallas o llevarte directo al carrito."
+      );
+    }
+  };
+
+  const parseAssistantActions = (replyStr) => {
+    let output = String(replyStr || "");
+
+    const actionAddMatch = output.match(/\[ACTION:ADD_TO_CART:(.*?)\]/i);
+    if (actionAddMatch) {
+      const sku = String(actionAddMatch[1] || "").trim();
+      output = output.replace(/\[ACTION:ADD_TO_CART:.*?\]/gi, "").trim();
+      if (sku && addToCartBySku(sku, null, 1)) {
+        output += "\n\nProducto agregado al carrito.";
+      }
+    }
+
+    const actionCartMatch = output.match(/\[ACTION:OPEN_CART\]/i);
+    if (actionCartMatch) {
+      output = output.replace(/\[ACTION:OPEN_CART\]/gi, "").trim();
+      setTimeout(() => {
+        closeModal(assistantModal);
+        openDrawer(cartDrawer);
+        renderCart();
+      }, 450);
+    }
+
+    return output;
+  };
+
   const sendAssistant = async () => {
     const message = String(assistantInput?.value || "").trim();
     if (!message) return;
@@ -1001,34 +1026,91 @@
     if (assistantInput) assistantInput.value = "";
 
     try {
+      if (assistantSendBtn) assistantSendBtn.disabled = true;
+
+      const ctx = {
+        currentProduct: currentProduct ? currentProduct.sku : null,
+        cartItems: cart.length > 0 ? cart.map((i) => `${i.qty}x ${i.name}`).join(", ") : "Vacío",
+        cartTotal: money(getCartTotal()),
+        shipMode,
+      };
+
       const res = await fetch("/.netlify/functions/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, context: ctx }),
       });
 
       const data = await res.json().catch(() => null);
-      appendAssistantBubble("assistant", data?.reply || "No tuve una respuesta disponible.");
+      let reply = data?.reply || "No tuve una respuesta disponible.";
+      reply = parseAssistantActions(reply);
+      appendAssistantBubble("assistant", reply);
     } catch {
       appendAssistantBubble("assistant", "No pude conectarme con el asistente en este momento.");
+    } finally {
+      if (assistantSendBtn) assistantSendBtn.disabled = false;
+      assistantInput?.focus();
     }
   };
 
-  openAssistantBtn?.addEventListener("click", () => openModal(assistantModal));
-  floatingAssistantBtn?.addEventListener("click", () => openModal(assistantModal));
-  navOpenAssistant?.addEventListener("click", () => {
-    closeDrawer(sideMenu);
-    openModal(assistantModal);
-  });
+  openAssistantBtn?.addEventListener("click", openAssistantChat);
+  floatingAssistantBtn?.addEventListener("click", openAssistantChat);
+  navOpenAssistant?.addEventListener("click", openAssistantChat);
   assistantClose?.addEventListener("click", () => closeModal(assistantModal));
   assistantSendBtn?.addEventListener("click", sendAssistant);
-  assistantInput?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") sendAssistant();
+
+  searchInput?.addEventListener(
+    "input",
+    debounce((e) => {
+      searchQuery = String(e.target.value || "").trim();
+      renderProducts();
+    }, 120)
+  );
+
+  mobileSearchInput?.addEventListener(
+    "input",
+    debounce((e) => {
+      searchQuery = String(e.target.value || "").trim();
+      if (searchInput) searchInput.value = searchQuery;
+      renderProducts();
+    }, 120)
+  );
+
+  menuSearchInput?.addEventListener(
+    "input",
+    debounce((e) => {
+      searchQuery = String(e.target.value || "").trim();
+      if (searchInput) searchInput.value = searchQuery;
+      if (mobileSearchInput) mobileSearchInput.value = searchQuery;
+      renderProducts();
+    }, 120)
+  );
+
+  sortSelect?.addEventListener("change", renderProducts);
+
+  clearFilterBtn?.addEventListener("click", () => {
+    activeCategory = null;
+    searchQuery = "";
+    if (searchInput) searchInput.value = "";
+    if (mobileSearchInput) mobileSearchInput.value = "";
+    if (menuSearchInput) menuSearchInput.value = "";
+    renderProducts();
+  });
+
+  scrollToCategoriesBtn?.addEventListener("click", () => smoothScrollTo("#categories"));
+
+  mobileSearchBtn?.addEventListener("click", () => {
+    if (!mobileSearchWrap) return;
+    mobileSearchWrap.hidden = false;
+    mobileSearchInput?.focus();
+  });
+
+  closeMobileSearchBtn?.addEventListener("click", () => {
+    if (mobileSearchWrap) mobileSearchWrap.hidden = true;
   });
 
   openMenuBtn?.addEventListener("click", () => openDrawer(sideMenu));
   closeMenuBtn?.addEventListener("click", () => closeDrawer(sideMenu));
-
   openCartBtn?.addEventListener("click", () => openDrawer(cartDrawer));
   closeCartBtn?.addEventListener("click", () => closeDrawer(cartDrawer));
   navOpenCart?.addEventListener("click", () => {
@@ -1037,11 +1119,27 @@
   });
 
   overlay?.addEventListener("click", () => {
-    closeDrawer(sideMenu);
-    closeDrawer(cartDrawer);
-    closeModal(assistantModal);
-    closeModal(productModal);
-    closeModal(sizeGuideModal);
+    if (checkoutLoader && !checkoutLoader.hidden) return;
+    closeAll();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (checkoutLoader && !checkoutLoader.hidden) return;
+      closeAll();
+    }
+  });
+
+  assistantInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendAssistant();
+  });
+
+  postalCode?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") quoteShipping();
+  });
+
+  promoCode?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") applyPromo();
   });
 
   scrollTopBtn?.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
