@@ -4,43 +4,40 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#E10600" />
-  <meta name="description" content="Merch Oficial de Score International. Pago cifrado seguro con Stripe + Logística Envía.com." />
+  <meta name="description" content="Merch Oficial de Score International. Pago seguro y experiencia oficial SCORE." />
   <meta name="facebook-domain-verification" content="wuo7x5sxsjcer1t0epn1id5xgjp8su" />
-
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
 
   <title>SCORE STORE — Official Merchandise</title>
-
-  <meta name="robots" content="index,follow,max-image-preview:large" />
-  <meta name="format-detection" content="telephone=no" />
   <link rel="canonical" href="https://scorestore.netlify.app/" />
 
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="es_MX" />
   <meta property="og:title" content="SCORE STORE — Official Merchandise" />
-  <meta property="og:description" content="Merch Oficial de Score International. Pago cifrado seguro con Stripe + Logística Envía.com." />
+  <meta property="og:description" content="Merch Oficial de Score International. Pago seguro y experiencia oficial SCORE." />
   <meta property="og:url" content="https://scorestore.netlify.app/" />
   <meta property="og:image" content="https://scorestore.netlify.app/assets/hero.webp" />
 
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SCORE STORE — Official Merchandise" />
-  <meta name="twitter:description" content="Merch Oficial de Score International. Pago cifrado seguro con Stripe + Logística Envía.com." />
+  <meta name="twitter:description" content="Merch Oficial de Score International. Pago seguro y experiencia oficial SCORE." />
   <meta name="twitter:image" content="https://scorestore.netlify.app/assets/hero.webp" />
 
   <link rel="manifest" href="/site.webmanifest" />
   <link rel="icon" href="/assets/icons/icon-192.png" />
   <link rel="apple-touch-icon" href="/assets/icons/icon-192.png" />
 
-  <link rel="preconnect" href="https://js.stripe.com" crossorigin />
-  <link rel="preconnect" href="https://connect.facebook.net" crossorigin />
   <link rel="preload" href="/css/styles.css" as="style" />
-  <link rel="preload" href="/assets/fondo-pagina-score.webp" as="image" type="image/webp" />
+  <link rel="preload" href="/css/override.css?v=2026-03-08b" as="style" />
   <link rel="preload" href="/assets/hero.webp" as="image" type="image/webp" fetchpriority="high" />
+  <link rel="preload" href="/assets/logo-score.webp" as="image" type="image/webp" />
 
   <link rel="stylesheet" href="/css/styles.css" />
-  <link rel="stylesheet" href="/css/override.css?v=2026-03-08" />
+  <link rel="stylesheet" href="/css/override.css?v=2026-03-08b" />
 
   <script type="application/ld+json">
     {
@@ -49,8 +46,7 @@
       "name": "Score Store",
       "url": "https://scorestore.netlify.app/",
       "logo": "https://scorestore.netlify.app/assets/logo-score.webp",
-      "description": "Mercancía oficial de Score International Off-Road Racing.",
-      "paymentAccepted": "Credit Card, Debit Card, OXXO Pay"
+      "description": "Mercancía oficial de Score International Off-Road Racing."
     }
   </script>
 </head>
@@ -175,7 +171,16 @@
   </div>
 
   <section class="hero cinematic-hero" aria-label="Presentación Principal">
-    <div class="hero__bg" aria-hidden="true"></div>
+    <img
+      class="hero__bgimg"
+      src="/assets/hero.webp"
+      alt=""
+      width="1536"
+      height="1024"
+      decoding="async"
+      fetchpriority="high"
+      aria-hidden="true"
+    />
     <div class="hero__overlay" aria-hidden="true"></div>
     <div class="hero__particles" aria-hidden="true"></div>
 
@@ -185,8 +190,8 @@
           class="hero__desert hero-vfx-float"
           src="/assets/logo-world-desert.webp"
           alt="World Desert Championship"
-          width="280"
-          height="253"
+          width="240"
+          height="217"
           decoding="async"
         />
 
@@ -208,8 +213,8 @@
         </div>
 
         <div class="hero__meta">
-          <span class="chip tech-chip" title="Transacciones encriptadas de extremo a extremo">🔒 Pago Seguro Stripe</span>
-          <span class="chip tech-chip" title="Cobertura total en México y Estados Unidos">📦 Envíos rápidos Envía.com</span>
+          <span class="chip tech-chip">🔒 Pago Seguro</span>
+          <span class="chip tech-chip">📦 Envíos rápidos</span>
         </div>
       </div>
     </div>
@@ -343,7 +348,7 @@
 
           <div class="cartsection">
             <button id="checkoutBtn" class="btn btn--primary btn--block btn--large cinematic-btn neon-border" type="button">
-              Pagar con Stripe
+              Pagar
             </button>
             <button id="continueShoppingBtn" class="btn btn--ghost btn--block tech-ghost-btn" type="button" style="margin-top:10px;">
               Seguir comprando
@@ -453,7 +458,7 @@
 
           <div class="sticky-mobile-cta glass-mobile-cta">
             <div class="ux-trust-badges" style="margin-bottom: 12px;">
-              <div class="trust-item">🔒 Pago cifrado Stripe</div>
+              <div class="trust-item">🔒 Pago seguro</div>
               <div class="trust-item">📦 Tracking automático</div>
             </div>
 
@@ -504,6 +509,6 @@
 
   <div id="toast" class="toast glass-panel" role="status" aria-live="polite" hidden></div>
 
-  <script src="/js/main.js?v=2026-03-08" defer></script>
+  <script src="/js/main.js?v=2026-03-08b" defer></script>
 </body>
 </html>
