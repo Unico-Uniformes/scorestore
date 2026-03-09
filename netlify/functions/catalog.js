@@ -9,6 +9,13 @@ const DEFAULT_SCORE_ORG_ID = "1f3b9980-a1c5-4557-b4eb-a75bb9a8aaa6";
 const isUuid = (s) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || "").trim());
 
+const CATEGORY_CONFIG = [
+  { uiId: "BAJA1000", mapFrom: ["BAJA1000", "BAJA_1000", "EDICION_2025", "OTRAS_EDICIONES"] },
+  { uiId: "BAJA500", mapFrom: ["BAJA500", "BAJA_500"] },
+  { uiId: "BAJA400", mapFrom: ["BAJA400", "BAJA_400"] },
+  { uiId: "SF250", mapFrom: ["SF250", "SF_250"] },
+];
+
 const withNoStore = (resp) => {
   resp.headers = resp.headers || {};
   resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate";
@@ -36,15 +43,10 @@ const ensureLeadingSlash = (value) => {
   return s.startsWith("/") ? s : `/${s}`;
 };
 
-const normalizeSectionId = (value) => {
-  const s = str(value, "EDICION_2025");
-
-  if (/^BAJA1000$/i.test(s)) return "EDICION_2025";
-  if (/^BAJA[_-]?400$/i.test(s)) return "BAJA400";
-  if (/^BAJA[_-]?500$/i.test(s)) return "BAJA500";
-  if (/^SF[_-]?250$/i.test(s)) return "SF250";
-
-  return s;
+const normalizeSectionIdToUi = (sectionId) => {
+  const sid = String(sectionId || "").trim();
+  const found = CATEGORY_CONFIG.find((c) => c.mapFrom.includes(sid));
+  return found ? found.uiId : "BAJA1000";
 };
 
 const resolveOrgId = async () => {
@@ -135,8 +137,7 @@ const normalizeAssetCandidate = (input) => {
   s = s.replace(/camiseta-cafe-oscuro-baja400/gi, "camiseta-cafe- oscuro-baja400");
   s = s.replace(/camiseta-negra-sinmangas-sf250/gi, "camiseta-negra-sinmangas-SF250");
 
-  s = ensureLeadingSlash(s);
-  return s;
+  return ensureLeadingSlash(s);
 };
 
 const resolveAssetPath = (input, fallbackList = []) => {
@@ -184,162 +185,18 @@ const uniqStrings = (items) => {
   return out;
 };
 
-const normalizeSection = (row) => {
-  const sectionId = normalizeSectionId(row?.section_id || row?.sectionId || row?.id);
-  const name = str(row?.name || row?.title || row?.label, sectionId.replaceAll("_", " "));
-
-  const cover = resolveAssetPath(
-    row?.cover_image || row?.image || row?.logo || row?.coverImage
-  );
-
-  return {
-    id: sectionId,
-    section_id: sectionId,
-    sectionId: sectionId,
-    name,
-    title: name,
-    image: cover,
-    logo: cover,
-    count: num(row?.count, 0),
-  };
-};
-
-const normalizeProduct = (p, fallbackBySku = new Map()) => {
-  const sku = str(p?.sku);
-  if (!sku) return null;
-
-  const fallback = fallbackBySku.get(sku) || null;
-
-  const mergedImages = uniqStrings([
-    ...arr(p?.images),
-    ...arr(fallback?.images),
-  ]);
-
-  const resolvedImages = uniqStrings(
-    mergedImages
-      .map((img) => resolveAssetPath(img, fallback?.images || []))
-      .filter(Boolean)
-  );
-
-  const primary = resolveAssetPath(
-    p?.img || p?.image_url || p?.image || fallback?.img || fallback?.image_url || fallback?.image || resolvedImages[0],
-    resolvedImages
-  );
-
-  const sizes =
-    arr(p?.sizes).length > 0
-      ? arr(p?.sizes).filter(Boolean).map(String)
-      : arr(fallback?.sizes).length > 0
-        ? arr(fallback?.sizes).filter(Boolean).map(String)
-        : ["S", "M", "L", "XL", "XXL"];
-
-  const priceCents =
-    Number.isFinite(Number(p?.price_cents)) && num(p?.price_cents) > 0
-      ? Math.max(0, Math.floor(num(p?.price_cents)))
-      : Number.isFinite(Number(p?.price_mxn)) && num(p?.price_mxn) > 0
-        ? Math.max(0, Math.round(num(p?.price_mxn) * 100))
-        : Number.isFinite(Number(p?.base_mxn)) && num(p?.base_mxn) > 0
-          ? Math.max(0, Math.round(num(p?.base_mxn) * 100))
-          : Number.isFinite(Number(fallback?.price_cents)) && num(fallback?.price_cents) > 0
-            ? Math.max(0, Math.floor(num(fallback?.price_cents)))
-            : 0;
-
-  const sectionId = normalizeSectionId(
-    p?.section_id || p?.sectionId || fallback?.section_id || fallback?.sectionId
-  );
-
-  const collection = str(p?.sub_section || p?.collection || fallback?.sub_section || fallback?.collection);
-
-  return {
-    sku,
-    id: str(p?.id, str(fallback?.id, sku)),
-    title: str(p?.title || p?.name || fallback?.title || fallback?.name, "Producto Oficial"),
-    name: str(p?.name || p?.title || fallback?.name || fallback?.title, "Producto Oficial"),
-    description: str(p?.description || fallback?.description),
-    price_cents: priceCents,
-    price_mxn: num(p?.price_mxn, num(fallback?.price_mxn, 0)),
-    base_mxn: num(p?.base_mxn, num(fallback?.base_mxn, 0)),
-    sectionId,
-    section_id: sectionId,
-    collection,
-    sub_section: collection,
-    image: primary,
-    image_url: primary,
-    img: primary,
-    images: resolvedImages.length ? resolvedImages : primary ? [primary] : [],
-    sizes,
-    rank: Number.isFinite(Number(p?.rank)) ? Number(p.rank) : Number.isFinite(Number(fallback?.rank)) ? Number(fallback.rank) : 999,
-    stock: p?.stock == null ? (fallback?.stock == null ? null : num(fallback?.stock, 0)) : num(p?.stock, 0),
-  };
-};
-
-const normalizePayload = (payload) => {
+const normalizeFallback = (payload) => {
   const data = payload && typeof payload === "object" ? payload : {};
-
-  const rawSections = Array.isArray(data.sections)
+  const sections = Array.isArray(data.sections)
     ? data.sections
     : Array.isArray(data.categories)
       ? data.categories
       : [];
-
-  const rawProducts = Array.isArray(data.products) ? data.products : [];
-
-  const fallbackBySku = new Map(
-    rawProducts
-      .filter((p) => str(p?.sku))
-      .map((p) => [str(p.sku), p])
-  );
-
-  const products = rawProducts.map((p) => normalizeProduct(p, fallbackBySku)).filter(Boolean);
-
-  let sections = rawSections.map(normalizeSection);
-
-  if (!sections.length && products.length) {
-    const sectionMap = new Map();
-
-    for (const item of products) {
-      const key = str(item.section_id || item.sectionId);
-      if (!key) continue;
-
-      if (!sectionMap.has(key)) {
-        sectionMap.set(key, {
-          id: key,
-          section_id: key,
-          sectionId: key,
-          title: key.replaceAll("_", " "),
-          name: key.replaceAll("_", " "),
-          image: item.image || item.image_url || "",
-          logo: item.image || item.image_url || "",
-          count: 0,
-        });
-      }
-
-      sectionMap.get(key).count += 1;
-    }
-
-    sections = Array.from(sectionMap.values());
-  } else if (sections.length) {
-    const counts = new Map();
-    for (const item of products) {
-      const key = str(item.section_id || item.sectionId);
-      if (!key) continue;
-      counts.set(key, (counts.get(key) || 0) + 1);
-    }
-
-    sections = sections.map((section) => {
-      const key = str(section.section_id || section.sectionId || section.id);
-      return {
-        ...section,
-        count: counts.get(key) || num(section.count, 0),
-      };
-    });
-  }
+  const products = Array.isArray(data.products) ? data.products : [];
 
   return {
-    ok: true,
     store: data.store || { name: "SCORE STORE", currency: "MXN", locale: "es-MX" },
     sections,
-    categories: sections,
     products,
   };
 };
@@ -348,28 +205,39 @@ exports.handler = async (event) => {
   const origin = event?.headers?.origin || event?.headers?.Origin || "*";
 
   if (event.httpMethod === "OPTIONS") return handleOptions(event);
-
   if (event.httpMethod !== "GET") {
     return withNoStore(jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
   }
 
-  const fallbackRaw =
+  const fallbackRaw = normalizeFallback(
     readJsonFile("data/catalog.json") || {
       store: { name: "SCORE STORE", currency: "MXN", locale: "es-MX" },
       sections: [],
       products: [],
-    };
+    }
+  );
 
-  const fallback = normalizePayload(fallbackRaw);
   const fallbackBySku = new Map(
-    arr(fallback.products)
+    fallbackRaw.products
       .filter((p) => str(p?.sku))
       .map((p) => [str(p.sku), p])
   );
 
   const sb = supabaseAdmin();
   if (!sb) {
-    return withNoStore(jsonResponse(200, fallback, origin));
+    return withNoStore(
+      jsonResponse(
+        200,
+        {
+          ok: true,
+          store: fallbackRaw.store,
+          sections: fallbackRaw.sections,
+          categories: fallbackRaw.sections,
+          products: fallbackRaw.products,
+        },
+        origin
+      )
+    );
   }
 
   try {
@@ -388,73 +256,117 @@ exports.handler = async (event) => {
       .limit(800);
 
     if (error || !Array.isArray(data) || data.length === 0) {
-      return withNoStore(jsonResponse(200, fallback, origin));
+      return withNoStore(
+        jsonResponse(
+          200,
+          {
+            ok: true,
+            store: fallbackRaw.store,
+            sections: fallbackRaw.sections,
+            categories: fallbackRaw.sections,
+            products: fallbackRaw.products,
+          },
+          origin
+        )
+      );
     }
 
     const products = data
-      .map((p) =>
-        normalizeProduct(
-          {
-            id: p.id,
-            sku: p.sku,
-            title: p.name,
-            name: p.name,
-            description: p.description,
-            price_cents: p.price_cents,
-            price_mxn: p.price_mxn,
-            base_mxn: p.base_mxn,
-            sectionId: p.section_id,
-            section_id: p.section_id,
-            collection: p.sub_section,
-            sub_section: p.sub_section,
-            image: p.image_url || p.img,
-            image_url: p.image_url,
-            img: p.img,
-            images: Array.isArray(p.images) ? p.images : [],
-            sizes: Array.isArray(p.sizes) ? p.sizes : [],
-            rank: p.rank,
-            stock: p.stock,
-          },
-          fallbackBySku
-        )
-      )
+      .map((p) => {
+        const sku = str(p?.sku);
+        if (!sku) return null;
+
+        const fb = fallbackBySku.get(sku) || null;
+
+        const mergedImages = uniqStrings([
+          ...arr(p?.images),
+          ...arr(fb?.images),
+          p?.image_url,
+          p?.img,
+        ]);
+
+        const resolvedImages = uniqStrings(
+          mergedImages.map((img) => resolveAssetPath(img, fb?.images || [])).filter(Boolean)
+        );
+
+        const primary = resolveAssetPath(
+          p?.image_url || p?.img || resolvedImages[0],
+          resolvedImages
+        );
+
+        const sizes =
+          arr(p?.sizes).length > 0
+            ? arr(p?.sizes).filter(Boolean).map(String)
+            : arr(fb?.sizes).length > 0
+              ? arr(fb?.sizes).filter(Boolean).map(String)
+              : ["S", "M", "L", "XL", "XXL"];
+
+        const priceCents =
+          Number.isFinite(Number(p?.price_cents)) && num(p?.price_cents) > 0
+            ? Math.max(0, Math.floor(num(p?.price_cents)))
+            : Number.isFinite(Number(p?.price_mxn)) && num(p?.price_mxn) > 0
+              ? Math.max(0, Math.round(num(p?.price_mxn) * 100))
+              : Number.isFinite(Number(p?.base_mxn)) && num(p?.base_mxn) > 0
+                ? Math.max(0, Math.round(num(p?.base_mxn) * 100))
+                : Number.isFinite(Number(fb?.price_cents)) && num(fb?.price_cents) > 0
+                  ? Math.max(0, Math.floor(num(fb?.price_cents)))
+                  : 0;
+
+        const rawSection = str(p?.section_id || fb?.sectionId || fb?.section_id, "EDICION_2025");
+        const uiSection = normalizeSectionIdToUi(rawSection);
+
+        return {
+          sku,
+          title: str(p?.name || fb?.title || fb?.name, "Producto Oficial"),
+          description: str(p?.description || fb?.description),
+          price_cents: priceCents,
+          sectionId: rawSection,
+          uiSection,
+          collection: str(p?.sub_section || fb?.collection || fb?.sub_section),
+          images: resolvedImages.length ? resolvedImages : primary ? [primary] : [],
+          sizes,
+          rank: Number.isFinite(Number(p?.rank)) ? Number(p.rank) : Number.isFinite(Number(fb?.rank)) ? Number(fb.rank) : 999,
+          stock: p?.stock == null ? (fb?.stock == null ? null : num(fb?.stock, 0)) : num(p?.stock, 0),
+        };
+      })
       .filter(Boolean);
 
-    const sectionMap = new Map();
-    const fallbackSections = arr(fallback.sections);
-    const fallbackSectionById = new Map(
-      fallbackSections.map((s) => [str(s.section_id || s.sectionId || s.id), s])
-    );
+    const counts = new Map();
+    products.forEach((p) => counts.set(p.uiSection, (counts.get(p.uiSection) || 0) + 1));
 
-    for (const item of products) {
-      const key = str(item.section_id || item.sectionId);
-      if (!key) continue;
-
-      if (!sectionMap.has(key)) {
-        const fb = fallbackSectionById.get(key);
-        sectionMap.set(key, {
-          id: key,
-          section_id: key,
-          sectionId: key,
-          title: str(fb?.title || fb?.name, key.replaceAll("_", " ")),
-          name: str(fb?.name || fb?.title, key.replaceAll("_", " ")),
-          image: resolveAssetPath(fb?.image || fb?.logo || fb?.cover_image || item.image || item.image_url),
-          logo: resolveAssetPath(fb?.logo || fb?.image || fb?.cover_image || item.image || item.image_url),
-          count: 0,
-        });
-      }
-
-      sectionMap.get(key).count += 1;
-    }
-
-    const sections = Array.from(sectionMap.values());
+    const sections = [
+      {
+        id: "BAJA1000",
+        title: "BAJA 1000",
+        logo: "/assets/logo-baja1000.webp",
+        count: counts.get("BAJA1000") || 0,
+      },
+      {
+        id: "BAJA500",
+        title: "BAJA 500",
+        logo: "/assets/logo-baja500.webp",
+        count: counts.get("BAJA500") || 0,
+      },
+      {
+        id: "BAJA400",
+        title: "BAJA 400",
+        logo: "/assets/logo-baja400.webp",
+        count: counts.get("BAJA400") || 0,
+      },
+      {
+        id: "SF250",
+        title: "SAN FELIPE 250",
+        logo: "/assets/logo-sf250.webp",
+        count: counts.get("SF250") || 0,
+      },
+    ];
 
     return withNoStore(
       jsonResponse(
         200,
         {
           ok: true,
-          store: fallback.store,
+          store: fallbackRaw.store,
           sections,
           categories: sections,
           products,
@@ -463,6 +375,18 @@ exports.handler = async (event) => {
       )
     );
   } catch {
-    return withNoStore(jsonResponse(200, fallback, origin));
+    return withNoStore(
+      jsonResponse(
+        200,
+        {
+          ok: true,
+          store: fallbackRaw.store,
+          sections: fallbackRaw.sections,
+          categories: fallbackRaw.sections,
+          products: fallbackRaw.products,
+        },
+        origin
+      )
+    );
   }
 };
