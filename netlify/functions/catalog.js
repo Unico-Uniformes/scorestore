@@ -6,9 +6,6 @@ const { jsonResponse, handleOptions, supabaseAdmin, readJsonFile } = require("./
 
 const DEFAULT_SCORE_ORG_ID = "1f3b9980-a1c5-4557-b4eb-a75bb9a8aaa6";
 
-const isUuid = (s) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || "").trim());
-
 const CATEGORY_CONFIG = [
   {
     id: "BAJA1000",
@@ -35,6 +32,9 @@ const CATEGORY_CONFIG = [
     mapFrom: ["SF250", "SF_250"],
   },
 ];
+
+const isUuid = (s) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || "").trim());
 
 const withNoStore = (resp) => {
   resp.headers = resp.headers || {};
