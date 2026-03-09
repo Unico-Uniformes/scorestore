@@ -1,17 +1,19 @@
 /* =========================================================
-   SCORE STORE — Frontend (Repo-alineado + Anti-404 assets + Carousel Snap)
-   Build: 2026-03-08
+   SCORE STORE — main.js
+   Aligned to CURRENT ORIGINAL index.html
+   Build: 2026-03-09
    ========================================================= */
 
 (() => {
   "use strict";
 
-  const APP_VERSION = window.__APP_VERSION__ || "2026.03.08.SCORESTORE";
+  const APP_VERSION = window.__APP_VERSION__ || "2026.03.09.SCORESTORE";
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
   const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+
   const debounce = (fn, wait = 150) => {
     let t = null;
     return (...args) => {
@@ -30,14 +32,6 @@
     }).format(v / 100);
   };
 
-  const safeUrl = (u) => {
-    const s = String(u || "").trim();
-    if (!s) return "";
-    if (s.startsWith("http://") || s.startsWith("https://")) return s;
-    if (s.startsWith("/")) return s;
-    return s;
-  };
-
   const escapeHtml = (s) =>
     String(s || "")
       .replaceAll("&", "&amp;")
@@ -45,6 +39,91 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+
+  const uniqStrings = (items) => {
+    const out = [];
+    const seen = new Set();
+
+    for (const item of Array.isArray(items) ? items : []) {
+      const s = String(item || "").trim();
+      if (!s) continue;
+      const key = s.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(s);
+    }
+
+    return out;
+  };
+
+  const safeUrl = (u) => {
+    let s = String(u || "").trim();
+    if (!s) return "";
+
+    if (/^https?:\/\//i.test(s) || s.startsWith("data:")) return s;
+
+    s = s.replace(/\\/g, "/");
+    s = s.replace(/^\.?\//, "");
+
+    // aliases reales del repo / supabase
+    s = s
+      .replaceAll("assets/BAJA_500/", "assets/BAJA500/")
+      .replaceAll("assets/BAJA_400/", "assets/BAJA400/")
+      .replaceAll("assets/SF_250/", "assets/SF250/")
+      .replaceAll("assets/BAJA_1000/", "assets/EDICION_2025/")
+      .replaceAll("assets/baja500/", "assets/BAJA500/")
+      .replaceAll("assets/baja400/", "assets/BAJA400/")
+      .replaceAll("assets/sf250/", "assets/SF250/")
+      .replaceAll("assets/edicion_2025/", "assets/EDICION_2025/")
+      .replaceAll("assets/otras_ediciones/", "assets/OTRAS_EDICIONES/")
+      .replaceAll("camiseta-cafe-oscuro-baja400", "camiseta-cafe- oscuro-baja400")
+      .replaceAll("camiseta-negra-sinmangas-sf250", "camiseta-negra-sinmangas-SF250")
+      .replaceAll("camiseta-negra-sinmangas-s250-atras", "camiseta-negra-sinmangas-S250-atras")
+      .replaceAll("camiseta-negra-sinmangas-s250-detalles", "camiseta-negra-sinmangas-S250-detalles");
+
+    return `/${s.replace(/^\/+/, "")}`;
+  };
+
+  const normalizeUiSection = (value) => {
+    const s = String(value || "").trim().toUpperCase();
+
+    if (["BAJA1000", "BAJA_1000", "EDICION_2025", "OTRAS_EDICIONES"].includes(s)) return "BAJA1000";
+    if (["BAJA500", "BAJA_500"].includes(s)) return "BAJA500";
+    if (["BAJA400", "BAJA_400"].includes(s)) return "BAJA400";
+    if (["SF250", "SF_250"].includes(s)) return "SF250";
+
+    return "BAJA1000";
+  };
+
+  const CATEGORY_CONFIG = [
+    {
+      id: "BAJA1000",
+      title: "BAJA 1000",
+      logo: "/assets/logo-baja1000.webp",
+    },
+    {
+      id: "BAJA500",
+      title: "BAJA 500",
+      logo: "/assets/logo-baja500.webp",
+    },
+    {
+      id: "BAJA400",
+      title: "BAJA 400",
+      logo: "/assets/logo-baja400.webp",
+    },
+    {
+      id: "SF250",
+      title: "SAN FELIPE 250",
+      logo: "/assets/logo-sf250.webp",
+    },
+  ];
+
+  const getCategoryMeta = (id) =>
+    CATEGORY_CONFIG.find((x) => x.id === id) || {
+      id,
+      title: id,
+      logo: "",
+    };
 
   // =========================================================
   // DOM
@@ -77,8 +156,6 @@
 
   const catalogCarouselSection = $("#catalogCarouselSection");
   const carouselTitle = $("#carouselTitle");
-  const scrollLeftBtn = $("#scrollLeftBtn");
-  const scrollRightBtn = $("#scrollRightBtn");
 
   const productGrid = $("#productGrid");
   const statusRow = $("#statusRow");
@@ -89,7 +166,6 @@
   const mobileSearchInput = $("#mobileSearchInput");
   const closeMobileSearchBtn = $("#closeMobileSearchBtn");
   const sortSelect = $("#sortSelect");
-
   const menuSearchInput = $("#menuSearchInput");
 
   const promoBar = $("#promoBar");
@@ -142,7 +218,6 @@
 
   const appVersionLabel = $("#appVersionLabel");
 
-  // Product modal
   const productModal = $("#productModal");
   const pmBackBtn = $("#pmBackBtn");
   const pmClose = $("#pmClose");
@@ -159,7 +234,6 @@
   const pmAdd = $("#pmAdd");
   const pmShareBtn = $("#pmShareBtn");
 
-  // Size guide
   const sizeGuideModal = $("#sizeGuideModal");
   const openSizeGuideBtn = $("#openSizeGuideBtn");
   const closeSizeGuideBtn = $("#closeSizeGuideBtn");
@@ -185,11 +259,30 @@
   let shippingMeta = null;
 
   let cart = [];
-  const CART_KEY = "scorestore_cart_v1";
+  const CART_KEY = "scorestore_cart_v3";
   const CONSENT_KEY = "scorestore_cookie_consent_v1";
 
+  const siteSettings = {
+    hero_title: null,
+    hero_image: null,
+    promo_active: false,
+    promo_text: "",
+    pixel_id: "",
+    maintenance_mode: false,
+    season_key: "default",
+    theme: { accent: "#e10600", accent2: "#111111", particles: true },
+    home: { footer_note: "", shipping_note: "", returns_note: "", support_hours: "" },
+    socials: { facebook: "", instagram: "", youtube: "", tiktok: "" },
+    contact: {
+      email: "ventas.unicotextil@gmail.com",
+      phone: "",
+      whatsapp_e164: "5216642368701",
+      whatsapp_display: "664 236 8701",
+    },
+  };
+
   // =========================================================
-  // Utils UI
+  // UI helpers
   // =========================================================
   const showToast = (msg, type = "ok", timeout = 2400) => {
     if (!toast) return;
@@ -230,7 +323,11 @@
     el.classList.remove("is-open");
     setTimeout(() => {
       el.hidden = true;
-      if (!assistantModal?.classList.contains("is-open") && !productModal?.classList.contains("is-open")) {
+      if (
+        !assistantModal?.classList.contains("is-open") &&
+        !productModal?.classList.contains("is-open") &&
+        !sizeGuideModal?.classList.contains("is-open")
+      ) {
         closeOverlay();
       }
     }, 180);
@@ -248,7 +345,13 @@
     el.classList.remove("is-open");
     setTimeout(() => {
       el.hidden = true;
-      if (!sideMenu?.classList.contains("is-open") && !cartDrawer?.classList.contains("is-open")) {
+      if (
+        !sideMenu?.classList.contains("is-open") &&
+        !cartDrawer?.classList.contains("is-open") &&
+        !assistantModal?.classList.contains("is-open") &&
+        !productModal?.classList.contains("is-open") &&
+        !sizeGuideModal?.classList.contains("is-open")
+      ) {
         closeOverlay();
       }
     }, 180);
@@ -280,8 +383,8 @@
     try {
       const raw = localStorage.getItem(CART_KEY);
       if (!raw) return;
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) cart = arr;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) cart = parsed;
     } catch {}
   };
 
@@ -311,27 +414,8 @@
   };
 
   // =========================================================
-  // Site settings / footer / promo
+  // Site settings
   // =========================================================
-  const siteSettings = {
-    hero_title: null,
-    hero_image: null,
-    promo_active: false,
-    promo_text: "",
-    pixel_id: "",
-    maintenance_mode: false,
-    season_key: "default",
-    theme: { accent: "#e10600", accent2: "#111111", particles: true },
-    home: { footer_note: "", shipping_note: "", returns_note: "", support_hours: "" },
-    socials: { facebook: "", instagram: "", youtube: "", tiktok: "" },
-    contact: {
-      email: "ventas.unicotextil@gmail.com",
-      phone: "",
-      whatsapp_e164: "5216642368701",
-      whatsapp_display: "664 236 8701",
-    },
-  };
-
   const applyFooterAndPromo = () => {
     if (footerNote) {
       footerNote.textContent = siteSettings.home?.footer_note || "Merch oficial de SCORE International.";
@@ -385,77 +469,148 @@
   });
 
   // =========================================================
-  // Catalog data
+  // Catalog normalization
   // =========================================================
   const getProductName = (p) => String(p?.name || p?.title || "Producto SCORE");
-  const getProductImage = (p) =>
-    safeUrl(p?.image_url || p?.img || p?.image || (Array.isArray(p?.images) ? p.images[0] : ""));
 
   const getProductImages = (p) => {
-    const arr = Array.isArray(p?.images) ? p.images.filter(Boolean) : [];
-    const fallback = getProductImage(p);
-    return arr.length ? arr.map(safeUrl) : fallback ? [fallback] : [];
+    const list = Array.isArray(p?.images) ? p.images.filter(Boolean).map(safeUrl) : [];
+    const primary = safeUrl(p?.image_url || p?.img || p?.image || list[0] || "");
+    return uniqStrings(list.length ? list : primary ? [primary] : []);
   };
 
+  const getProductImage = (p) => getProductImages(p)[0] || "";
+
   const getProductSizes = (p) => {
-    const arr = Array.isArray(p?.sizes) ? p.sizes.filter(Boolean) : [];
-    return arr.length ? arr.map((x) => String(x)) : ["Única"];
+    const list = Array.isArray(p?.sizes) ? p.sizes.filter(Boolean).map(String) : [];
+    return list.length ? list : ["Única"];
   };
 
   const getProductPriceCents = (p) => {
-    const price = Number(p?.price_cents);
-    if (Number.isFinite(price) && price > 0) return Math.round(price);
-    const mxn = Number(p?.price_mxn);
-    if (Number.isFinite(mxn) && mxn > 0) return Math.round(mxn * 100);
-    const base = Number(p?.base_mxn);
-    if (Number.isFinite(base) && base > 0) return Math.round(base * 100);
+    const a = Number(p?.price_cents);
+    if (Number.isFinite(a) && a > 0) return Math.round(a);
+
+    const b = Number(p?.price_mxn);
+    if (Number.isFinite(b) && b > 0) return Math.round(b * 100);
+
+    const c = Number(p?.base_mxn);
+    if (Number.isFinite(c) && c > 0) return Math.round(c * 100);
+
     return 0;
   };
 
-  const normalizeCategory = (row) => ({
-    id: String(row?.id || row?.slug || row?.section_id || row?.sectionId || ""),
-    name: String(row?.name || row?.title || row?.section_id || row?.sectionId || "Colección"),
-    logo: safeUrl(row?.logo || row?.image || row?.cover_image || row?.coverImage || ""),
-    section_id: String(row?.section_id || row?.sectionId || row?.id || ""),
-  });
+  const normalizeCategory = (row) => {
+    const raw = String(row?.section_id || row?.sectionId || row?.id || "BAJA1000");
+    const uiId = normalizeUiSection(raw);
+    const meta = getCategoryMeta(uiId);
 
-  const normalizeProduct = (row) => ({
-    ...row,
-    sku: String(row?.sku || ""),
-    name: String(row?.name || row?.title || "Producto SCORE"),
-    title: String(row?.title || row?.name || "Producto SCORE"),
-    section_id: String(row?.section_id || row?.sectionId || ""),
-    sectionId: String(row?.sectionId || row?.section_id || ""),
-    sub_section: String(row?.sub_section || row?.collection || ""),
-    image_url: safeUrl(row?.image_url || row?.img || row?.image || ""),
-    images: Array.isArray(row?.images) ? row.images.map(safeUrl).filter(Boolean) : [],
-    sizes: Array.isArray(row?.sizes) ? row.sizes : [],
-  });
+    return {
+      id: uiId,
+      section_id: uiId,
+      sectionId: raw,
+      name: String(row?.name || row?.title || meta.title),
+      title: String(row?.title || row?.name || meta.title),
+      logo: safeUrl(row?.logo || meta.logo),
+      image: safeUrl(row?.image || row?.cover_image || row?.coverImage || meta.logo),
+      count: Number.isFinite(Number(row?.count)) ? Number(row.count) : 0,
+    };
+  };
+
+  const normalizeProduct = (row) => {
+    const rawSection = String(row?.section_id || row?.sectionId || "BAJA1000");
+    const uiSection = normalizeUiSection(rawSection);
+
+    return {
+      ...row,
+      sku: String(row?.sku || ""),
+      name: String(row?.name || row?.title || "Producto SCORE"),
+      title: String(row?.title || row?.name || "Producto SCORE"),
+      section_id: uiSection,
+      sectionId: rawSection,
+      uiSection,
+      sub_section: String(row?.sub_section || row?.collection || ""),
+      collection: String(row?.collection || row?.sub_section || ""),
+      image_url: safeUrl(row?.image_url || row?.img || row?.image || ""),
+      img: safeUrl(row?.img || row?.image_url || row?.image || ""),
+      image: safeUrl(row?.image || row?.image_url || row?.img || ""),
+      images: Array.isArray(row?.images) ? row.images.map(safeUrl).filter(Boolean) : [],
+      sizes: Array.isArray(row?.sizes) ? row.sizes : [],
+      rank: Number.isFinite(Number(row?.rank)) ? Number(row.rank) : 999,
+      stock: row?.stock == null ? null : Number(row.stock),
+    };
+  };
+
+  const normalizePayload = (payload) => {
+    const data = payload && typeof payload === "object" ? payload : {};
+    return {
+      categories: Array.isArray(data.categories)
+        ? data.categories
+        : Array.isArray(data.sections)
+          ? data.sections
+          : [],
+      products: Array.isArray(data.products) ? data.products : [],
+    };
+  };
+
+  const buildCategoryCards = (inputCategories, inputProducts) => {
+    const map = new Map();
+
+    CATEGORY_CONFIG.forEach((cfg) => {
+      map.set(cfg.id, {
+        id: cfg.id,
+        section_id: cfg.id,
+        sectionId: cfg.id,
+        name: cfg.title,
+        title: cfg.title,
+        logo: safeUrl(cfg.logo),
+        image: safeUrl(cfg.logo),
+        count: 0,
+      });
+    });
+
+    for (const cat of inputCategories.map(normalizeCategory)) {
+      const existing = map.get(cat.id) || {};
+      map.set(cat.id, {
+        ...existing,
+        ...cat,
+        logo: cat.logo || existing.logo || "",
+        image: cat.image || existing.image || "",
+      });
+    }
+
+    for (const p of inputProducts.map(normalizeProduct)) {
+      const key = p.section_id || "BAJA1000";
+      if (!map.has(key)) {
+        const meta = getCategoryMeta(key);
+        map.set(key, {
+          id: key,
+          section_id: key,
+          sectionId: key,
+          name: meta.title,
+          title: meta.title,
+          logo: safeUrl(meta.logo),
+          image: safeUrl(meta.logo),
+          count: 0,
+        });
+      }
+      map.get(key).count += 1;
+    }
+
+    return CATEGORY_CONFIG.map((cfg) => map.get(cfg.id)).filter(Boolean);
+  };
 
   const loadCatalog = async () => {
-    const [catalogRes, categoriesRes] = await Promise.all([
+    const [catalogRes, fallbackRes] = await Promise.all([
       fetch("/.netlify/functions/catalog", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       fetch("/data/catalog.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]);
 
-    const normalizePayload = (payload) => {
-      const data = payload && typeof payload === "object" ? payload : {};
-      return {
-        categories: Array.isArray(data.categories)
-          ? data.categories
-          : Array.isArray(data.sections)
-            ? data.sections
-            : [],
-        products: Array.isArray(data.products) ? data.products : [],
-      };
-    };
-
     const apiData = catalogRes?.ok ? normalizePayload(catalogRes) : null;
-    const fallbackData = normalizePayload(categoriesRes);
+    const fallbackData = normalizePayload(fallbackRes);
     const source = apiData && apiData.products.length ? apiData : fallbackData;
 
-    categories = source.categories.map(normalizeCategory);
     products = source.products.map(normalizeProduct);
+    categories = buildCategoryCards(source.categories, source.products);
     filteredProducts = [...products];
   };
 
@@ -464,11 +619,13 @@
   // =========================================================
   const applySort = (items) => {
     const mode = String(sortSelect?.value || "featured");
-
     const arr = [...items];
+
     if (mode === "price_asc") arr.sort((a, b) => getProductPriceCents(a) - getProductPriceCents(b));
     else if (mode === "price_desc") arr.sort((a, b) => getProductPriceCents(b) - getProductPriceCents(a));
     else if (mode === "name_asc") arr.sort((a, b) => getProductName(a).localeCompare(getProductName(b), "es"));
+    else arr.sort((a, b) => Number(a.rank || 999) - Number(b.rank || 999));
+
     return arr;
   };
 
@@ -482,7 +639,7 @@
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter((p) =>
-        [p.name, p.sku, p.section_id, p.sub_section].some((x) =>
+        [p.name, p.title, p.sku, p.section_id, p.sub_section, p.collection].some((x) =>
           String(x || "").toLowerCase().includes(q)
         )
       );
@@ -491,25 +648,34 @@
     return applySort(list);
   };
 
-  const ensureCarouselUX = () => {
+  const resetCarouselPosition = () => {
     if (!productGrid) return;
-    productGrid.scrollTo({ left: 0, behavior: "instant" });
+    productGrid.scrollTo({ left: 0, behavior: "auto" });
   };
 
   const renderCategories = () => {
     if (!categoryGrid) return;
     categoryGrid.innerHTML = "";
 
+    const frag = document.createDocumentFragment();
+
     for (const cat of categories) {
+      const meta = getCategoryMeta(cat.id);
+      const logo = safeUrl(cat.logo || meta.logo);
+
       const card = document.createElement("button");
       card.type = "button";
       card.className = "catcard glass-panel hover-fx";
       card.innerHTML = `
         <div class="catcard__media">
-          ${cat.logo ? `<img src="${escapeHtml(cat.logo)}" alt="${escapeHtml(cat.name)}" loading="lazy" />` : `<div class="product-card__placeholder">🏁</div>`}
+          ${
+            logo
+              ? `<img class="catcard__logo" src="${escapeHtml(logo)}" alt="${escapeHtml(cat.title || cat.name)}" loading="lazy" decoding="async" />`
+              : `<div class="product-card__placeholder">🏁</div>`
+          }
         </div>
         <div class="catcard__body">
-          <h3 class="catcard__title">${escapeHtml(cat.name)}</h3>
+          <h3 class="catcard__title">${escapeHtml(cat.title || cat.name)}</h3>
           <p class="catcard__copy">Explorar colección oficial</p>
         </div>
       `;
@@ -521,8 +687,10 @@
         smoothScrollTo(catalogCarouselSection || "#catalogCarouselSection");
       });
 
-      categoryGrid.appendChild(card);
+      frag.appendChild(card);
     }
+
+    categoryGrid.appendChild(frag);
   };
 
   const renderProducts = () => {
@@ -531,14 +699,14 @@
     filteredProducts = getVisibleProducts();
 
     if (carouselTitle) {
-      carouselTitle.textContent = activeCategory?.name || "Catálogo";
+      carouselTitle.textContent = activeCategory?.title || activeCategory?.name || "Catálogo";
     }
 
     if (categoryHint) categoryHint.hidden = !!activeCategory;
 
     if (activeFilterRow && activeFilterLabel) {
       const parts = [];
-      if (activeCategory?.name) parts.push(`Colección: ${activeCategory.name}`);
+      if (activeCategory?.title || activeCategory?.name) parts.push(`Colección: ${activeCategory.title || activeCategory.name}`);
       if (searchQuery) parts.push(`Búsqueda: ${searchQuery}`);
       activeFilterLabel.textContent = parts.join(" · ");
       activeFilterRow.hidden = !parts.length;
@@ -553,9 +721,12 @@
           <p class="hint" style="margin:0;">No encontré productos para ese filtro.</p>
         </article>
       `;
-      ensureCarouselUX();
+      resetCarouselPosition();
+      setStatus("0 producto(s) encontrados.");
       return;
     }
+
+    const frag = document.createDocumentFragment();
 
     for (const p of filteredProducts) {
       const card = document.createElement("article");
@@ -571,7 +742,7 @@
       card.innerHTML = `
         <button type="button" class="product-card__btn" aria-label="Abrir ${escapeHtml(getProductName(p))}">
           <div class="product-card__media">
-            ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(getProductName(p))}" loading="lazy" />` : `<div class="product-card__placeholder">🏁</div>`}
+            ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(getProductName(p))}" loading="lazy" decoding="async" />` : `<div class="product-card__placeholder">🏁</div>`}
           </div>
           <div class="product-card__body">
             <div class="product-card__top">
@@ -589,11 +760,12 @@
       `;
 
       card.querySelector(".product-card__btn")?.addEventListener("click", () => openProduct(String(p.sku || "")));
-      productGrid.appendChild(card);
+      frag.appendChild(card);
     }
 
+    productGrid.appendChild(frag);
     setStatus(`${filteredProducts.length} producto(s) encontrados.`);
-    ensureCarouselUX();
+    resetCarouselPosition();
   };
 
   searchInput?.addEventListener(
@@ -609,6 +781,7 @@
     debounce((e) => {
       searchQuery = String(e.target.value || "").trim();
       if (searchInput) searchInput.value = searchQuery;
+      if (menuSearchInput) menuSearchInput.value = searchQuery;
       renderProducts();
     }, 120)
   );
@@ -652,7 +825,10 @@
   const renderPmSizes = (sizes) => {
     if (!pmSizePills) return;
     pmSizePills.innerHTML = "";
-    sizes.forEach((size, i) => {
+
+    const list = sizes.length ? sizes : ["Única"];
+
+    list.forEach((size, i) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "size-pill";
@@ -686,7 +862,7 @@
     list.forEach((src) => {
       const slide = document.createElement("div");
       slide.className = "pm-carousel__slide";
-      slide.innerHTML = `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" />`;
+      slide.innerHTML = `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" />`;
       track.appendChild(slide);
     });
 
@@ -771,7 +947,7 @@
     try {
       if (navigator.share) {
         await navigator.share({ title: getProductName(currentProduct), url });
-      } else {
+      } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url);
         showToast("Link copiado.", "ok");
       }
@@ -792,7 +968,7 @@
     if (!activePromo) return 0;
     const subtotal = getCartSubtotal();
 
-    if (activePromo.type === "percentage") {
+    if (activePromo.type === "percentage" || activePromo.type === "percent") {
       return Math.round(subtotal * (Number(activePromo.value || 0) / 100));
     }
 
@@ -843,7 +1019,7 @@
 
     if (cartItemsEl) {
       if (!cart.length) {
-        cartItemsEl.innerHTML = `<div class="hint" style="padding: 10px 0;">Tu carrito está vacío.</div>`;
+        cartItemsEl.innerHTML = `<div class="hint" style="padding:10px 0;">Tu carrito está vacío.</div>`;
       } else {
         cartItemsEl.innerHTML = "";
         cart.forEach((item, idx) => {
@@ -851,7 +1027,7 @@
           row.className = "cartitem";
           row.innerHTML = `
             <div class="cartitem__media">
-              ${item.image ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" />` : `<div class="product-card__placeholder">🏁</div>`}
+              ${item.image ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy" decoding="async" />` : `<div class="product-card__placeholder">🏁</div>`}
             </div>
             <div class="cartitem__body">
               <div class="cartitem__title">${escapeHtml(item.name)}</div>
@@ -1139,14 +1315,11 @@
         updateViaCache: "none",
       });
 
-      if (registration.waiting) {
-        activateWaitingWorker(registration);
-      }
+      if (registration.waiting) activateWaitingWorker(registration);
 
       registration.addEventListener("updatefound", () => {
         const installing = registration.installing;
         if (!installing) return;
-
         installing.addEventListener("statechange", () => {
           if (installing.state === "installed" && navigator.serviceWorker.controller) {
             activateWaitingWorker(registration);
