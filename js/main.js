@@ -1,12 +1,12 @@
 /* =========================================================
    SCORE STORE — Frontend (Repo-alineado + Anti-404 assets + Carousel Snap)
-   Build: 2026-03-04
+   Build: 2026-03-08
    ========================================================= */
 
 (() => {
   "use strict";
 
-  const APP_VERSION = window.__APP_VERSION__ || "2026.03.04.SCORESTORE";
+  const APP_VERSION = window.__APP_VERSION__ || "2026.03.08.SCORESTORE";
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -270,8 +270,6 @@
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const canUseCookies = () => localStorage.getItem(CONSENT_KEY) === "accepted";
-
   const persistCart = () => {
     try {
       localStorage.setItem(CART_KEY, JSON.stringify(cart));
@@ -460,7 +458,8 @@
     products = source.products.map(normalizeProduct);
     filteredProducts = [...products];
   };
- =========================================================
+
+  // =========================================================
   // Search / sort / categories
   // =========================================================
   const applySort = (items) => {
@@ -1113,6 +1112,61 @@
   });
 
   // =========================================================
+  // Service Worker
+  // =========================================================
+  const registerServiceWorker = async () => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator)) return;
+    if (location.protocol !== "https:" && location.hostname !== "localhost") return;
+
+    let refreshing = false;
+
+    const activateWaitingWorker = (registration) => {
+      if (registration?.waiting) {
+        registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+    };
+
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+        updateViaCache: "none",
+      });
+
+      if (registration.waiting) {
+        activateWaitingWorker(registration);
+      }
+
+      registration.addEventListener("updatefound", () => {
+        const installing = registration.installing;
+        if (!installing) return;
+
+        installing.addEventListener("statechange", () => {
+          if (installing.state === "installed" && navigator.serviceWorker.controller) {
+            activateWaitingWorker(registration);
+          }
+        });
+      });
+
+      try {
+        await navigator.serviceWorker.ready;
+      } catch {}
+
+      try {
+        await registration.update();
+      } catch {}
+    } catch (err) {
+      console.error("SW register error:", err);
+    }
+  };
+
+  // =========================================================
   // Ambient sales
   // =========================================================
   const runSalesAmbient = () => {
@@ -1158,6 +1212,7 @@
       renderCategories();
       renderProducts();
       runSalesAmbient();
+      await registerServiceWorker();
 
       if (location.hash.startsWith("#sku=")) {
         const sku = decodeURIComponent(location.hash.replace("#sku=", ""));
