@@ -39,8 +39,9 @@
   <link rel="preload" href="/css/styles.css" as="style" />
   <link rel="preload" href="/assets/fondo-pagina-score.webp" as="image" type="image/webp" />
   <link rel="preload" href="/assets/hero.webp" as="image" type="image/webp" fetchpriority="high" />
+
   <link rel="stylesheet" href="/css/styles.css" />
-  <link rel="stylesheet" href="/css/override.css?v=2026-03-09-unified" />
+  <link rel="stylesheet" href="/css/override.css?v=2026-03-09-fusion" />
 
   <script type="application/ld+json">
     {
@@ -63,7 +64,15 @@
     <div class="splash__grid"></div>
     <div class="splash__inner">
       <div class="splash__logo-wrap">
-        <img class="splash__logo" src="/assets/logo-score.webp" alt="SCORE" width="220" height="88" />
+        <img
+          class="splash__logo"
+          src="/assets/logo-score.webp"
+          alt="SCORE"
+          width="220"
+          height="96"
+          decoding="async"
+          fetchpriority="high"
+        />
         <div class="splash__laser"></div>
       </div>
       <div class="splash__subtitle">OFFICIAL MERCHANDISE</div>
@@ -84,13 +93,13 @@
         <span class="icon" aria-hidden="true">≡</span>
       </button>
 
-      <a class="brand" href="/" aria-label="Ir a Inicio de Score Store">
+      <a class="brand" href="/index.html" aria-label="Ir a Inicio de Score Store">
         <img
           class="brand__logo"
           src="/assets/logo-score.webp"
           alt="Logotipo SCORE STORE"
           width="120"
-          height="48"
+          height="53"
           decoding="async"
         />
       </a>
@@ -240,34 +249,26 @@
               type="button"
               style="margin-left:10px;"
             >
-              Limpiar
+              Quitar filtros ✕
             </button>
           </div>
         </div>
 
-        <div class="carousel-header__right" style="display:flex; align-items:center; gap:10px;">
+        <div class="carousel-header__right" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           <button id="scrollLeftBtn" class="iconbtn iconbtn--dark hover-fx vfx-nav-btn" type="button" aria-label="Desplazar carrusel hacia la izquierda" title="Ver anteriores">←</button>
           <button id="scrollRightBtn" class="iconbtn iconbtn--dark hover-fx vfx-nav-btn" type="button" aria-label="Desplazar carrusel hacia la derecha" title="Ver siguientes">→</button>
+
           <select id="sortSelect" class="input tech-input" aria-label="Ordenar productos" style="max-width:220px;">
-            <option value="featured">Destacados</option>
-            <option value="price_asc">Precio: menor a mayor</option>
-            <option value="price_desc">Precio: mayor a menor</option>
-            <option value="name_asc">Nombre A-Z</option>
+            <option value="featured">★ Relevancia</option>
+            <option value="price_asc">Menor Precio</option>
+            <option value="price_desc">Mayor Precio</option>
+            <option value="name_asc">Orden Alfabético (A-Z)</option>
           </select>
         </div>
       </div>
 
-      <div style="position:relative;">
-        <div class="carousel-fade carousel-fade--left" aria-hidden="true"></div>
-        <div class="carousel-fade carousel-fade--right" aria-hidden="true"></div>
+      <div class="carousel-wrapper" style="position:relative;">
         <div id="productGrid" class="carousel-track custom-scrollbar" aria-live="polite"></div>
-      </div>
-
-      <div class="carousel-progress" aria-hidden="true">
-        <div class="carousel-progress__bar">
-          <span id="carouselProgressFill" class="carousel-progress__fill"></span>
-        </div>
-        <div id="carouselProgressText" class="carousel-progress__text">0%</div>
       </div>
 
       <div id="statusRow" class="status" style="margin-top:10px;"></div>
@@ -278,15 +279,15 @@
     <div class="wrap partners__inner">
       <div class="partners__title">SCORE INTERNATIONAL OFFICIAL PARTNERS</div>
       <div class="partners__row">
-        <img src="/assets/logo-ford.webp" alt="Ford" loading="lazy" decoding="async" />
-        <img src="/assets/logo-rzr.webp" alt="RZR" loading="lazy" decoding="async" />
-        <img src="/assets/logo-bfgodrich.webp" alt="BFGoodrich" loading="lazy" decoding="async" />
-        <img src="/assets/logo-unico.webp" alt="Único Uniformes" loading="lazy" decoding="async" />
+        <img src="/assets/logo-ford.webp" alt="Ford" width="90" height="35" loading="lazy" decoding="async" />
+        <img src="/assets/logo-rzr.webp" alt="RZR" width="90" height="35" loading="lazy" decoding="async" />
+        <img src="/assets/logo-bfgodrich.webp" alt="BFGoodrich" width="90" height="35" loading="lazy" decoding="async" />
+        <img src="/assets/logo-unico.webp" alt="Único Uniformes" width="90" height="35" loading="lazy" decoding="async" />
       </div>
     </div>
   </section>
 
-  <aside id="sideMenu" class="drawer" hidden aria-label="Menú lateral">
+  <aside id="sideMenu" class="drawer glass-drawer" hidden aria-label="Menú lateral">
     <div class="drawer__panel glass-panel">
       <div class="drawer__head">
         <strong>Menú</strong>
@@ -307,16 +308,22 @@
         </div>
 
         <nav class="menu-list">
+          <button class="menu-list__item" type="button" data-scroll="#categories">🏁 Ver colecciones</button>
           <button id="navOpenCart" class="menu-list__item" type="button">🛒 Ver carrito</button>
           <button id="navOpenAssistant" class="menu-list__item" type="button">✨ Asistente SCORE</button>
+          <a href="/legal.html" class="menu-list__item" style="text-decoration:none;">Centro de Ayuda / Políticas</a>
         </nav>
+
+        <div class="drawer__foot" style="margin-top:18px;">
+          <div class="muted">SCORE STORE OS v<span id="appVersionLabel">—</span></div>
+        </div>
       </div>
     </div>
   </aside>
 
   <div id="overlay" class="overlay" hidden></div>
 
-  <aside id="cartDrawer" class="drawer drawer--right" hidden aria-label="Carrito de compras">
+  <aside id="cartDrawer" class="drawer drawer--right glass-drawer" hidden aria-label="Carrito de compras">
     <div class="drawer__panel glass-panel">
       <div class="drawer__head">
         <strong>Mi carrito</strong>
@@ -392,41 +399,50 @@
     </div>
   </section>
 
-  <button id="floatingAssistantBtn" class="floating-assistant hover-fx ai-fab" type="button" aria-label="Abrir asistente" title="Asistente SCORE">✨</button>
-  <button id="scrollTopBtn" class="floating-scroll" type="button" aria-label="Volver arriba" title="Volver arriba">↑</button>
+  <button id="floatingAssistantBtn" class="floating-assistant hover-fx neon-glow" type="button" aria-label="Abrir asistente" title="Asistente SCORE">
+    <svg class="assistant-icon pulse-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 2l1.4 4.2L18 8l-4.6 1.8L12 14l-1.4-4.2L6 8l4.6-1.8L12 2z"></path>
+      <path d="M19 12l.8 2.4 2.2.9-2.2.9L19 18l-.8-2.4-2.2-.9 2.2-.9L19 12z"></path>
+      <path d="M5 12l.8 2.4 2.2.9-2.2.9L5 18l-.8-2.4-2.2-.9 2.2-.9L5 12z"></path>
+    </svg>
+  </button>
+
+  <button id="scrollTopBtn" class="floating-scroll hover-fx neon-glow" type="button" aria-label="Volver arriba" title="Volver arriba">↑</button>
 
   <div id="salesNotification" class="sales-toast glass-panel" hidden>
     <strong id="salesName"></strong>
     <span id="salesAction"></span>
   </div>
 
-  <footer class="footer" role="contentinfo" style="background-color: var(--text); color: #ffffff;">
+  <footer class="footer" role="contentinfo" style="background-color: var(--text); color:#ffffff;">
     <div class="wrap footer__inner">
       <div class="footer__brand-col">
         <div class="footer__brand"><span class="tech-text" style="color: var(--red);">SCORE</span> STORE</div>
-        <div class="footer__sub" style="line-height: 1.8; color: #d1d1d1;">
-          <strong style="color: #ffffff;">Seguridad Total Garantizada</strong><br>
-          Pago cifrado vía Stripe. Aceptamos OXXO Pay.<br>
-          Logística inteligente internacional con Envía.com.<br><br>
-          <div style="margin-top: 15px; font-weight: 600; display: flex; flex-direction: column; gap: 8px;">
-            <a href="mailto:ventas.unicotextil@gmail.com" class="footer-contact-link" style="color: #ffffff;" aria-label="Enviar correo a soporte"><span class="footer-icon">✉️</span> ventas.unicotextil@gmail.com</a>
-            <a href="https://wa.me/5216642368701" target="_blank" rel="noopener noreferrer" class="footer-contact-link" style="color: #ffffff;" aria-label="Contactar por WhatsApp"><span class="footer-icon" style="color:#25D366;">💬</span> 664 236 8701</a>
+        <div class="footer__sub" style="line-height:1.8; color:#d1d1d1;">
+          <strong style="color:#ffffff;">Seguridad Total Garantizada</strong><br>
+          <span id="footerNote">Pago cifrado vía Stripe. Aceptamos OXXO Pay. Logística inteligente internacional con Envía.com.</span><br><br>
+          <div style="margin-top:15px; font-weight:600; display:flex; flex-direction:column; gap:8px;">
+            <a id="footerEmailLink" href="mailto:ventas.unicotextil@gmail.com" class="footer-contact-link" style="color:#ffffff;" aria-label="Enviar correo a soporte">
+              <span class="footer-icon">✉️</span> <span id="footerEmailText">ventas.unicotextil@gmail.com</span>
+            </a>
+            <a id="footerWhatsappLink" href="https://wa.me/5216642368701" target="_blank" rel="noopener noreferrer" class="footer-contact-link" style="color:#ffffff;" aria-label="Contactar por WhatsApp">
+              <span class="footer-icon" style="color:#25D366;">💬</span> <span id="footerWhatsappText">664 236 8701</span>
+            </a>
           </div>
         </div>
       </div>
 
       <div class="footer__socials">
-        <div class="social-title" style="color: #ffffff;">SÍGUENOS EN LA PISTA</div>
+        <div class="social-title" style="color:#ffffff;">SÍGUENOS EN LA PISTA</div>
         <div class="social-links">
-          <a href="https://www.facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook Oficial" style="color: #d1d1d1;">Facebook</a>
-          <a href="https://www.instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram Oficial" style="color: #d1d1d1;">Instagram</a>
-          <a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer" aria-label="YouTube Oficial" style="color: #d1d1d1;">YouTube</a>
+          <a id="footerFacebookLink" href="https://www.facebook.com/uniforme.unico/" target="_blank" rel="noopener noreferrer" aria-label="Facebook Oficial" style="color:#d1d1d1;">Facebook</a>
+          <a id="footerInstagramLink" href="https://www.instagram.com/uniformes.unico" target="_blank" rel="noopener noreferrer" aria-label="Instagram Oficial" style="color:#d1d1d1;">Instagram</a>
+          <a id="footerYoutubeLink" href="https://youtu.be/F4lw1EcehIA?si=jFBT9skFLs566g8N" target="_blank" rel="noopener noreferrer" aria-label="YouTube Oficial" style="color:#d1d1d1;">YouTube</a>
         </div>
       </div>
 
       <div class="footer__right">
-        <a href="/legal.html" class="linkbtn hover-fx" aria-label="Leer términos y políticas de privacidad" style="color: #d1d1d1;">Términos, Privacidad y Devoluciones</a>
-        <div style="margin-top:12px; font-size:12px; color:#d1d1d1;"><span id="appVersionLabel"></span></div>
+        <a href="/legal.html" class="linkbtn hover-fx" aria-label="Leer términos y políticas de privacidad" style="color:#d1d1d1;">Términos, Privacidad y Devoluciones</a>
       </div>
     </div>
   </footer>
@@ -523,6 +539,6 @@
 
   <div id="toast" class="toast glass-panel" role="status" aria-live="polite" hidden></div>
 
-  <script src="/js/main.js?v=2026-03-09-unified" defer></script>
+  <script src="/js/main.js?v=2026-03-09-fusion" defer></script>
 </body>
 </html>
