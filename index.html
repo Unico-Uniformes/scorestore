@@ -8,6 +8,9 @@
   <meta name="description" content="Merch Oficial de Score International. Pago cifrado seguro con Stripe + Logística Envía.com." />
   <meta name="facebook-domain-verification" content="wuo7x5sxsjcer1t0epn1id5xgjp8su" />
 
+  <!-- CSP: coincide con lo que usa netlify.toml; más adelante recomiendo eliminar 'unsafe-inline' moviendo bootstrap a archivos -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; img-src 'self' data: https: https://www.facebook.com; script-src 'self' 'unsafe-inline' https://js.stripe.com https://connect.facebook.net; script-src-elem 'self' 'unsafe-inline' https://js.stripe.com https://connect.facebook.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.stripe.com https://*.supabase.co wss://*.supabase.co https://www.facebook.com https://connect.facebook.net https://generativelanguage.googleapis.com; manifest-src 'self'; worker-src 'self'; frame-src https://js.stripe.com https://hooks.stripe.com;" />
+
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -41,7 +44,7 @@
   <link rel="preload" href="/assets/hero.webp" as="image" type="image/webp" fetchpriority="high" />
 
   <link rel="stylesheet" href="/css/styles.css" />
-  <link rel="stylesheet" href="/css/override.css?v=2026-03-09-fusion-v2" />
+  <link rel="stylesheet" href="/css/override.css?v=2026-03-09-fusion-v3" />
 
   <script type="application/ld+json">
     {
@@ -57,6 +60,7 @@
 </head>
 
 <body>
+  <!-- SPLASH: corregido aspect ratio del logo (height 96 para concordar con el asset 1536x672) -->
   <div id="splash" class="splash" aria-hidden="true">
     <div class="splash__bg"></div>
     <div class="splash__vignette"></div>
@@ -69,7 +73,7 @@
           src="/assets/logo-score.webp"
           alt="SCORE"
           width="220"
-          height="88"
+          height="96"
           decoding="async"
           fetchpriority="high"
         />
@@ -268,13 +272,13 @@
 
   <div id="overlay" class="overlay" hidden></div>
 
+  <!-- Cart Drawer, Assistant modal, Product modal y demás (se mantienen los IDs y estructura que espera /js/main.js) -->
   <aside id="cartDrawer" class="drawer drawer--right glass-drawer" hidden aria-label="Carrito de compras">
     <div class="drawer__panel glass-panel">
       <div class="drawer__head">
         <strong>Mi carrito</strong>
         <button id="closeCartBtn" class="iconbtn" type="button" aria-label="Cerrar carrito">✕</button>
       </div>
-
       <div class="drawer__body">
         <div id="cartItems"></div>
 
@@ -484,6 +488,6 @@
 
   <div id="toast" class="toast glass-panel" role="status" aria-live="polite" hidden></div>
 
-  <script src="/js/main.js?v=2026-03-09-fusion-v2" defer></script>
+  <script src="/js/main.js?v=2026-03-09-fusion-v3" defer></script>
 </body>
 </html>
