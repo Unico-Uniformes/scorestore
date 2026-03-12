@@ -1,18 +1,12 @@
 /* =========================================================
-   SCORE STORE — override.css (Unified & Repo-Aligned)
-   Build: 2026-03-09-fusion-final
-   Objetivo:
-   - Unificación de estilos visuales (v2026-03-04 + v2026-03-08).
-   - Optimización Lighthouse (content-visibility, aspect-ratio fixes).
-   - UX de Carruseles (Snap Stop + Swipe Hint).
-   - Estética Glassmorphism blindada para alto rendimiento.
+   SCORE STORE — override.css (Build: 2026-03-09-FIXED)
    ========================================================= */
 
-/* 1. VARIABLES DE ENTORNO Y PERFORMANCE */
 :root {
   --topbar-h: 74px;
   --glass-blur: 16px;
   --glass-blur-strong: 22px;
+  --brand-red: #e10600;
 }
 
 @media (max-width: 768px) {
@@ -23,245 +17,91 @@
   }
 }
 
-/* 2. ICONOGRAFÍA Y ANIMACIONES (ASISTENTE AI) */
-.assistant-icon {
-  width: 18px;
-  height: 18px;
-  fill: currentColor;
-  stroke: none;
-  display: inline-block;
+/* 1. ESTRUCTURA BASE Y Z-INDEX */
+.topbar {
+  z-index: 2100; /* Siempre por encima de la promo-bar */
+  position: sticky;
+  top: 0;
 }
 
-.assistant-icon--small { width: 16px; height: 16px; }
-.assistant-icon--menu { width: 18px; height: 18px; margin-right: 10px; }
-
-.pulse-svg { 
-  animation: pulseGlow 2.4s ease-in-out infinite; 
-}
-
-@keyframes pulseGlow {
-  0%, 100% { 
-    filter: drop-shadow(0 0 0 rgba(225, 6, 0, 0)); 
-    opacity: .9; 
-    transform: scale(1); 
-  }
-  50% { 
-    filter: drop-shadow(0 0 10px rgba(225, 6, 0, .55)); 
-    opacity: 1; 
-    transform: scale(1.06); 
-  }
-}
-
-/* 3. PROMO BAR (ESTRICTAMENTE ALINEADA AL TOPBAR) */
 .promo-bar {
   position: sticky;
   top: var(--topbar-h);
-  z-index: 1900;
-  background: linear-gradient(135deg, rgba(225, 6, 0, 0.95), rgba(0, 0, 0, 0.92));
+  z-index: 2000;
+  background: linear-gradient(135deg, rgba(225, 6, 0, 0.98), rgba(0, 0, 0, 0.95));
   color: #fff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
-.promo-bar__inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-}
-
-.promo-bar__text {
-  font-weight: 900;
-  font-size: 13px;
-  letter-spacing: .2px;
-  line-height: 1.35;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-}
-
-/* 4. GLASSMORPHISM CORE (RED_BLUR OPTIMIZED) */
-.glass-panel,
-.vfx-glass-container,
-.topbar,
-.glass-drawer,
-.glass-header,
-.modal,
-.overlay,
-.checkout-loader,
-.sticky-mobile-cta,
-.sales-toast,
-.cookie,
-.mobile-search-bar {
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-}
-
-.vfx-glass-container {
-  backdrop-filter: blur(var(--glass-blur-strong));
-  -webkit-backdrop-filter: blur(var(--glass-blur-strong));
-}
-
-/* 5. LIGHTHOUSE: CONTENT VISIBILITY & PAINT OPTIMIZATION */
-#catalogCarouselSection,
-.partners,
-.footer {
+/* 2. LOGOS Y PREVENCIÓN DE DESCUADRE (CLS) */
+.catcard__logo {
+  aspect-ratio: 3 / 2; /* Reserva el espacio exacto antes de cargar */
+  width: min(140px, 70vw);
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
   content-visibility: auto;
-  contain-intrinsic-size: 900px;
 }
 
-@media (max-width: 520px) {
-  .catcard,
-  .card {
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.10) !important;
-  }
-  .hero__particles { display: none; }
-}
-
-/* Partners: Previene distorsión de logos en carga */
 .partners__row img {
   height: 36px;
   width: auto;
+  aspect-ratio: attr(width) / attr(height); /* Usa atributos nativos si existen */
 }
 
-/* Catcard Logos: Fix de aspect-ratio para evitar Layout Shift */
-.catcard__logo {
-  height: auto !important;
-  max-width: 180px;
-  width: min(140px, 70vw);
-  object-fit: contain;
-  display: block;
-}
-
-.catcard__meta {
-  margin-top: 14px;
-  text-align: center;
-  color: #ffffff;
-  font-weight: 900;
-}
-
-.catcard__title {
-  font-size: 15px;
-  letter-spacing: .4px;
-  line-height: 1.1;
-}
-
-.catcard__sub {
-  margin-top: 6px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.82);
-  font-weight: 800;
-}
-
-/* 6. CARRUSELES: LÓGICA DE SWIPE Y HINTS */
-
-/* Comportamiento de Snap para tarjetas de producto */
-.card__track {
-  scroll-snap-stop: always;
-  overscroll-behavior-x: contain;
+/* 3. CARRUSELES: EL "PEEK EFFECT" SIN DESCUADRE */
+.carousel-track {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  padding: 0 16px 20px 16px; /* Padding lateral para que la primera/última no peguen al borde */
+  scroll-padding: 16px;
 }
 
-/* Hint visual de "DESLIZA" (UX Pro) */
+.carousel-track::-webkit-scrollbar { display: none; }
+
+.card, .catcard {
+  flex: 0 0 280px; /* Tamaño fijo para evitar que flex-grow las descuadre */
+  scroll-snap-align: start;
+  max-width: 85vw;
+}
+
+/* 4. UX: SWIPE HINT */
 .product-swipe-hint {
   position: absolute;
-  right: 10px;
-  top: 12px;
-  z-index: 6;
+  right: 16px;
+  top: 16px;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.60);
-  color: #fff;
-  font-weight: 900;
-  font-size: 12px;
-  letter-spacing: .2px;
+  padding: 8px 14px;
+  border-radius: 50px;
+  background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  color: #fff;
+  font-weight: 800;
+  font-size: 11px;
+  text-transform: uppercase;
   pointer-events: none;
-  opacity: .98;
-  transform: translateY(0);
-  transition: opacity .25s ease, transform .25s ease;
-}
-
-.product-swipe-hint__arr {
-  display: inline-block;
-  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 .product-swipe-hint.is-hide {
   opacity: 0;
-  transform: translateY(-6px);
+  transform: translateX(20px);
 }
 
-.product-swipe-hint.is-pulse .product-swipe-hint__arr {
-  animation: hintArrow 1.2s ease-in-out infinite;
-}
-
-@keyframes hintArrow {
-  0%, 100% { transform: translateX(0); opacity: .85; }
-  50% { transform: translateX(6px); opacity: 1; }
-}
-
-/* Track general del catálogo (Alineación con el diseño de "Peek") */
-.carousel-track {
-  scroll-snap-stop: always;
-  overscroll-behavior-x: contain;
-  scroll-padding-left: 8px;
-  scroll-padding-right: 72px;
-  padding-right: 72px;
-}
-
-/* 7. COMPONENTES DE MODAL DE PRODUCTO (PM) */
-.pm__carousel img {
-  width: 100%;
-  height: auto;
-  object-fit: cover;
-}
-
-.size-pill-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.qty-stepper-large {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.qty-stepper-large button {
-  min-width: 40px;
-}
-
-/* 8. FOOTER & CONTACTO */
-.footer-contact-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  text-decoration: none;
-}
-
-.footer-contact-link:hover {
-  opacity: .92;
-}
-
-.footer-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-}
-
-/* 9. RESPONSIVE FIXES FINALES */
-@media (max-width: 520px) {
-  .product-swipe-hint {
-    font-size: 11px;
-    padding: 7px 10px;
-  }
+/* 5. GLASSMORPHISM OPTIMIZADO */
+.glass-panel, .topbar, .sales-toast {
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  will-change: transform; /* Optimización de pintado */
 }
