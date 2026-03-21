@@ -1,13 +1,4 @@
-"use strict";
-
-const {
-  jsonResponse,
-  handleOptions,
-  safeJsonParse,
-  readPublicSiteSettings,
-  SUPPORT_EMAIL,
-  SUPPORT_WHATSAPP_DISPLAY,
-} = require("./_shared");
+const { jsonResponse, handleOptions, readPublicSiteSettings, SUPPORT_EMAIL, SUPPORT_WHATSAPP_DISPLAY } = require("./_shared");
 
 const sanitizeContext = (str) => {
   return String(str || "Ninguno")
@@ -40,27 +31,45 @@ async function callGemini({ apiKey, model, systemText, userText }) {
   return { ok: res.ok, status: res.status, data };
 }
 
-exports.handler = async (event) => {
-  const origin = event?.headers?.origin || event?.headers?.Origin || "*";
+module.exports = async (req, res) => {
+  const origin = req.headers.origin || "*";
+
+  const sendResponse = (statusCode, data) => {
+    const response = jsonResponse(statusCode, data, origin);
+    Object.entries(response.headers).forEach(([key, value]) => {
+      res.setHeader(key, value);
+    });
+    res.status(response.statusCode).send(response.body);
+  };
 
   try {
-    if (event.httpMethod === "OPTIONS") return handleOptions(event);
-
-    if (event.httpMethod !== "POST") {
-      return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
+    if (req.method === "OPTIONS") {
+      const response = handleOptions({ headers: req.headers });
+      Object.entries(response.headers).forEach(([key, value]) => {
+        res.setHeader(key, value);
+      });
+      res.status(response.statusCode).send(response.body);
+      return;
     }
 
-    const body = safeJsonParse(event.body) || {};
+    if (req.method !== "POST") {
+      sendResponse(405, { ok: false, error: "Method not allowed" });
+      return;
+    }
+
+    const body = req.body || {};
     const message = String(body.message || "").trim().substring(0, 1200);
     const context = body.context || {};
 
     if (!message) {
-      return jsonResponse(400, { ok: false, error: "Se requiere un mensaje válido." }, origin);
+      sendResponse(400, { ok: false, error: "Se requiere un mensaje válido." });
+      return;
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return jsonResponse(200, { ok: false, error: "El asistente no está conectado en este momento." }, origin);
+      sendResponse(200, { ok: false, error: "El asistente no está conectado en este momento." });
+      return;
     }
 
     const site = await readPublicSiteSettings().catch(() => null);
@@ -74,18 +83,10 @@ exports.handler = async (event) => {
     const preferredModel = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
     const fallbackModel = "gemini-2.5-flash";
 
-    const safeProduct = sanitizeContext(
-      context.currentProduct || context.currentSku || context.product || "Ninguno"
-    );
-    const safeCartItems = sanitizeContext(
-      context.cartItems || context.cart || "Sin productos detectados"
-    );
-    const safeTotal = sanitizeContext(
-      context.cartTotal || context.total || "No disponible"
-    );
-    const safeShipMode = sanitizeContext(
-      context.shipMode || context.shippingMode || "No definido"
-    );
+    const safeProduct = sanitizeContext(context.currentProduct || context.currentSku || context.product || "Ninguno");
+    const safeCartItems = sanitizeContext(context.cartItems || context.cart || "Sin productos detectados");
+    const safeTotal = sanitizeContext(context.cartTotal || context.total || "No disponible");
+    const safeShipMode = sanitizeContext(context.shipMode || context.shippingMode || "No definido");
 
     const sys = `Eres SCORE AI, la agente comercial y operativa de Score Store.
 
@@ -133,40 +134,30 @@ Si detectas intención clarísima de abrir carrito o pagar, agrega EXACTAMENTE a
 
 Usa comandos solo cuando de verdad ayuden.`;
 
-    let r = await callGemini({
-      apiKey,
-      model: preferredModel,
-      systemText: sys,
-      userText: message,
-    });
+    let r = await callGemini({ apiKey, model: preferredModel, systemText: sys, userText: message });
 
     if (!r.ok) {
       const errMsg = String(r?.data?.error?.message || "");
       const looksLikeModelIssue = r.status === 404 || /model.*not found/i.test(errMsg);
 
       if (looksLikeModelIssue && preferredModel !== fallbackModel) {
-        r = await callGemini({
-          apiKey,
-          model: fallbackModel,
-          systemText: sys,
-          userText: message,
-        });
+        r = await callGemini({ apiKey, model: fallbackModel, systemText: sys, userText: message });
       }
     }
 
     if (!r.ok) {
       const msg = r?.data?.error?.message || "El asistente no pudo responder.";
-      return jsonResponse(200, { ok: false, error: String(msg) }, origin);
+      sendResponse(200, { ok: false, error: String(msg) });
+      return;
     }
 
     const data = r.data || {};
-    const reply =
-      data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "No pude generar una respuesta en este momento.";
+    const reply = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") ||
+                  data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+                  "No pude generar una respuesta en este momento.";
 
-    return jsonResponse(200, { ok: true, reply: String(reply).trim() }, origin);
-  } catch {
-    return jsonResponse(200, { ok: false, error: "El asistente está temporalmente fuera de línea." }, origin);
+    sendResponse(200, { ok: true, reply: String(reply).trim() });
+  } catch (error) {
+    sendResponse(200, { ok: false, error: "El asistente está temporalmente fuera de línea." });
   }
 };

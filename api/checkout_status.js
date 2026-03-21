@@ -11,10 +11,6 @@ const DEFAULT_SCORE_ORG_ID = "1f3b9980-a1c5-4557-b4eb-a75bb9a8aaa6";
 
 const safeUpper = (v) => String(v || "").toUpperCase().trim();
 const safeStr = (v, d = "") => (typeof v === "string" ? v : v == null ? d : String(v));
-const safeNum = (v, d = 0) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : d;
-};
 
 const normalizeLineItems = (lineItems) => {
   const arr = Array.isArray(lineItems) ? lineItems : [];
@@ -43,20 +39,32 @@ function pickOrgId(session) {
   return safeStr(meta.org_id || meta.organization_id || "").trim() || DEFAULT_SCORE_ORG_ID;
 }
 
-exports.handler = async (event) => {
-  const origin = event?.headers?.origin || event?.headers?.Origin || "*";
+module.exports = async (req, res) => {
+  const origin = req.headers.origin || "*";
+
+  const sendVercelResponse = (response) => {
+    Object.keys(response.headers || {}).forEach(key => {
+        res.setHeader(key, response.headers[key]);
+    });
+    res.status(response.statusCode).send(response.body);
+  };
 
   try {
-    if (event.httpMethod === "OPTIONS") return handleOptions(event);
-    if (event.httpMethod !== "GET") {
-      return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
+    if (req.method === "OPTIONS") {
+        const optionsResponse = handleOptions({ headers: req.headers });
+        sendVercelResponse(optionsResponse);
+        return;
+    }
+    if (req.method !== "GET") {
+      sendVercelResponse(jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
+      return;
     }
 
-    const qs = event.queryStringParameters || {};
-    const session_id = String(qs.session_id || "").trim();
+    const { session_id } = req.query;
 
     if (!sessionLooksValid(session_id)) {
-      return jsonResponse(400, { ok: false, error: "ID de sesión inválido" }, origin);
+      sendVercelResponse(jsonResponse(400, { ok: false, error: "ID de sesión inválido" }, origin));
+      return;
     }
 
     const stripe = initStripe();
@@ -139,7 +147,7 @@ exports.handler = async (event) => {
       }
     }
 
-    return jsonResponse(
+    sendVercelResponse(jsonResponse(
       200,
       {
         ok: true,
@@ -159,13 +167,13 @@ exports.handler = async (event) => {
         items,
       },
       origin
-    );
+    ));
   } catch (e) {
     console.error("[checkout_status] error:", e?.message);
-    return jsonResponse(
+    sendVercelResponse(jsonResponse(
       200,
       { ok: false, error: "No se pudo recuperar el estado del pedido." },
       origin
-    );
+    ));
   }
 };

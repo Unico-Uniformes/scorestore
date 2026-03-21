@@ -105,33 +105,40 @@ function normalizeOrderId(payload) {
   ).trim();
 }
 
-exports.handler = async (event) => {
-  const origin = event?.headers?.origin || event?.headers?.Origin || "*";
+module.exports = async (req, res) => {
+    const origin = req.headers.origin || "*";
+
+    const sendVercelResponse = (response) => {
+        Object.keys(response.headers || {}).forEach(key => {
+            res.setHeader(key, response.headers[key]);
+        });
+        res.status(response.statusCode).send(response.body);
+    };
 
   try {
-    if (event.httpMethod === "OPTIONS") return handleOptions(event);
-    if (event.httpMethod !== "POST") {
-      return jsonResponse(405, { ok: false, error: "Method not allowed" }, origin);
+    if (req.method === "OPTIONS") {
+        sendVercelResponse(handleOptions({headers: req.headers}));
+        return;
+    }
+    if (req.method !== "POST") {
+        sendVercelResponse(jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
+        return;
     }
 
     const expectedSecret = safeStr(process.env.ENVIA_WEBHOOK_SECRET || "");
-    const receivedSecret = safeStr(getSecretFromHeaders(event.headers || {}));
+    const receivedSecret = safeStr(getSecretFromHeaders(req.headers || {}));
 
     if (expectedSecret && receivedSecret !== expectedSecret) {
-      return jsonResponse(403, { ok: false, error: "Forbidden" }, origin);
+        sendVercelResponse(jsonResponse(403, { ok: false, error: "Forbidden" }, origin));
+        return;
     }
 
-    const payload = (() => {
-      try {
-        return JSON.parse(event.body || "{}");
-      } catch {
-        return {};
-      }
-    })();
+    const payload = req.body || {};
 
     const sb = supabaseAdmin();
     if (!sb) {
-      return jsonResponse(500, { ok: false, error: "Supabase not configured" }, origin);
+        sendVercelResponse(jsonResponse(500, { ok: false, error: "Supabase not configured" }, origin));
+        return;
     }
 
     const trackingNumber = normalizeTracking(payload);
@@ -177,13 +184,15 @@ exports.handler = async (event) => {
     }
 
     if (!query) {
-      return jsonResponse(200, { ok: true, ignored: true, reason: "no_match_keys" }, origin);
+        sendVercelResponse(jsonResponse(200, { ok: true, ignored: true, reason: "no_match_keys" }, origin));
+        return;
     }
 
     const { data: order, error: orderErr } = await query;
 
     if (orderErr || !order?.id) {
-      return jsonResponse(200, { ok: true, ignored: true, reason: "order_not_found" }, origin);
+        sendVercelResponse(jsonResponse(200, { ok: true, ignored: true, reason: "order_not_found" }, origin));
+        return;
     }
 
     const update = {
@@ -224,7 +233,7 @@ exports.handler = async (event) => {
       throw upErr;
     }
 
-    return jsonResponse(
+    sendVercelResponse(jsonResponse(
       200,
       {
         ok: true,
@@ -234,9 +243,9 @@ exports.handler = async (event) => {
         shipping_status: shipmentBucket,
       },
       origin
-    );
+    ));
   } catch (e) {
     console.error("[envia_webhook] error:", e?.message || e);
-    return jsonResponse(500, { ok: false, error: "envia_webhook_failed" }, origin);
+    sendVercelResponse(jsonResponse(500, { ok: false, error: "envia_webhook_failed" }, origin));
   }
 };

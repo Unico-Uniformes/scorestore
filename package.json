@@ -5,17 +5,12 @@
   "description": "Tienda Oficial SCORE International — Fabricado y operado por BAJATEX (Único Uniformes).",
   "main": "index.html",
   "scripts": {
-    "start": "netlify dev",
-    "build": "echo 'Build ready - Functions bundled by Netlify'"
+    "build": "echo \"Build successful\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.3",
-    "axios": "^1.6.7",
     "dotenv": "^16.4.1",
     "stripe": "^14.14.0"
-  },
-  "devDependencies": {
-    "netlify-cli": "^17.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
