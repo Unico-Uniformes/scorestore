@@ -139,17 +139,28 @@ const isSupabaseConfigured = () =>
 
 const supabaseAdmin = (() => {
   let client = null;
+  let initError = null;
+
   return () => {
-    if (!isSupabaseConfigured()) return null;
+    if (initError) {
+      // Log the initialization error on every call to see it in Vercel logs.
+      console.error("Supabase client failed to initialize:", initError);
+      return null;
+    }
     if (client) return client;
+    if (!isSupabaseConfigured()) return null;
 
-    client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-      // Updated client info for Vercel environment
-      global: { headers: { "x-client-info": "scorestore-vercel-functions" } },
-    });
-
-    return client;
+    try {
+      client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false },
+        global: { headers: { "x-client-info": "scorestore-vercel-functions" } },
+      });
+      return client;
+    } catch (e) {
+      initError = e;
+      console.error("Supabase client initialization failed:", e);
+      return null;
+    }
   };
 })();
 
