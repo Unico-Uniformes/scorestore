@@ -8,7 +8,7 @@ const {
   getEnviaQuote,
   initStripe,
   supabaseAdmin,
-} = require("./_shared");
+} = require("./_shared.js");
 
 const DEFAULT_SCORE_ORG_ID = "1f3b9980-a1c5-4557-b4eb-a75bb9a8aaa6";
 
