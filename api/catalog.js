@@ -1,5 +1,5 @@
 module.exports = async (req, res) => {
-  const { jsonResponse, handleOptions, supabaseAdmin, readJsonFile } = require("./_shared");
+  const { jsonResponse, handleOptions, supabaseAdmin, readJsonFile } = require("./_shared.js");
 
   const origin = req.headers.origin || "*";
 
