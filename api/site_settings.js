@@ -1,35 +1,48 @@
-'use client';
+'use strict';
 
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+const { supabaseAdmin, jsonResponse, handleOptions, readPublicSiteSettings, SUPPORT_EMAIL, SUPPORT_PHONE, SUPPORT_WHATSAPP_E164, SUPPORT_WHATSAPP_DISPLAY } = require('./_shared');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+module.exports = async (req, res) => {
+  const origin = req.headers.origin || '';
 
-export async function GET() {
-    try {
-        const { data: siteConfig, error: siteConfigError } = await supabase
-            .from('site_settings')
-            .select('*')
-            .single();
+  if (req.method === 'OPTIONS') {
+    const optionsRes = handleOptions({ headers: req.headers });
+    Object.keys(optionsRes.headers || {}).forEach(key => res.setHeader(key, optionsRes.headers[key]));
+    res.status(optionsRes.statusCode).send(optionsRes.body);
+    return;
+  }
 
-        const { data: contactInfo, error: contactInfoError } = await supabase
-            .from('contact_info')
-            .select('*')
-            .single();
+  if (req.method !== 'GET') {
+    const response = jsonResponse(405, { ok: false, error: 'Method not allowed' }, origin);
+    Object.keys(response.headers || {}).forEach(key => res.setHeader(key, response.headers[key]));
+    res.status(response.statusCode).send(response.body);
+    return;
+  }
 
-        if (siteConfigError || contactInfoError) {
-            return NextResponse.json({ error: siteConfigError || contactInfoError }, { status: 500 });
-        }
-
-        const responseData = {
-            siteConfig,
-            contactInfo,
-        };
-
-        return NextResponse.json(responseData, { status: 200 });
-    } catch (error) {
-        return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
+  try {
+    const sb = supabaseAdmin();
+    if (sb) {
+      const { data: settings, error } = await sb.from('site_settings').select('*').limit(1).maybeSingle();
+      if (!error && settings) {
+        const response = jsonResponse(200, { ok: true, settings, source: 'database' }, origin);
+        Object.keys(response.headers || {}).forEach(key => res.setHeader(key, response.headers[key]));
+        res.status(response.statusCode).send(response.body);
+        return;
+      }
     }
-}
+
+    const defaultSettings = await readPublicSiteSettings();
+    const response = jsonResponse(200, {
+      ok: true,
+      settings: { ...defaultSettings, contact_email: SUPPORT_EMAIL, contact_phone: SUPPORT_PHONE, whatsapp_e164: SUPPORT_WHATSAPP_E164, whatsapp_display: SUPPORT_WHATSAPP_DISPLAY },
+      source: 'defaults'
+    }, origin);
+    Object.keys(response.headers || {}).forEach(key => res.setHeader(key, response.headers[key]));
+    res.status(response.statusCode).send(response.body);
+  } catch (e) {
+    console.error('[site_settings] error:', e?.message);
+    const response = jsonResponse(500, { ok: false, error: 'site_settings_failed' }, origin);
+    Object.keys(response.headers || {}).forEach(key => res.setHeader(key, response.headers[key]));
+    res.status(response.statusCode).send(response.body);
+  }
+};
