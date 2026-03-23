@@ -1,1 +1,26 @@
-{\n  "name": "scorestore",\n  "version": "1.0.0",\n  "description": "A score tracking application for Unico Uniformes",\n  "main": "index.js",\n  "repository": {\n    "type": "git",\n    "url": "https://github.com/Unico-Uniformes/scorestore"\n  },\n  "homepage": "https://github.com/Unico-Uniformes/scorestore#readme",\n  "keywords": [\n    "scorestore",\n    "unico",\n    "uniformes"\n  ],\n  "bugs": {\n    "url": "https://github.com/Unico-Uniformes/scorestore/issues"\n  },\n  "scripts": {\n    "start": "node index.js",\n    "test": "echo 'Error: no test specified' && exit 1",\n    "build": "echo 'Building the project...'"\n  },\n  "author": "BAJATEX",\n  "license": "ISC"\n}
+{
+  "name": "scorestore",
+  "version": "1.0.0",
+  "description": "A score tracking application for Unico Uniformes",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Unico-Uniformes/scorestore"
+  },
+  "homepage": "https://github.com/Unico-Uniformes/scorestore#readme",
+  "keywords": [
+    "scorestore",
+    "unico",
+    "uniformes"
+  ],
+  "bugs": {
+    "url": "https://github.com/Unico-Uniformes/scorestore/issues"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo 'Error: no test specified' && exit 1",
+    "build": "echo 'Building the project...'"
+  },
+  "author": "BAJATEX",
+  "license": "ISC"
+}
