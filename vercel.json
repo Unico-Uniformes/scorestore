@@ -1,1 +1,3 @@
-{\n  "routes": [\n    {\n      "src": "/api/(.*)",\n      "dest": "/api/$1"\n    }\n  ]\n}
+{
+  "version": 2
+}
