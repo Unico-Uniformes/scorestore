@@ -1,6 +1,6 @@
 /* =========================================================
    SCORE STORE — UI (ULTRA-VFX PRO SECURED + FULL LAYOUT) 
-   Adaptado para Vercel: Rutas absolutas estáticas garantizadas.
+   Restauración estructural completa + Efectos Cinematográficos.
    ========================================================= */
 
 :root {
@@ -40,8 +40,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   background-color: #ffffff;
-  /* RUTAS VERCEL: Absolutas desde la raíz */
-  background-image: linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)), url("/assets/fondo-pagina-score.webp");
+  background-image: linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)), url("../assets/fondo-pagina-score.webp");
   background-size: cover; background-position: center top;
   background-attachment: fixed; background-blend-mode: normal; 
 }
@@ -109,7 +108,7 @@ button, input, select, textarea { font: inherit; }
 .spinner-mini { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; }
 
 .splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; z-index: 99999; overflow: hidden; perspective: 1000px; }
-.splash__bg { position: absolute; inset: 0; background-image: url("/assets/fondo-pagina-score.webp"); background-size: cover; background-position: center; opacity: 0.2; filter: contrast(1.5) saturate(0.5); }
+.splash__bg { position: absolute; inset: 0; background-image: url("../assets/fondo-pagina-score.webp"); background-size: cover; background-position: center; opacity: 0.2; filter: contrast(1.5) saturate(0.5); }
 .splash__vignette { position: absolute; inset: 0; background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.95) 100%); z-index: 1; pointer-events: none; }
 .splash__dust { position: absolute; inset: 0; background-image: radial-gradient(circle, rgba(200, 180, 150, 0.4) 1px, transparent 1px); background-size: 40px 40px; z-index: 1; animation: dustStorm 3s infinite linear; pointer-events: none; }
 .splash__grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(225,6,0,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(225,6,0,0.05) 1px, transparent 1px); background-size: 40px 40px; opacity: 0.3; transform: rotateX(60deg) translateY(100px); transform-origin: bottom; animation: float 10s infinite linear; z-index: 1; }
@@ -153,7 +152,7 @@ button, input, select, textarea { font: inherit; }
 .floating-scroll:hover { transform: translateY(-5px); background: var(--red); border-color: var(--red); box-shadow: 0 10px 25px rgba(225,6,0,0.6); }
 
 .cinematic-hero { position: relative; min-height: 75vh; display: flex; align-items: center; overflow: hidden; background: #000; padding: 40px 0; }
-.hero__bg { position: absolute; inset: 0; background-image: url("/assets/hero.webp"); background-size: cover; background-position: center 20%; animation: slowPan 30s linear infinite alternate; transform: translateZ(0); filter: saturate(1.2); }
+.hero__bg { position: absolute; inset: 0; background-image: url("../assets/hero.webp"); background-size: cover; background-position: center 20%; animation: slowPan 30s linear infinite alternate; transform: translateZ(0); filter: saturate(1.2); }
 .cinematic-hero::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.8) 100%); z-index: 1; pointer-events: none; }
 .hero__overlay { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(10,10,10,0.98) 100%); z-index: 2; pointer-events: none;}
 .hero__particles { position: absolute; inset: 0; background-image: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px); background-size: 50px 50px; opacity: 0.5; z-index: 2; animation: particlesDrift 60s linear infinite; pointer-events: none;}
@@ -201,8 +200,7 @@ button, input, select, textarea { font: inherit; }
 .catcard { position: relative; border-radius: var(--radius2); overflow: hidden; border: 2px solid transparent; background: #000; box-shadow: var(--shadow2); cursor: pointer; min-height: 200px; transition: all 0.4s var(--ease-bouncy); display: flex; align-items: center; justify-content: center; padding: 0; transform: translateZ(0); }
 .catcard.hover-fx:hover { transform: translateY(-12px) scale(1.03); border-color: var(--red); box-shadow: 0 25px 50px rgba(225,6,0,0.4); z-index: 10; }
 .catcard.active { border-color: var(--red); transform: translateY(-5px); box-shadow: 0 0 30px rgba(225,6,0,0.5); border-width: 3px; }
-/* RUTAS VERCEL: Textura BAJA 1000 */
-.catcard__bg { position: absolute; inset: 0; background-image: url("/assets/baja1000-texture.webp"); background-size: cover; background-position: center; opacity: 1; transition: transform 0.6s var(--ease); }
+.catcard__bg { position: absolute; inset: 0; background-image: url("../assets/baja1000-texture.webp"); background-size: cover; background-position: center; opacity: 1; transition: transform 0.6s var(--ease); }
 .catcard:hover .catcard__bg { transform: scale(1.15); }
 .catcard__inner { position: relative; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; z-index: 2; background: rgba(0,0,0,0.4); transition: background 0.3s; }
 .catcard:hover .catcard__inner { background: rgba(0,0,0,0.7); }
