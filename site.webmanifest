@@ -2,23 +2,25 @@
   "name": "SCORE STORE",
   "short_name": "SCORE",
   "description": "Tienda oficial SCORE con pagos seguros y seguimiento de pedidos.",
-
-  "id": "/?app=scorestore-v1",
+  "id": "scorestore-pwa",
   "start_url": "/?source=pwa&v=2026-03-24",
   "scope": "/",
-
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui", "browser"],
+  "display_override": [
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
   "orientation": "portrait",
-
   "background_color": "#0f0f0f",
   "theme_color": "#E10600",
-
   "lang": "es-MX",
   "dir": "ltr",
-
-  "categories": ["shopping", "sports", "lifestyle"],
-
+  "categories": [
+    "shopping",
+    "sports",
+    "lifestyle"
+  ],
   "icons": [
     {
       "src": "/assets/icons/icon-192.png",
@@ -33,7 +35,6 @@
       "purpose": "any maskable"
     }
   ],
-
   "shortcuts": [
     {
       "name": "Ver carrito",
@@ -58,7 +59,6 @@
       ]
     }
   ],
-
   "screenshots": [
     {
       "src": "/assets/screenshots/home.webp",
@@ -67,6 +67,5 @@
       "form_factor": "narrow"
     }
   ],
-
   "prefer_related_applications": false
 }
