@@ -2,13 +2,23 @@
   "name": "SCORE STORE",
   "short_name": "SCORE",
   "description": "Tienda oficial SCORE con pagos seguros y seguimiento de pedidos.",
-  "background_color": "#ffffff",
-  "theme_color": "#E10600",
-  "display": "standalone",
-  "orientation": "portrait",
-  "id": "/",
-  "start_url": "/",
+
+  "id": "/?app=scorestore-v1",
+  "start_url": "/?source=pwa&v=2026-03-24",
   "scope": "/",
+
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "portrait",
+
+  "background_color": "#0f0f0f",
+  "theme_color": "#E10600",
+
+  "lang": "es-MX",
+  "dir": "ltr",
+
+  "categories": ["shopping", "sports", "lifestyle"],
+
   "icons": [
     {
       "src": "/assets/icons/icon-192.png",
@@ -23,17 +33,40 @@
       "purpose": "any maskable"
     }
   ],
-  "display_override": [
-    "standalone",
-    "minimal-ui",
-    "browser"
+
+  "shortcuts": [
+    {
+      "name": "Ver carrito",
+      "short_name": "Carrito",
+      "url": "/?view=cart",
+      "icons": [
+        {
+          "src": "/assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Pedidos",
+      "short_name": "Pedidos",
+      "url": "/success.html",
+      "icons": [
+        {
+          "src": "/assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ],
-  "lang": "es-MX",
-  "dir": "ltr",
-  "categories": [
-    "shopping",
-    "sports",
-    "lifestyle"
+
+  "screenshots": [
+    {
+      "src": "/assets/screenshots/home.webp",
+      "sizes": "1080x1920",
+      "type": "image/webp",
+      "form_factor": "narrow"
+    }
   ],
+
   "prefer_related_applications": false
 }
