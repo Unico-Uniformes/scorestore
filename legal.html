@@ -215,16 +215,15 @@ WhatsApp:
 (async () => {
   async function fetchConfig(url) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error("bad response");
       return await res.json();
     } catch {
       return null;
     }
   }
 
-  let data =
-    await fetchConfig("/api/site_settings") ||
-    await fetchConfig("/.netlify/functions/site_settings");
+  const data = await fetchConfig("/api/site_settings");
 
   if (!data || !data.contact) return;
 
@@ -232,12 +231,14 @@ WhatsApp:
   const wa = data.contact.whatsapp_e164;
 
   if (email) {
-    document.getElementById("emailLink").textContent = email;
-    document.getElementById("emailLink").href = "mailto:" + email;
+    const emailEl = document.getElementById("emailLink");
+    emailEl.textContent = email;
+    emailEl.href = "mailto:" + email;
   }
 
   if (wa) {
-    document.getElementById("waLink").href = "https://wa.me/" + wa;
+    const waEl = document.getElementById("waLink");
+    waEl.href = "https://wa.me/" + wa;
   }
 })();
 </script>
