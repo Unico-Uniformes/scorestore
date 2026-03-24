@@ -9,7 +9,7 @@
       "id": "BAJA1000",
       "title": "BAJA 1000",
       "cover_image": "/assets/EDICION_2025/camiseta-negra-baja1000.webp",
-      "count": 9
+      "count": 13
     },
     {
       "id": "BAJA500",
@@ -20,7 +20,7 @@
     {
       "id": "BAJA400",
       "title": "BAJA 400",
-      "cover_image": "/assets/BAJA400/camiseta-cafe- oscuro-baja400.webp",
+      "cover_image": "/assets/BAJA400/camiseta-cafe-oscuro-baja400.webp",
       "count": 1
     },
     {
@@ -71,8 +71,8 @@
       "sizes": ["S", "M", "L", "XL", "XXL"],
       "images": [
         "/assets/EDICION_2025/camiseta-negra-baja1000.webp",
-        "/assets/EDICION_2025/camiseta-negra-baja1000-atras.jpg.webp",
-        "/assets/EDICION_2025/camiseta-negra-baja1000-detalles.jpg.webp"
+        "/assets/EDICION_2025/camiseta-negra-baja1000-atras.webp",
+        "/assets/EDICION_2025/camiseta-negra-baja1000-detalles.webp"
       ]
     },
     {
@@ -86,8 +86,8 @@
       "sizes": ["S", "M", "L", "XL", "XXL"],
       "images": [
         "/assets/EDICION_2025/camiseta-cafe-baja1000.jpg.webp",
-        "/assets/EDICION_2025/camiseta-cafe-baja1000-atras.jpg.webp",
-        "/assets/EDICION_2025/camiseta-cafe-baja1000-detalles.jpg.webp"
+        "/assets/EDICION_2025/camiseta-cafe-baja1000-atras.webp",
+        "/assets/EDICION_2025/camiseta-cafe-baja1000-detalles.webp"
       ]
     },
     {
@@ -127,8 +127,8 @@
       "rank": 7,
       "sizes": ["S", "M", "L", "XL", "XXL"],
       "images": [
-        "/assets/EDICION_2025/camisa-gris-pits-baja1000.jpg.webp",
-        "/assets/EDICION_2025/camisa-gris-pits-baja1000-detalles.jpg.webp"
+        "/assets/EDICION_2025/camisa-gris-pits-baja1000.webp",
+        "/assets/EDICION_2025/camisa-gris-pits-baja1000-detalles.webp"
       ]
     },
     {
@@ -141,8 +141,8 @@
       "rank": 8,
       "sizes": ["S", "M", "L", "XL", "XXL"],
       "images": [
-        "/assets/EDICION_2025/camisa-rosa-pits-baja1000.jpg.webp",
-        "/assets/EDICION_2025/camisa-rosa-pits-baja1000-detalles.jpg.webp"
+        "/assets/EDICION_2025/camisa-rosa-pits-baja1000.webp",
+        "/assets/EDICION_2025/camisa-rosa-pits-baja1000-detalles.webp"
       ]
     },
     {
@@ -163,8 +163,8 @@
       "title": "Camiseta Gris — Baja 500",
       "description": "Camiseta oficial Baja 500. Tela premium ideal para el uso diario de los apasionados del Score.",
       "price_cents": 35000,
-      "sectionId": "EDICION_2025",
-      "collection": "Edición 2025",
+      "sectionId": "BAJA500",
+      "collection": "Baja 500",
       "rank": 10,
       "sizes": ["S", "M", "L", "XL", "XXL"],
       "images": [
@@ -195,9 +195,9 @@
       "rank": 12,
       "sizes": ["S", "M", "L", "XL", "XXL"],
       "images": [
-        "/assets/BAJA400/camiseta-cafe- oscuro-baja400.webp",
-        "/assets/BAJA400/camiseta-cafe- oscuro-baja400-atras.webp",
-        "/assets/BAJA400/camiseta-cafe- oscuro-baja400-detalle.webp"
+        "/assets/BAJA400/camiseta-cafe-oscuro-baja400.webp",
+        "/assets/BAJA400/camiseta-cafe-oscuro-baja400-atras.webp",
+        "/assets/BAJA400/camiseta-cafe-oscuro-baja400-detalle.webp"
       ]
     },
     {
@@ -252,7 +252,7 @@
       "rank": 16,
       "sizes": ["S", "M", "L", "XL", "XXL"],
       "images": [
-        "/assets/OTRAS_EDICIONES/hoodie-rosa-baja1000.jpg.webp"
+        "/assets/OTRAS_EDICIONES/hoodie-rosa-baja1000.webp"
       ]
     },
     {
