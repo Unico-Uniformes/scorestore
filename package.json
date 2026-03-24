@@ -1,7 +1,7 @@
 {
   "name": "scorestore",
-  "version": "1.0.0",
-  "description": "Tienda Oficial Score Store",
+  "version": "1.0.1",
+  "description": "Score Store Official",
   "main": "api/catalog.js",
   "scripts": {
     "build": "echo 'Build OK'"
