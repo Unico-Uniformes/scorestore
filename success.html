@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f0f0f" />
   <meta name="description" content="Estado de tu pedido en SCORE STORE. Revisa el resumen de pago, entrega y soporte oficial." />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https: https://www.facebook.com; script-src 'self' 'unsafe-inline' https://js.stripe.com https://connect.facebook.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.stripe.com https://*.supabase.co wss://*.supabase.co https://www.facebook.com https://connect.facebook.net; manifest-src 'self'; worker-src 'self'; frame-src https://js.stripe.com https://hooks.stripe.com;" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.vercel.app; img-src 'self' data: https: https://www.facebook.com; script-src 'self' 'unsafe-inline' https://js.stripe.com https://connect.facebook.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.stripe.com https://*.supabase.co wss://*.supabase.co https://www.facebook.com https://connect.facebook.net https://*.vercel.app; manifest-src 'self'; worker-src 'self'; frame-src https://js.stripe.com https://hooks.stripe.com;" />
 
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -13,12 +14,13 @@
 
   <title>Estado de Pedido — SCORE STORE</title>
 
+  <link rel="canonical" href="https://scorestore.vercel.app/success.html" />
   <link rel="manifest" href="/site.webmanifest" />
   <link rel="icon" href="/assets/icons/icon-192.png" />
   <link rel="apple-touch-icon" href="/assets/icons/icon-192.png" />
 
   <link rel="stylesheet" href="/css/styles.css" />
-  <link rel="stylesheet" href="/css/override.css?v=2026-03-07" />
+  <link rel="stylesheet" href="/css/override.css?v=2026-03-26-vercel-fused" />
 
   <style>
     .success-page {
@@ -33,6 +35,7 @@
         radial-gradient(circle at top right, rgba(225,6,0,0.10), transparent 0 26%),
         linear-gradient(180deg, #090909 0%, #101010 100%);
     }
+
     .success-bg {
       position: fixed;
       inset: 0;
@@ -42,12 +45,14 @@
         url("/assets/fondo-pagina-score.webp") center/cover no-repeat;
       filter: saturate(1.05) brightness(0.58);
     }
+
     .success-shell {
       width: 100%;
       max-width: 760px;
       position: relative;
       z-index: 2;
     }
+
     .success-panel {
       background: rgba(255,255,255,0.92);
       backdrop-filter: blur(22px);
@@ -59,6 +64,7 @@
       overflow: hidden;
       padding: 28px 22px;
     }
+
     .success-logo {
       height: auto;
       width: min(180px, 45vw);
@@ -67,15 +73,16 @@
       object-fit: contain;
       filter: drop-shadow(0 10px 24px rgba(225,6,0,0.28));
     }
-    .success-hero {
-      text-align: center;
-    }
+
+    .success-hero { text-align: center; }
+
     .success-emoji {
       font-size: 58px;
       line-height: 1;
       margin-bottom: 8px;
       filter: drop-shadow(0 0 12px rgba(255,255,255,0.28));
     }
+
     .success-title {
       margin: 0;
       font-size: clamp(30px, 4vw, 38px);
@@ -83,6 +90,7 @@
       font-weight: 900;
       color: var(--black-btn);
     }
+
     .success-copy {
       max-width: 620px;
       margin: 14px auto 0;
@@ -91,33 +99,37 @@
       color: #374151;
       font-weight: 600;
     }
+
     .success-box {
       margin-top: 22px;
       border: 1px solid rgba(0,0,0,0.08);
       border-radius: 20px;
       padding: 18px;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.74));
+      background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.74));
       box-shadow: 0 12px 30px rgba(0,0,0,0.08);
     }
+
     .success-topline {
       display: flex;
       justify-content: space-between;
       gap: 12px;
       flex-wrap: wrap;
     }
+
     .success-meta {
       margin-top: 16px;
       display: grid;
       gap: 10px;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     }
+
     .success-meta-card {
       border-radius: 16px;
       padding: 12px;
       background: rgba(0,0,0,0.04);
       border: 1px solid rgba(0,0,0,0.06);
     }
+
     .success-label {
       font-size: 11px;
       font-weight: 900;
@@ -126,11 +138,13 @@
       color: #6b7280;
       margin-bottom: 6px;
     }
+
     .success-value {
       font-weight: 900;
       color: var(--black-btn);
       word-break: break-word;
     }
+
     .success-actions {
       margin-top: 20px;
       display: flex;
@@ -138,6 +152,7 @@
       flex-wrap: wrap;
       justify-content: center;
     }
+
     .success-note {
       margin-top: 16px;
       padding: 12px 14px;
@@ -148,6 +163,7 @@
       line-height: 1.65;
       font-weight: 700;
     }
+
     .success-support {
       margin-top: 18px;
       border-radius: 16px;
@@ -155,6 +171,7 @@
       background: rgba(0,0,0,0.04);
       border: 1px solid rgba(0,0,0,0.06);
     }
+
     .success-support strong {
       display: block;
       margin-bottom: 8px;
@@ -163,25 +180,22 @@
       text-transform: uppercase;
       color: #6b7280;
     }
+
     .success-support a {
       font-weight: 900;
       color: var(--black-btn);
       word-break: break-word;
       text-decoration: none;
     }
+
     .success-support a:hover {
       text-decoration: underline;
     }
+
     @media (max-width: 640px) {
-      .success-panel {
-        padding: 22px 16px;
-      }
-      .success-title {
-        font-size: 28px;
-      }
-      .success-emoji {
-        font-size: 50px;
-      }
+      .success-panel { padding: 22px 16px; }
+      .success-title { font-size: 28px; }
+      .success-emoji { font-size: 50px; }
     }
   </style>
 </head>
@@ -189,7 +203,7 @@
   <div class="success-bg" aria-hidden="true"></div>
 
   <main class="success-shell">
-    <section class="success-panel">
+    <section class="success-panel vfx-glass-container">
       <img
         src="/assets/logo-score.webp"
         alt="Score Store"
@@ -207,7 +221,7 @@
         </p>
       </div>
 
-      <div class="success-box">
+      <div class="success-box glass-panel">
         <div class="success-topline">
           <div>
             <div class="success-label">ID de pedido oficial</div>
@@ -272,20 +286,32 @@
       const shipMode = String(params.get("ship") || params.get("shipping") || params.get("delivery") || "—").trim();
       const currency = String(params.get("currency") || "MXN").toUpperCase();
 
-      const amountRaw =
-        params.get("total_cents") ||
-        params.get("amount_total_cents") ||
-        params.get("amount_cents") ||
-        params.get("total") ||
-        params.get("amount_total") ||
-        "";
+      const totalCentsKeys = ["total_cents", "amount_total_cents", "amount_cents"];
+      const totalTextKeys = ["total", "amount_total"];
 
-      const amountNumber = Number(amountRaw);
-      const amountText = Number.isFinite(amountNumber)
-        ? new Intl.NumberFormat("es-MX", { style: "currency", currency, maximumFractionDigits: 2 }).format(
-            amountRaw.includes("cents") || amountNumber >= 1000 ? amountNumber / 100 : amountNumber
-          )
-        : "—";
+      let amountText = "—";
+      const centsKey = totalCentsKeys.find((k) => params.has(k));
+      const textKey = totalTextKeys.find((k) => params.has(k));
+
+      if (centsKey) {
+        const cents = Number(params.get(centsKey));
+        if (Number.isFinite(cents)) {
+          amountText = new Intl.NumberFormat("es-MX", {
+            style: "currency",
+            currency,
+            maximumFractionDigits: 2
+          }).format(cents / 100);
+        }
+      } else if (textKey) {
+        const amt = Number(params.get(textKey));
+        if (Number.isFinite(amt)) {
+          amountText = new Intl.NumberFormat("es-MX", {
+            style: "currency",
+            currency,
+            maximumFractionDigits: 2
+          }).format(amt);
+        }
+      }
 
       const heroEmoji = document.getElementById("heroEmoji");
       const heroTitle = document.getElementById("heroTitle");
@@ -308,18 +334,21 @@
         if (heroText) heroText.textContent = "Tu pedido fue registrado correctamente. Conserva este resumen para cualquier seguimiento.";
         if (orderStatusText) orderStatusText.textContent = "Confirmado";
         if (extraHint) extraHint.textContent = "Tu correo recibirá la confirmación y cualquier actualización de despacho.";
+        document.title = "Pago confirmado — SCORE STORE";
       } else if (isPendingLike) {
         if (heroEmoji) heroEmoji.textContent = "⏳";
         if (heroTitle) heroTitle.textContent = "Pago en proceso";
         if (heroText) heroText.textContent = "Tu pago fue recibido y puede tardar un momento en reflejarse por completo.";
         if (orderStatusText) orderStatusText.textContent = "En proceso";
         if (extraHint) extraHint.textContent = "Si pagaste con OXXO, la confirmación puede tardar hasta 1 día hábil.";
+        document.title = "Pago en proceso — SCORE STORE";
       } else if (isCanceledLike) {
         if (heroEmoji) heroEmoji.textContent = "⚠️";
         if (heroTitle) heroTitle.textContent = "Pago no completado";
         if (heroText) heroText.textContent = "No se generó un cargo final. Puedes volver a intentar con otro método de pago.";
         if (orderStatusText) orderStatusText.textContent = "Cancelado";
         if (extraHint) extraHint.textContent = "Tu carrito permanece guardado en este dispositivo.";
+        document.title = "Pago no completado — SCORE STORE";
       } else {
         if (heroEmoji) heroEmoji.textContent = "🏁";
         if (heroTitle) heroTitle.textContent = "Estado de pedido";
@@ -351,31 +380,83 @@
         try {
           const res = await fetch("/api/site_settings", { cache: "no-store" });
           const data = await res.json().catch(() => null);
-          if (!data || !data.ok) return;
+          const settings = data?.data && typeof data.data === "object" ? data.data : data;
+          if (!settings || typeof settings !== "object") return;
 
-          const contact = data.contact || {};
-          const home = data.home || {};
+          const contact = settings.contact || {};
+          const home = settings.home || {};
+          const socials = settings.socials || {};
 
-          const email = String(contact.email || "").trim();
-          const waE164 = String(contact.whatsapp_e164 || "").trim();
-          const waDisplay = String(contact.whatsapp_display || "").trim();
+          const email = String(contact.email || "ventas.unicotextil@gmail.com").trim();
+          const waE164 = String(contact.whatsapp_e164 || "5216642368701").trim();
+          const waDisplay = String(contact.whatsapp_display || "664 236 8701").trim();
           const footerNote = String(home.footer_note || "").trim();
 
-          const emailLink = document.getElementById("successSupportEmail");
-          const waLink = document.getElementById("successSupportWa");
+          const emailLinks = [
+            document.getElementById("successSupportEmail"),
+            document.getElementById("footerEmailLink"),
+            document.getElementById("footerMailLink"),
+            document.getElementById("footerMailLinkInline")
+          ].filter(Boolean);
 
-          if (email && emailLink) {
-            emailLink.textContent = email;
-            emailLink.href = `mailto:${email}`;
+          emailLinks.forEach((el) => {
+            el.textContent = email;
+            el.setAttribute("href", `mailto:${email}`);
+          });
+
+          const privacyEmail = document.getElementById("privacyEmail");
+          if (privacyEmail) privacyEmail.textContent = email;
+
+          const waLinks = [
+            document.getElementById("successSupportWa"),
+            document.getElementById("footerWhatsappLink"),
+            document.getElementById("footerWaLink"),
+            document.getElementById("footerWaLinkInline")
+          ].filter(Boolean);
+
+          waLinks.forEach((el) => {
+            el.setAttribute("href", `https://wa.me/${waE164}`);
+          });
+
+          const waTexts = [
+            document.getElementById("footerWhatsappText")
+          ].filter(Boolean);
+
+          waTexts.forEach((el) => {
+            el.textContent = waDisplay;
+          });
+
+          const socialMap = [
+            ["footerFacebookLink", socials.facebook],
+            ["footerInstagramLink", socials.instagram],
+            ["footerYoutubeLink", socials.youtube]
+          ];
+
+          socialMap.forEach(([id, href]) => {
+            const el = document.getElementById(id);
+            if (el && href) el.setAttribute("href", href);
+          });
+
+          const footerNoteEl = document.getElementById("footerNote");
+          if (footerNoteEl && footerNote) {
+            footerNoteEl.textContent = footerNote || footerNoteEl.textContent;
           }
 
-          if (waLink) {
-            if (waE164) waLink.href = `https://wa.me/${encodeURIComponent(waE164)}`;
-            if (waDisplay) waLink.textContent = waDisplay;
-          }
-
-          if (footerNote && extraHint && isSuccessLike && !params.get("custom_hint")) {
+          if (extraHint && footerNote && isSuccessLike && !params.get("custom_hint")) {
             extraHint.textContent = footerNote;
+          }
+
+          const supportEmail = document.getElementById("successSupportEmail");
+          const supportWa = document.getElementById("successSupportWa");
+
+          if (supportEmail) {
+            supportEmail.textContent = email;
+            supportEmail.setAttribute("href", `mailto:${email}`);
+          }
+
+          if (supportWa) {
+            supportWa.textContent = waDisplay;
+            supportWa.setAttribute("href", `https://wa.me/${waE164}`);
           }
         } catch {}
       })();
