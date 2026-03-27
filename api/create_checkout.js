@@ -1,47 +1,178 @@
 "use strict";
 
-const {
-  jsonResponse,
-  handleOptions,
-  safeJsonParse,
-  readJsonFile,
-  getEnviaQuote,
-  initStripe,
-  supabaseAdmin,
-} = require("./_shared.js");
+const shared = require("./_shared");
+
+const jsonResponse = shared.jsonResponse;
+const handleOptions = shared.handleOptions;
+const supabaseAdmin = shared.supabaseAdmin;
+const getBaseUrl = shared.getBaseUrl;
+const getCatalogIndex = shared.getCatalogIndex;
+const initStripe = shared.initStripe;
+const makeCheckoutIdempotencyKey = shared.makeCheckoutIdempotencyKey;
+const normalizeQty = shared.normalizeQty || ((items) => Array.isArray(items) ? items : []);
+const itemsQtyFromAny = shared.itemsQtyFromAny || ((items) => Array.isArray(items) ? items.reduce((s, i) => s + Number(i?.qty || 0), 0) : 0);
+const readJsonFile = shared.readJsonFile;
+const safeStr = shared.safeStr || ((v, d = "") => (typeof v === "string" && v.trim() ? v.trim() : d));
+const sendTelegram = shared.sendTelegram;
+const getFallbackShipping = shared.getFallbackShipping;
 
 const DEFAULT_SCORE_ORG_ID = "1f3b9980-a1c5-4557-b4eb-a75bb9a8aaa6";
 
-const isUuid = (s) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || "").trim());
-
-const num = (v) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+const withNoStore = (resp) => {
+  const out = resp || {};
+  out.headers = out.headers || {};
+  out.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate";
+  out.headers["Pragma"] = "no-cache";
+  out.headers["Expires"] = "0";
+  return out;
 };
 
-const normCode = (s) => String(s || "").trim().toUpperCase().replace(/\s+/g, "");
+const send = (res, resp) => {
+  const out = withNoStore(resp);
+  if (out.headers) {
+    Object.keys(out.headers).forEach((key) => res.setHeader(key, out.headers[key]));
+  }
+  res.status(out.statusCode || 200).send(out.body);
+};
 
-const clampInt = (v, a, b) => {
+const parseBody = (req) => {
+  if (!req) return {};
+  if (req.body && typeof req.body === "object") return req.body;
+
+  const raw = typeof req.body === "string" ? req.body : "";
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+};
+
+const clampInt = (v, min, max) => {
   const n = Math.floor(Number(v));
-  if (!Number.isFinite(n)) return a;
-  return Math.max(a, Math.min(b, n));
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, n));
+};
+
+const moneyToCents = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100);
+};
+
+const cleanCode = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, "");
+
+const promoKind = (promo) => {
+  const type = String(promo?.type || "").trim().toLowerCase();
+  if (type === "percent" || type === "percentage" || type === "percent_off") return "percent";
+  if (type === "fixed_mxn" || type === "fixed" || type === "fixed_off") return "fixed";
+  if (type === "free_shipping" || type === "freeshipping") return "free_shipping";
+  return "unknown";
+};
+
+const computePromo = (promo, subtotalCents) => {
+  if (!promo) return { promo: null, discount_cents: 0, free_shipping: false };
+
+  const kind = promoKind(promo);
+  const active = promo.active == null ? true : !!promo.active;
+  if (!active) return { promo: null, discount_cents: 0, free_shipping: false };
+
+  const minAmountMxn = Number(promo.min_amount_mxn || 0) || 0;
+  if (Number(subtotalCents || 0) < moneyToCents(minAmountMxn)) {
+    return { promo: null, discount_cents: 0, free_shipping: false };
+  }
+
+  if (kind === "free_shipping") {
+    return { promo, discount_cents: 0, free_shipping: true };
+  }
+
+  if (kind === "percent") {
+    const raw = Number(promo.value || 0);
+    const rate = raw > 1 ? raw / 100 : raw;
+    const discount = Math.max(0, Math.round(Number(subtotalCents || 0) * (Number.isFinite(rate) ? rate : 0)));
+    return { promo, discount_cents: Math.min(Number(subtotalCents || 0), discount), free_shipping: false };
+  }
+
+  if (kind === "fixed") {
+    const discount = Math.max(0, moneyToCents(Number(promo.value || 0)));
+    return { promo, discount_cents: Math.min(Number(subtotalCents || 0), discount), free_shipping: false };
+  }
+
+  return { promo: null, discount_cents: 0, free_shipping: false };
+};
+
+const normalizeText = (s) => String(s ?? "").trim();
+const normalizeUrl = (u) => {
+  const s = String(u ?? "").trim();
+  if (!s) return "";
+  if (/^(https?:|data:|blob:)/i.test(s)) return s;
+  if (s.startsWith("assets/")) return `/${s}`;
+  if (s.startsWith("/assets/")) return s;
+  return s.startsWith("/") ? s : `/${s}`;
+};
+
+const itemPriceCents = (item, catalogIndex) => {
+  const sku = normalizeText(item?.sku);
+  const fromCatalog = sku && catalogIndex?.get ? catalogIndex.get(sku) : null;
+
+  const fromCatalogPrice =
+    Number(fromCatalog?.price_cents) ||
+    (Number.isFinite(Number(fromCatalog?.price_mxn)) ? Math.round(Number(fromCatalog.price_mxn) * 100) : 0) ||
+    (Number.isFinite(Number(fromCatalog?.base_mxn)) ? Math.round(Number(fromCatalog.base_mxn) * 100) : 0);
+
+  const clientPrice =
+    Number(item?.price_cents) ||
+    (Number.isFinite(Number(item?.priceCents)) ? Math.round(Number(item.priceCents)) : 0) ||
+    (Number.isFinite(Number(item?.price_mxn)) ? Math.round(Number(item.price_mxn) * 100) : 0);
+
+  return Math.max(0, fromCatalogPrice || clientPrice || 0);
+};
+
+const itemTitle = (item, catalogIndex) => {
+  const sku = normalizeText(item?.sku);
+  const fromCatalog = sku && catalogIndex?.get ? catalogIndex.get(sku) : null;
+  return normalizeText(fromCatalog?.name || fromCatalog?.title || item?.name || item?.title || "Producto SCORE");
+};
+
+const itemImage = (item, catalogIndex) => {
+  const sku = normalizeText(item?.sku);
+  const fromCatalog = sku && catalogIndex?.get ? catalogIndex.get(sku) : null;
+  const imgs = Array.isArray(fromCatalog?.images) ? fromCatalog.images : [];
+  const candidate = imgs[0] || fromCatalog?.image_url || fromCatalog?.img || item?.image || "";
+  return normalizeUrl(candidate);
+};
+
+const getCatalogMap = () => {
+  try {
+    const fn = getCatalogIndex;
+    if (typeof fn === "function") {
+      const out = fn();
+      if (out?.index instanceof Map) return out.index;
+      if (out?.index && typeof out.index === "object") return new Map(Object.entries(out.index));
+    }
+  } catch {}
+
+  const raw = readJsonFile ? readJsonFile("data/catalog.json") : null;
+  const products = Array.isArray(raw?.products) ? raw.products : [];
+  const map = new Map();
+  for (const p of products) {
+    const sku = normalizeText(p?.sku);
+    if (sku) map.set(sku, p);
+  }
+  return map;
 };
 
 const resolveOrgId = async (sb) => {
   const envId = process.env.SCORE_ORG_ID || process.env.DEFAULT_ORG_ID;
-  if (envId && isUuid(envId)) return String(envId).trim();
+  if (envId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(envId).trim())) {
+    return String(envId).trim();
+  }
 
   let orgId = DEFAULT_SCORE_ORG_ID;
 
   try {
-    const { data: byId } = await sb
-      .from("organizations")
-      .select("id")
-      .eq("id", orgId)
-      .limit(1)
-      .maybeSingle();
-
+    const { data: byId } = await sb.from("organizations").select("id").eq("id", orgId).limit(1).maybeSingle();
     if (byId?.id) return orgId;
 
     const { data: byName } = await sb
@@ -58,457 +189,444 @@ const resolveOrgId = async (sb) => {
   return orgId;
 };
 
-const loadLocalCatalogIndex = () => {
-  const cat = readJsonFile("data/catalog.json") || { products: [] };
-  const map = new Map();
+const getFallbackShippingQuote = (country, qty) => {
+  const c = String(country || "MX").toUpperCase();
+  const q = clampInt(qty || 1, 1, 99);
 
-  for (const p of Array.isArray(cat?.products) ? cat.products : []) {
-    const sku = String(p?.sku || "").trim();
-    if (!sku) continue;
-    map.set(sku, p);
+  const fallback = typeof getFallbackShipping === "function"
+    ? getFallbackShipping(c, q)
+    : null;
+
+  if (fallback && Number.isFinite(Number(fallback.amount_cents))) {
+    return {
+      ok: true,
+      provider: fallback.provider || "fallback",
+      label: fallback.label || (c === "US" ? "Envío USA (estimado)" : "Envío MX (estimado)"),
+      country: c,
+      amount_cents: Number(fallback.amount_cents) || 0,
+      amount_mxn: Number(fallback.amount_mxn) || ((Number(fallback.amount_cents) || 0) / 100),
+    };
   }
 
-  return map;
-};
-
-const loadLocalPromos = () => readJsonFile("data/promos.json") || { rules: [] };
-
-const getProductsFromDB = async (sb, orgId, skus) => {
-    if (!sb) return new Map();
-    const { data, error } = await sb
-        .from("products")
-        .select("sku,name,description,price_cents,price_mxn,images,sizes,image_url,stock,is_active,deleted_at")
-        .or(`organization_id.eq.${orgId},org_id.eq.${orgId}`)
-        .in("sku", skus)
-        .is("deleted_at", null)
-        .eq("is_active", true)
-        .limit(200);
-
-    if (error) throw error;
-
-    const map = new Map();
-
-    for (const p of Array.isArray(data) ? data : []) {
-        const sku = String(p?.sku || "").trim();
-        if (!sku) continue;
-
-        const images = Array.isArray(p?.images) ? p.images.filter(Boolean).map(String) : [];
-        const sizes = Array.isArray(p?.sizes) && p.sizes.length ? p.sizes.map(String) : null;
-
-        const priceCents = Number.isFinite(Number(p?.price_cents))
-            ? Math.max(0, Math.floor(Number(p.price_cents)))
-            : Math.max(0, Math.round(num(p?.price_mxn) * 100));
-
-        map.set(sku, {
-            sku,
-            title: String(p?.name || "Producto Oficial").trim(),
-            description: String(p?.description || "").trim(),
-            priceCents,
-            sizes: sizes || ["S", "M", "L", "XL", "XXL"],
-            images: images.length ? images : p?.image_url ? [String(p.image_url)] : [],
-            stock: Number.isFinite(Number(p?.stock)) ? Number(p.stock) : null,
-        });
-    }
-
-    return map;
-};
-
-const getPromoFromDB = async (sb, orgId, code) => {
-    if(!sb) return null;
-    const c = normCode(code);
-    if (!c) return null;
-
-    const { data, error } = await sb
-        .from("promo_rules")
-        .select("code,type,value,description,active,min_amount_mxn,expires_at")
-        .or(`organization_id.eq.${orgId},org_id.eq.${orgId}`)
-        .ilike("code", c)
-        .eq("active", true)
-        .limit(1)
-        .maybeSingle();
-
-    if (error || !data?.code) return null;
-
-    const expOk = !data.expires_at || Date.now() <= new Date(data.expires_at).getTime();
-    if (!expOk) return null;
-
-    return {
-        code: String(data.code || "").trim(),
-        type: String(data.type || "").trim(),
-        value: num(data.value),
-        description: String(data.description || "").trim(),
-        min_amount_mxn: num(data.min_amount_mxn),
-    };
-};
-
-const getPromoFromLocal = (promosData, code) => {
-  const c = normCode(code);
-  const rules = Array.isArray(promosData?.rules) ? promosData.rules : [];
-  const r = rules.find((x) => normCode(x?.code) === c && !!x?.active);
-  if (!r) return null;
-
-  const expOk = !r.expires_at || Date.now() <= new Date(r.expires_at).getTime();
-  if (!expOk) return null;
-
+  const base = c === "US" ? 850 : 250;
+  const perItem = 50;
+  const priceMXN = Math.max(0, base + Math.max(0, q - 1) * perItem);
   return {
-    code: String(r.code || "").trim(),
-    type: String(r.type || "").trim(),
-    value: num(r.value),
-    description: String(r.description || "").trim(),
-    min_amount_mxn: num(r.min_amount_mxn),
+    ok: true,
+    provider: "fallback",
+    label: c === "US" ? "Envío USA (estimado)" : "Envío MX (estimado)",
+    country: c,
+    amount_cents: Math.round(priceMXN * 100),
+    amount_mxn: priceMXN,
   };
 };
 
-const normalizeFrontendPromo = (promo) => {
-  if (!promo || typeof promo !== "object") return null;
-  const code = normCode(promo.code);
+const expandUnits = (items, catalogIndex) => {
+  const units = [];
+
+  for (const item of items) {
+    const qty = clampInt(item?.qty, 1, 99);
+    const priceCents = itemPriceCents(item, catalogIndex);
+    const title = itemTitle(item, catalogIndex);
+    const sku = normalizeText(item?.sku);
+    const size = normalizeText(item?.size || "");
+
+    for (let i = 0; i < qty; i += 1) {
+      units.push({
+        sku,
+        title,
+        size,
+        price_cents: priceCents,
+        image: itemImage(item, catalogIndex),
+      });
+    }
+  }
+
+  return units;
+};
+
+const allocateDiscount = (units, discountCents) => {
+  const subtotal = units.reduce((sum, u) => sum + Number(u.price_cents || 0), 0);
+  const totalDiscount = Math.max(0, Math.min(subtotal, Math.round(Number(discountCents || 0))));
+  if (!totalDiscount || !subtotal) {
+    return units.map((u) => ({ ...u, discount_cents: 0, net_cents: Math.max(0, Number(u.price_cents || 0)) }));
+  }
+
+  const raw = units.map((u) => {
+    const exact = (Number(u.price_cents || 0) / subtotal) * totalDiscount;
+    const floor = Math.floor(exact);
+    return {
+      ...u,
+      exact,
+      floor,
+      frac: exact - floor,
+    };
+  });
+
+  let remainder = totalDiscount - raw.reduce((sum, u) => sum + u.floor, 0);
+  raw.sort((a, b) => b.frac - a.frac);
+
+  for (let i = 0; i < raw.length && remainder > 0; i += 1, remainder -= 1) {
+    raw[i].floor += 1;
+  }
+
+  return raw.map((u) => {
+    const discount_cents = Math.min(Number(u.price_cents || 0), Math.max(0, u.floor));
+    return {
+      ...u,
+      discount_cents,
+      net_cents: Math.max(0, Number(u.price_cents || 0) - discount_cents),
+    };
+  });
+};
+
+const buildItemsSummary = (items) => {
+  return items
+    .map((it) => {
+      const name = normalizeText(it?.title || it?.name || "Producto");
+      const qty = clampInt(it?.qty, 1, 99);
+      const size = normalizeText(it?.size || "");
+      return `${qty} x ${name}${size ? ` [${size}]` : ""}`;
+    })
+    .join(" | ");
+};
+
+const parseCustomer = (body) => {
+  const customer = body?.customer && typeof body.customer === "object" ? body.customer : {};
+  return {
+    name: normalizeText(customer.name || body?.name || ""),
+    email: normalizeText(customer.email || body?.email || ""),
+    phone: normalizeText(customer.phone || body?.phone || ""),
+    address: normalizeText(customer.address || body?.address || ""),
+    postal: normalizeText(customer.postal || body?.postal || body?.shipPostal || ""),
+    country: normalizeText(customer.country || body?.country || "MX").toUpperCase() || "MX",
+    notes: normalizeText(customer.notes || body?.notes || ""),
+  };
+};
+
+const parseShipping = (body, customer, totalQty) => {
+  const ship = body?.shipping && typeof body.shipping === "object" ? body.shipping : {};
+  const mode = String(ship.mode || body?.ship_mode || body?.shipping_mode || "pickup").toLowerCase().trim() === "delivery" ? "delivery" : "pickup";
+  const country = String(ship.country || customer.country || "MX").toUpperCase() || "MX";
+  const postal = normalizeText(ship.postal || customer.postal || "");
+  const quote = ship.quote && typeof ship.quote === "object" ? ship.quote : null;
+
+  let amount_cents = Number(ship.amount_cents || ship.amount || quote?.amount_cents || quote?.amount || 0) || 0;
+
+  if (mode === "delivery" && amount_cents <= 0) {
+    const fallback = getFallbackShippingQuote(country, totalQty);
+    amount_cents = Number(fallback.amount_cents || 0) || 0;
+    return {
+      mode,
+      country,
+      postal,
+      amount_cents,
+      quote: fallback,
+    };
+  }
+
+  if (mode === "pickup") {
+    return {
+      mode,
+      country,
+      postal,
+      amount_cents: 0,
+      quote: { ok: true, provider: "pickup", label: "Pickup", amount_cents: 0, amount_mxn: 0 },
+    };
+  }
+
+  return {
+    mode,
+    country,
+    postal,
+    amount_cents: Math.max(0, amount_cents),
+    quote: quote || { ok: true, provider: "manual", amount_cents: Math.max(0, amount_cents), amount_mxn: Math.max(0, amount_cents) / 100 },
+  };
+};
+
+const parsePromo = (body) => {
+  const promo = body?.promo && typeof body.promo === "object" ? body.promo : null;
+  if (!promo) return null;
+
+  const code = cleanCode(promo.code);
   if (!code) return null;
 
   return {
     code,
-    type: String(promo.type || "").trim(),
-    value: num(promo.value),
+    type: String(promo.type || "").trim().toLowerCase(),
+    value: promo.value,
     description: String(promo.description || "").trim(),
-    min_amount_mxn: num(promo.min_amount_mxn),
+    active: promo.active == null ? true : !!promo.active,
+    min_amount_mxn: Number(promo.min_amount_mxn || 0) || 0,
+    expires_at: promo.expires_at || null,
   };
 };
 
-const sumLineItemsCents = (lineItems) =>
-  (Array.isArray(lineItems) ? lineItems : []).reduce((acc, li) => {
-    const qty = Math.max(1, Math.floor(Number(li?.quantity || 1)));
-    const unitAmount = Math.max(0, Math.floor(Number(li?.price_data?.unit_amount || 0)));
-    return acc + unitAmount * qty;
-  }, 0);
-
-function cloneLineItem(li, unitAmount, qty) {
-  const out = JSON.parse(JSON.stringify(li));
-  out.price_data.unit_amount = Math.max(0, Math.floor(Number(unitAmount || 0)));
-  out.quantity = Math.max(1, Math.floor(Number(qty || 1)));
-  return out;
-}
-
-function applyPromoToLineItems(lineItems, promoRule, subtotalCents) {
-  if (!promoRule || !Array.isArray(lineItems) || !lineItems.length) {
-    return {
-      lineItems,
-      freeShipping: false,
-      discountCents: 0,
-    };
-  }
-
-  const type = String(promoRule.type || "").toLowerCase().trim();
-  const value = num(promoRule.value);
-
-  if (type === "free_shipping") {
-    return {
-      lineItems,
-      freeShipping: true,
-      discountCents: 0,
-    };
-  }
-
-  if (type === "fixed") {
-    const discountCents = Math.max(0, Math.round(value * 100));
-    const remaining = Math.max(0, subtotalCents - discountCents);
-    const ratio = subtotalCents > 0 ? remaining / subtotalCents : 1;
-
-    const out = lineItems.map((li) => {
-      const baseUnit = Math.max(0, Math.floor(Number(li?.price_data?.unit_amount || 0)));
-      const nextUnit = Math.max(1, Math.round(baseUnit * ratio));
-      return cloneLineItem(li, nextUnit, li.quantity);
-    });
-
-    return {
-      lineItems: out,
-      freeShipping: false,
-      discountCents: discountCents,
-    };
-  }
-
-  if (type === "percent" || type === "percentage") {
-    const ratio = Math.max(0, 1 - value / 100);
-    const discountCents = Math.max(0, Math.round(subtotalCents * (value / 100)));
-
-    const out = lineItems.map((li) => {
-      const baseUnit = Math.max(0, Math.floor(Number(li?.price_data?.unit_amount || 0)));
-      const nextUnit = Math.max(1, Math.round(baseUnit * ratio));
-      return cloneLineItem(li, nextUnit, li.quantity);
-    });
-
-    return {
-      lineItems: out,
-      freeShipping: false,
-      discountCents,
-    };
-  }
-
-  return {
-    lineItems,
-    freeShipping: false,
-    discountCents: 0,
-  };
-}
-
-async function seedPendingOrder(sb, payload) {
-  if (!sb || !payload?.stripe_session_id) return;
-
-  const { error } = await sb.from("orders").upsert(payload, {
-    onConflict: "stripe_session_id",
-  });
-
-  if (error) throw error;
-}
-
 module.exports = async (req, res) => {
-    const origin = req.headers.origin || "*";
+  const origin = req.headers.origin || req.headers.Origin || "*";
 
-    const sendVercelResponse = (response) => {
-        Object.keys(response.headers || {}).forEach(key => {
-            res.setHeader(key, response.headers[key]);
-        });
-        res.status(response.statusCode).send(response.body);
-    };
+  if (req.method === "OPTIONS") {
+    const optionsRes =
+      handleOptions?.({ headers: { origin } }) ||
+      {
+        statusCode: 204,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Credentials": "true",
+          "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        },
+        body: "",
+      };
 
-    if (req.method === "OPTIONS") {
-        sendVercelResponse(handleOptions({headers: req.headers}));
-        return;
-    }
-    if (req.method !== "POST") {
-        sendVercelResponse(jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
-        return;
-    }
+    return send(res, optionsRes);
+  }
+
+  if (req.method !== "POST") {
+    return send(res, jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
+  }
+
+  const body = parseBody(req);
+  const customer = parseCustomer(body);
+
+  if (!customer.name || !customer.email || !customer.phone) {
+    return send(
+      res,
+      jsonResponse(400, { ok: false, error: "Completa nombre, correo y teléfono." }, origin)
+    );
+  }
+
+  const rawItems = Array.isArray(body.items) ? body.items : Array.isArray(body.cart) ? body.cart : [];
+  const normalizedItems = normalizeQty(rawItems);
+  const totalQty = itemsQtyFromAny(normalizedItems);
+
+  if (!normalizedItems.length || totalQty <= 0) {
+    return send(res, jsonResponse(400, { ok: false, error: "Tu carrito está vacío." }, origin));
+  }
+
+  const catalogIndex = getCatalogMap();
+  const units = expandUnits(normalizedItems, catalogIndex);
+
+  const subtotal_cents = units.reduce((sum, u) => sum + Number(u.price_cents || 0), 0);
+
+  const promo = parsePromo(body);
+  const promoVerdict = computePromo(promo, subtotal_cents);
+
+  const shipping = parseShipping(body, customer, totalQty);
+  const shipping_cents = promoVerdict.free_shipping ? 0 : Math.max(0, Number(shipping.amount_cents || 0) || 0);
+
+  const discountedUnits = allocateDiscount(units, promoVerdict.discount_cents);
+  const discountedSubtotal_cents = discountedUnits.reduce((sum, u) => sum + Number(u.net_cents || 0), 0);
+  const total_cents = Math.max(0, discountedSubtotal_cents + shipping_cents);
+
+  if (total_cents <= 0) {
+    return send(
+      res,
+      jsonResponse(
+        400,
+        {
+          ok: false,
+          error: "El total de la orden no puede ser cero.",
+        },
+        origin
+      )
+    );
+  }
+
+  const paymentMethod = String(body.payment_method || body.paymentMethod || "card").toLowerCase().trim();
+  const selectedPaymentMethod = paymentMethod === "oxxo" ? "oxxo" : "card";
+
+  const baseUrl = getBaseUrl?.(req) || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://scorestore.vercel.app";
+  const successUrl = `${baseUrl.replace(/\/+$/, "")}/success.html?session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = `${baseUrl.replace(/\/+$/, "")}/cancel.html`;
+
+  const lineItems = discountedUnits.map((u, idx) => ({
+    quantity: 1,
+    price_data: {
+      currency: "mxn",
+      unit_amount: Math.max(1, Math.round(Number(u.net_cents || 0))),
+      product_data: {
+        name: `${u.title}${u.size ? ` · ${u.size}` : ""}`,
+        description: u.sku ? `SKU: ${u.sku}` : undefined,
+        images: u.image ? [u.image] : undefined,
+        metadata: {
+          sku: u.sku || "",
+          size: u.size || "",
+          unit_index: String(idx + 1),
+        },
+      },
+    },
+  }));
+
+  if (shipping_cents > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: "mxn",
+        unit_amount: Math.max(1, Math.round(shipping_cents)),
+        product_data: {
+          name: shipping.quote?.label ? `Envío · ${shipping.quote.label}` : "Envío",
+          description: shipping.mode === "delivery" ? "Entrega a domicilio" : "Recolección en tienda",
+        },
+      },
+    });
+  }
+
+  const stripe = initStripe();
+
+  const metadata = {
+    source: "scorestore-vercel",
+    shipping_mode: shipping.mode,
+    shipping_country: shipping.country || "",
+    shipping_postal: shipping.postal || "",
+    subtotal_cents: String(subtotal_cents),
+    discount_cents: String(promoVerdict.discount_cents || 0),
+    shipping_cents: String(shipping_cents || 0),
+    total_cents: String(total_cents),
+    items_count: String(discountedUnits.length),
+    items_qty: String(totalQty),
+    items_summary: buildItemsSummary(normalizedItems).slice(0, 450),
+    customer_name: customer.name.slice(0, 120),
+    customer_email: customer.email.slice(0, 120),
+    customer_phone: customer.phone.slice(0, 40),
+    promo_code: promoVerdict.promo?.code || "",
+  };
+
+  const sessionParams = {
+    mode: "payment",
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    line_items: lineItems,
+    customer_email: customer.email,
+    payment_method_types: selectedPaymentMethod === "oxxo" ? ["oxxo"] : ["card"],
+    payment_method_collection: "always",
+    billing_address_collection: "required",
+    phone_number_collection: { enabled: true },
+    allow_promotion_codes: false,
+    locale: "es",
+    metadata,
+    shipping_address_collection:
+      shipping.mode === "delivery"
+        ? {
+            allowed_countries: ["MX", "US"],
+          }
+        : undefined,
+    payment_method_options:
+      selectedPaymentMethod === "oxxo"
+        ? {
+            oxxo: {
+              expires_after_days: 3,
+            },
+          }
+        : undefined,
+  };
+
+  const checkoutIdempotencyKey = makeCheckoutIdempotencyKey
+    ? makeCheckoutIdempotencyKey(
+        {
+          customer_email: customer.email,
+          subtotal_cents,
+          discount_cents: promoVerdict.discount_cents || 0,
+          shipping_cents,
+          total_cents,
+          items_summary: metadata.items_summary,
+          payment_method: selectedPaymentMethod,
+        },
+        body.req_id || body.request_id || ""
+      )
+    : undefined;
+
+  try {
+    const session = await stripe.checkout.sessions.create(sessionParams, checkoutIdempotencyKey ? { idempotencyKey: checkoutIdempotencyKey } : undefined);
 
     try {
-        const stripe = initStripe();
-        const body = req.body || {};
-
-        const items = Array.isArray(body?.items) ? body.items : [];
-        if (!items.length) {
-            sendVercelResponse(jsonResponse(400, { ok: false, error: "Carrito vacío" }, origin));
-            return;
-        }
-
-        const reqId = String(body?.req_id || "").trim();
-        const shipping_mode = String(body?.ship_mode || body?.shipping_mode || "pickup").trim();
-        const postal_code = String(body?.postal_code || body?.zip || "").trim();
-        const promo_code = normCode(body?.promo_code || body?.coupon || body?.promo?.code || "");
-
-        const normalizedItems = items
-            .map((it) => ({
-                sku: String(it?.sku || "").trim(),
-                qty: clampInt(it?.qty, 1, 99),
-                size: String(it?.size || "").trim() || "Unitalla",
+      const sb = typeof supabaseAdmin === "function" ? supabaseAdmin() : null;
+      if (sb) {
+        const orgId = await resolveOrgId(sb);
+        const row = {
+          stripe_session_id: session.id,
+          checkout_session_id: session.id,
+          status: session.status || "open",
+          payment_status: session.payment_status || "unpaid",
+          customer_name: customer.name,
+          customer_email: customer.email,
+          customer_phone: customer.phone,
+          shipping_mode: shipping.mode,
+          shipping_country: shipping.country,
+          shipping_postal_code: shipping.postal,
+          subtotal_cents,
+          discount_cents: promoVerdict.discount_cents || 0,
+          shipping_cents,
+          total_cents,
+          currency: "MXN",
+          promo_code: promoVerdict.promo?.code || "",
+          items_summary: metadata.items_summary,
+          items_json: JSON.stringify(
+            normalizedItems.map((item) => ({
+              sku: item.sku,
+              qty: clampInt(item.qty, 1, 99),
+              size: normalizeText(item.size || ""),
             }))
-            .filter((it) => it.sku);
-
-        if (!normalizedItems.length) {
-            sendVercelResponse(jsonResponse(400, { ok: false, error: "Items inválidos" }, origin));
-            return;
-        }
-
-        const skuList = Array.from(new Set(normalizedItems.map((i) => i.sku))).slice(0, 80);
-
-        const sb = supabaseAdmin();
-        let orgId = DEFAULT_SCORE_ORG_ID;
-        let productsIndex = null;
-        let promoRule = null;
-
-        if (sb) {
-            orgId = await resolveOrgId(sb);
-            productsIndex = await getProductsFromDB(sb, orgId, skuList).catch(() => null);
-            promoRule = promo_code ? await getPromoFromDB(sb, orgId, promo_code).catch(() => null) : null;
-        }
-
-        if (!productsIndex) productsIndex = loadLocalCatalogIndex();
-        if (!promoRule && promo_code) promoRule = getPromoFromLocal(loadLocalPromos(), promo_code);
-        if (!promoRule && body?.promo) promoRule = normalizeFrontendPromo(body.promo);
-
-        let line_items = [];
-        let itemsQty = 0;
-        let pendingItems = [];
-
-        for (const it of normalizedItems) {
-            const p = productsIndex.get(it.sku);
-            if (!p) {
-                sendVercelResponse(jsonResponse(400, { ok: false, error: `SKU no encontrado: ${it.sku}` }, origin));
-                return;
-            }
-
-            const title = String(p.title || p.name || "Producto Oficial").trim();
-            const unitPrice = Math.max(0, Number(p.priceCents || p.price_cents || 0));
-            if (!unitPrice) {
-                sendVercelResponse(jsonResponse(400, { ok: false, error: `Precio inválido: ${it.sku}` }, origin));
-                return;
-            }
-
-            const stock = Number(p.stock);
-            if (Number.isFinite(stock) && stock <= 0) {
-                sendVercelResponse(jsonResponse(409, { ok: false, error: `Sin stock: ${it.sku}` }, origin));
-                return;
-            }
-
-            itemsQty += it.qty;
-
-            line_items.push({
-                price_data: {
-                    currency: "mxn",
-                    product_data: {
-                        name: title + (it.size ? ` (${it.size})` : ""),
-                        metadata: { sku: it.sku, size: it.size },
-                    },
-                    unit_amount: unitPrice,
-                },
-                quantity: it.qty,
-            });
-
-            pendingItems.push({
-                sku: it.sku,
-                size: it.size,
-                name: title,
-                qty: it.qty,
-                unit_amount_mxn: unitPrice / 100,
-                amount_total_mxn: (unitPrice * it.qty) / 100,
-                currency: "MXN",
-            });
-        }
-
-        const subtotalCents = sumLineItemsCents(line_items);
-
-        if (promoRule) {
-            const min = num(promoRule.min_amount_mxn) || 0;
-            const subtotalMXN = subtotalCents / 100;
-            if (subtotalMXN < min) promoRule = null;
-        }
-
-        const promoApplied = applyPromoToLineItems(line_items, promoRule, subtotalCents);
-        line_items = promoApplied.lineItems;
-
-        const needsZip = shipping_mode === "envia_mx" || shipping_mode === "envia_us";
-        let shippingCents = 0;
-        let shippingCountry = "MX";
-
-        if (shipping_mode === "pickup") {
-            shippingCents = 0;
-        } else if (needsZip) {
-            shippingCountry = shipping_mode === "envia_us" ? "US" : "MX";
-
-            const frontendQuoted = Math.max(
-                0,
-                Math.floor(Number(body?.shipping_amount_cents || body?.shippingAmountCents || 0))
-            );
-
-            if (frontendQuoted > 0) {
-                shippingCents = frontendQuoted;
-            } else {
-                if (postal_code.length < 4) {
-                    sendVercelResponse(jsonResponse(400, { ok: false, error: "CP/ZIP inválido" }, origin));
-                    return;
-                }
-
-                const shippingQuote = await getEnviaQuote({
-                    zip: postal_code,
-                    country: shippingCountry,
-                    items_qty: itemsQty,
-                });
-
-                shippingCents = Math.max(0, Number(shippingQuote?.amount_cents || 0));
-            }
-        } else {
-            sendVercelResponse(jsonResponse(400, { ok: false, error: "shipping_mode inválido" }, origin));
-            return;
-        }
-
-        const freeShipping = !!promoApplied.freeShipping;
-        const finalShippingCents = freeShipping ? 0 : shippingCents;
-
-        const SITE_URL = String(process.env.SITE_URL || "https://scorestore.vercel.app").replace(/\/+$/, "");
-        const pmTypes = ["card"];
-        if (String(process.env.STRIPE_ENABLE_OXXO || "0") === "1") pmTypes.push("oxxo");
-
-        const sessionParams = {
-            mode: "payment",
-            payment_method_types: pmTypes,
-            line_items,
-            allow_promotion_codes: false,
-            success_url: `${SITE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${SITE_URL}/index.html`,
-            billing_address_collection: "auto",
-            locale: "es",
-            customer_creation: "always",
-            metadata: {
-                org_id: orgId,
-                organization_id: orgId,
-                shipping_mode,
-                postal_code: needsZip ? postal_code : "",
-                promo_code: promoRule?.code || "",
-                promo_type: promoRule?.type || "",
-                promo_value: promoRule?.value != null ? String(promoRule.value) : "",
-            },
-            shipping_address_collection:
-                shipping_mode === "pickup"
-                    ? undefined
-                    : { allowed_countries: [shippingCountry] },
-            shipping_options:
-                shipping_mode === "pickup"
-                    ? undefined
-                    : [
-                        {
-                            shipping_rate_data: {
-                                type: "fixed_amount",
-                                fixed_amount: { amount: finalShippingCents, currency: "mxn" },
-                                display_name: shippingCountry === "US" ? "Envío USA (Envía.com)" : "Envío MX (Envía.com)",
-                                delivery_estimate: {
-                                    minimum: { unit: "business_day", value: shippingCountry === "US" ? 5 : 2 },
-                                    maximum: { unit: "business_day", value: shippingCountry === "US" ? 12 : 6 },
-                                },
-                            },
-                        },
-                    ],
+          ),
+          metadata,
+          org_id: orgId,
+          organization_id: orgId,
+          created_at: new Date().toISOString(),
         };
 
-        const idempotencyKey = reqId ? `scorestore_${reqId}` : undefined;
-        const session = await stripe.checkout.sessions.create(
-            sessionParams,
-            idempotencyKey ? { idempotencyKey } : undefined
+        await sb.from("orders").insert([row]);
+      }
+    } catch {}
+
+    if (typeof sendTelegram === "function") {
+      try {
+        await sendTelegram(
+          [
+            "🛒 <b>Nuevo checkout creado</b>",
+            `Cliente: ${customer.name}`,
+            `Email: ${customer.email}`,
+            `Total: $${(total_cents / 100).toFixed(2)} MXN`,
+            `Pago: ${selectedPaymentMethod.toUpperCase()}`,
+            `Sesión: ${session.id}`,
+          ].join("\n")
         );
-
-        if (sb && session?.id) {
-            await seedPendingOrder(sb, {
-                org_id: orgId,
-                organization_id: orgId,
-                stripe_session_id: session.id,
-                currency: "MXN",
-                amount_total_mxn: (sumLineItemsCents(line_items) + finalShippingCents) / 100,
-                amount_subtotal_mxn: sumLineItemsCents(line_items) / 100,
-                amount_shipping_mxn: finalShippingCents / 100,
-                amount_discount_mxn: promoApplied.discountCents / 100,
-                shipping_total_mxn: finalShippingCents / 100,
-                status: "pending_payment",
-                items: pendingItems,
-                metadata: {
-                    org_id: orgId,
-                    organization_id: orgId,
-                    shipping_mode,
-                    postal_code: needsZip ? postal_code : "",
-                    promo_code: promoRule?.code || "",
-                    promo_type: promoRule?.type || "",
-                    promo_value: promoRule?.value != null ? String(promoRule.value) : "",
-                },
-                updated_at: new Date().toISOString(),
-            }).catch((e) => {
-                console.warn("[create_checkout] warn pending order upsert:", e?.message);
-            });
-        }
-
-        sendVercelResponse(jsonResponse(
-            200,
-            {
-                ok: true,
-                url: session.url,
-            },
-            origin
-        ));
-    } catch (e) {
-        sendVercelResponse(jsonResponse(500, { ok: false, error: String(e?.message || e) }, origin));
+      } catch {}
     }
+
+    return send(
+      res,
+      jsonResponse(
+        200,
+        {
+          ok: true,
+          url: session.url,
+          checkout_url: session.url,
+          session_id: session.id,
+          id: session.id,
+          payment_status: session.payment_status || "unpaid",
+          status: session.status || "open",
+          currency: "MXN",
+          subtotal_cents,
+          discount_cents: promoVerdict.discount_cents || 0,
+          shipping_cents,
+          total_cents,
+          customer_email: customer.email,
+          shipping_mode: shipping.mode,
+        },
+        origin
+      )
+    );
+  } catch (err) {
+    return send(
+      res,
+      jsonResponse(
+        500,
+        {
+          ok: false,
+          error: err?.message || "No fue posible crear el checkout.",
+        },
+        origin
+      )
+    );
+  }
 };
