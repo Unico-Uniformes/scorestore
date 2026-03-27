@@ -1,13 +1,13 @@
-/* SCORE STORE — Service Worker (PWA producción, Vercel-ready v3.0.0)
+/* SCORE STORE — Service Worker (PWA producción, Vercel-ready v3.1.0)
    Objetivo:
    - Evitar quedarse pegado a una versión vieja
    - No cachear /data/*.json ni /api/*
-   - Bypassear Stripe / Supabase / Envia / proveedores externos
+   - Bypassear Stripe / Supabase / Envía / proveedores externos
    - Mantener navegación estable con fallback a caché
    - No dejar rastros de Netlify
 */
 
-const CACHE_VERSION = "scorestore-vfx-pro-v3.0.0";
+const CACHE_VERSION = "scorestore-vfx-pro-v3.1.0";
 const CACHE_NAME = CACHE_VERSION;
 
 const CORE_ASSETS = [
@@ -24,7 +24,7 @@ const CORE_ASSETS = [
   "/assets/logo-score.webp",
   "/assets/logo-world-desert.webp",
   "/assets/fondo-pagina-score.webp",
-  "/assets/hero.webp",
+  "/assets/hero.webp"
 ];
 
 const EXTERNAL_SKIP_HOSTS = [
@@ -34,7 +34,7 @@ const EXTERNAL_SKIP_HOSTS = [
   "facebook.com",
   "connect.facebook.net",
   "googleapis.com",
-  "generativelanguage.googleapis.com",
+  "generativelanguage.googleapis.com"
 ];
 
 const isSafeToCache = (requestUrl) => {
@@ -49,25 +49,6 @@ const isSafeToCache = (requestUrl) => {
 
   return true;
 };
-
-async function reloadAllClients() {
-  try {
-    const clients = await self.clients.matchAll({
-      type: "window",
-      includeUncontrolled: true,
-    });
-
-    await Promise.allSettled(
-      clients.map((client) => {
-        try {
-          return client.navigate(client.url);
-        } catch {
-          return null;
-        }
-      })
-    );
-  } catch {}
-}
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -103,7 +84,6 @@ self.addEventListener("activate", (event) => {
       }
 
       await self.clients.claim();
-      await reloadAllClients();
     })()
   );
 });
@@ -127,7 +107,6 @@ self.addEventListener("fetch", (event) => {
   if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) return;
   if (url.origin === self.location.origin && url.pathname.startsWith("/data/")) return;
 
-  // Navegación: network-first con fallback a caché
   if (req.mode === "navigate") {
     event.respondWith(
       (async () => {
@@ -162,7 +141,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Core assets: cache-first
   if (url.origin === self.location.origin && CORE_ASSETS.includes(url.pathname)) {
     event.respondWith(
       (async () => {
@@ -180,7 +158,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // JS/CSS: network-first para evitar versiones viejas
   if (
     url.origin === self.location.origin &&
     (url.pathname.startsWith("/js/") || url.pathname.startsWith("/css/"))
@@ -203,7 +180,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Resto: stale-while-revalidate
   if (isSafeToCache(req.url)) {
     event.respondWith(
       (async () => {
