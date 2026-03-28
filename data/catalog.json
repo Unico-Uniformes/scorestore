@@ -26,7 +26,7 @@
     {
       "id": "SF250",
       "title": "SAN FELIPE 250",
-      "cover_image": "/assets/sf250/camiseta-negra-sinmangas-sf250.webp",
+      "cover_image": "/assets/sf250/camiseta-negra-sinmangas-SF250.webp",
       "count": 1
     }
   ],
@@ -210,9 +210,9 @@
       "rank": 13,
       "sizes": ["S", "M", "L", "XL", "XXL"],
       "images": [
-        "/assets/sf250/camiseta-negra-sinmangas-sf250.webp",
-        "/assets/sf250/camiseta-negra-sinmangas-sf250-atras.webp",
-        "/assets/sf250/camiseta-negra-sinmangas-sf250-detalles.webp"
+        "/assets/sf250/camiseta-negra-sinmangas-SF250.webp",
+        "/assets/sf250/camiseta-negra-sinmangas-S250-atras.webp",
+        "/assets/sf250/camiseta-negra-sinmangas-S250-detalles.webp"
       ]
     },
     {
