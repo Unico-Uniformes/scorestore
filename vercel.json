@@ -1,169 +1,106 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "cleanUrls": true,
+  "version": 2,
+  "public": true,
+  "cleanUrls": false,
   "trailingSlash": false,
   "headers": [
     {
       "source": "/",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate, proxy-revalidate"
-        },
-        {
-          "key": "Pragma",
-          "value": "no-cache"
-        },
-        {
-          "key": "Expires",
-          "value": "0"
-        },
-        {
-          "key": "Link",
-          "value": "</css/styles.css>; rel=preload; as=style, </assets/fondo-pagina-score.webp>; rel=preload; as=image, </assets/hero.webp>; rel=preload; as=image"
-        }
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Expires", "value": "0" }
       ]
     },
     {
-      "source": "/(.*)\\.html",
+      "source": "/index.html",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate, proxy-revalidate"
-        },
-        {
-          "key": "Pragma",
-          "value": "no-cache"
-        },
-        {
-          "key": "Expires",
-          "value": "0"
-        }
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Expires", "value": "0" }
       ]
     },
     {
-      "source": "/api/(.*)",
+      "source": "/success.html",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate, proxy-revalidate"
-        },
-        {
-          "key": "Pragma",
-          "value": "no-cache"
-        },
-        {
-          "key": "Expires",
-          "value": "0"
-        }
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Expires", "value": "0" }
       ]
     },
     {
-      "source": "/assets/(.*)",
+      "source": "/cancel.html",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400, stale-while-revalidate=604800"
-        }
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Expires", "value": "0" }
       ]
     },
     {
-      "source": "/js/(.*)",
+      "source": "/legal.html",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/css/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/data/(.*)\\.json",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate, proxy-revalidate"
-        },
-        {
-          "key": "Pragma",
-          "value": "no-cache"
-        },
-        {
-          "key": "Expires",
-          "value": "0"
-        }
-      ]
-    },
-    {
-      "source": "/site.webmanifest",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        },
-        {
-          "key": "Content-Type",
-          "value": "application/manifest+json; charset=utf-8"
-        }
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Expires", "value": "0" }
       ]
     },
     {
       "source": "/sw.js",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate, proxy-revalidate"
-        },
-        {
-          "key": "Pragma",
-          "value": "no-cache"
-        },
-        {
-          "key": "Expires",
-          "value": "0"
-        },
-        {
-          "key": "Content-Type",
-          "value": "application/javascript; charset=utf-8"
-        }
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate" },
+        { "key": "Pragma", "value": "no-cache" },
+        { "key": "Expires", "value": "0" },
+        { "key": "Content-Type", "value": "application/javascript; charset=utf-8" }
       ]
     },
     {
-      "source": "/(.*)",
+      "source": "/site.webmanifest",
       "headers": [
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
-          "key": "X-XSS-Protection",
-          "value": "1; mode=block"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "geolocation=(), microphone=(), camera=()"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self' https://*.vercel.app; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; img-src 'self' data: https: https://www.facebook.com; script-src 'self' 'unsafe-inline' https://js.stripe.com https://connect.facebook.net; script-src-elem 'self' 'unsafe-inline' https://js.stripe.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://*.vercel.app; connect-src 'self' https://api.stripe.com https://*.supabase.co wss://*.supabase.co https://www.facebook.com https://connect.facebook.net https://generativelanguage.googleapis.com https://*.vercel.app; manifest-src 'self'; worker-src 'self'; frame-src https://js.stripe.com https://hooks.stripe.com;"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "Content-Type", "value": "application/manifest+json; charset=utf-8" }
       ]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" },
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+      ]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" },
+        { "key": "Content-Type", "value": "application/xml; charset=utf-8" }
+      ]
+    },
+    {
+      "source": "/css/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/js/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
