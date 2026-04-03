@@ -1,4 +1,12 @@
 User-agent: *
 Allow: /
 
+# Bloquear páginas transaccionales
+Disallow: /success.html
+Disallow: /cancel.html
+
+# Bloquear endpoints API
+Disallow: /api/
+
+# Sitemap
 Sitemap: https://scorestore.vercel.app/sitemap.xml
