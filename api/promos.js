@@ -1,185 +1,244 @@
+// api/promos.js
 "use strict";
 
-const { jsonResponse, handleOptions, readJsonFile } = require("./_shared");
+const {
+  jsonResponse,
+  handleOptions,
+  readJsonFile,
+  safeStr,
+} = require("./_shared");
 
-const DEFAULT_PROMOS = {
-  rules: [
-    {
-      code: "SCORE25",
-      type: "percent",
-      value: 0.25,
-      description: "25% OFF por Inauguración",
-      active: true,
-      min_amount_mxn: 1000,
-      expires_at: "2026-12-31T23:59:59Z",
-    },
-    {
-      code: "BAJA25",
-      type: "percent",
-      value: 0.25,
-      description: "25% OFF Cupón Baja",
-      active: true,
-      min_amount_mxn: 0,
-      expires_at: "2026-12-31T23:59:59Z",
-    },
-    {
-      code: "SCORE10",
-      type: "percent",
-      value: 0.1,
-      description: "10% OFF Fans",
-      active: true,
-      min_amount_mxn: 500,
-      expires_at: "2027-01-01T00:00:00Z",
-    },
-    {
-      code: "BAJA200",
-      type: "fixed_mxn",
-      value: 200,
-      description: "$200 MXN OFF en tu carrito",
-      active: true,
-      min_amount_mxn: 1500,
-      expires_at: null,
-    },
-    {
-      code: "ENVIOFREE",
-      type: "free_shipping",
-      value: 0,
-      description: "Envío Gratis a todo México",
-      active: true,
-      min_amount_mxn: 2000,
-      expires_at: null,
-    },
-  ],
+const noStoreHeaders = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
 };
 
-const withNoStore = (resp) => {
-  const out = resp || {};
+function send(res, payload) {
+  const out = payload || {};
   out.headers = out.headers || {};
-  out.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate";
-  out.headers["Pragma"] = "no-cache";
-  out.headers["Expires"] = "0";
-  return out;
-};
 
-const send = (res, resp) => {
-  const out = withNoStore(resp);
-  if (out.headers) {
-    Object.keys(out.headers).forEach((key) => res.setHeader(key, out.headers[key]));
+  for (const [k, v] of Object.entries(noStoreHeaders)) {
+    out.headers[k] = v;
   }
-  res.status(out.statusCode || 200).send(out.body);
-};
 
-const cleanCode = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, "");
-const now = () => new Date();
+  res.statusCode = out.statusCode || 200;
+  for (const [k, v] of Object.entries(out.headers)) {
+    res.setHeader(k, v);
+  }
 
-const parseDate = (value) => {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
+  res.end(out.body || "");
+}
 
-const isExpired = (promo) => {
-  const expires = parseDate(promo?.expires_at);
-  if (!expires) return false;
-  return expires.getTime() < now().getTime();
-};
+function normalizeText(v) {
+  return safeStr(v).trim();
+}
 
-const normalizeRule = (rule) => {
-  if (!rule || typeof rule !== "object") return null;
+function normalizeUpper(v) {
+  return normalizeText(v).toUpperCase();
+}
 
-  const code = cleanCode(rule.code);
-  if (!code) return null;
+function normalizeNumber(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
 
-  const type = String(rule.type || "").trim().toLowerCase();
-  const value = Number(rule.value || 0);
-  const minAmount = Number(rule.min_amount_mxn || 0);
-  const active = rule.active == null ? true : !!rule.active;
-  const expiresAt = rule.expires_at || null;
+function normalizeBool(v, fallback = false) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    const s = v.toLowerCase();
+    if (["true", "1", "yes"].includes(s)) return true;
+    if (["false", "0", "no"].includes(s)) return false;
+  }
+  return fallback;
+}
+
+function normalizeDate(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+function normalizePromo(promo) {
+  const type = normalizeText(promo?.type || "fixed_mxn");
 
   return {
-    code,
-    type,
-    value: Number.isFinite(value) ? value : 0,
-    description: String(rule.description || "").trim(),
-    active,
-    min_amount_mxn: Number.isFinite(minAmount) ? minAmount : 0,
-    expires_at: expiresAt,
+    code: normalizeUpper(promo?.code),
+    type: type === "percent" ? "percent" : "fixed_mxn",
+    value: normalizeNumber(promo?.value, 0),
+    min_amount_mxn: normalizeNumber(promo?.min_amount_mxn, 0),
+    active: normalizeBool(promo?.active, true),
+    expires_at: normalizeDate(promo?.expires_at),
+    description: normalizeText(promo?.description || ""),
   };
-};
+}
 
-const loadPromos = () => {
-  const fallback = readJsonFile("data/promos.json");
-  const source = fallback && typeof fallback === "object" ? fallback : DEFAULT_PROMOS;
-  const rules = Array.isArray(source.rules) ? source.rules : Array.isArray(source.promos) ? source.promos : [];
-  const normalized = rules.map(normalizeRule).filter(Boolean);
-  return { rules: normalized };
-};
+function readPromosFile() {
+  const file = readJsonFile("data/promos.json");
 
-const computeValidity = (promo, subtotalMxn) => {
-  if (!promo) return { valid: false, reason: "NOT_FOUND" };
-  if (!promo.active) return { valid: false, reason: "INACTIVE" };
-  if (isExpired(promo)) return { valid: false, reason: "EXPIRED" };
-  if (Number(subtotalMxn || 0) < Number(promo.min_amount_mxn || 0)) {
-    return { valid: false, reason: "MIN_AMOUNT" };
+  if (!file) return { rules: [] };
+
+  if (Array.isArray(file)) {
+    return { rules: file };
   }
-  return { valid: true, reason: "OK" };
-};
+
+  if (Array.isArray(file?.rules)) {
+    return file;
+  }
+
+  return { rules: [] };
+}
+
+function isExpired(expiresAt) {
+  if (!expiresAt) return false;
+  const now = new Date();
+  const exp = new Date(expiresAt);
+  if (Number.isNaN(exp.getTime())) return false;
+  return exp < now;
+}
+
+function validatePromo({ code, subtotalCents }) {
+  const normalizedCode = normalizeUpper(code);
+
+  if (!normalizedCode) {
+    return {
+      valid: false,
+      reason: "NO_CODE",
+    };
+  }
+
+  const { rules } = readPromosFile();
+  const promo = (rules || []).map(normalizePromo).find((r) => r.code === normalizedCode);
+
+  if (!promo) {
+    return {
+      valid: false,
+      reason: "NOT_FOUND",
+    };
+  }
+
+  if (!promo.active) {
+    return {
+      valid: false,
+      reason: "INACTIVE",
+      promo,
+    };
+  }
+
+  if (isExpired(promo.expires_at)) {
+    return {
+      valid: false,
+      reason: "EXPIRED",
+      promo,
+    };
+  }
+
+  const subtotal = Number(subtotalCents || 0);
+
+  if (promo.min_amount_mxn > 0) {
+    const minCents = Math.round(promo.min_amount_mxn * 100);
+    if (subtotal < minCents) {
+      return {
+        valid: false,
+        reason: "MIN_AMOUNT",
+        promo,
+      };
+    }
+  }
+
+  let discountCents = 0;
+
+  if (promo.type === "percent") {
+    discountCents = Math.round(subtotal * promo.value);
+  } else {
+    discountCents = Math.round(promo.value * 100);
+  }
+
+  discountCents = Math.max(0, Math.min(discountCents, subtotal));
+
+  return {
+    valid: discountCents > 0,
+    reason: discountCents > 0 ? "OK" : "NO_DISCOUNT",
+    promo,
+    discount_cents: discountCents,
+  };
+}
 
 module.exports = async (req, res) => {
-  const origin = req.headers.origin || req.headers.Origin || "*";
+  const origin = req.headers.origin || "*";
 
-  if (req.method === "OPTIONS") {
-    const optionsRes = handleOptions?.({ headers: { origin } }) || {
-      statusCode: 204,
-      headers: {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Methods": "GET,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      },
-      body: "",
-    };
-    return send(res, optionsRes);
-  }
+  try {
+    if (req.method === "OPTIONS") {
+      return send(res, handleOptions({ headers: req.headers }));
+    }
 
-  if (req.method !== "GET") {
-    return send(res, jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
-  }
+    if (req.method === "GET") {
+      const { rules } = readPromosFile();
 
-  const promos = loadPromos();
-  const code = cleanCode(req.query?.code || req.query?.coupon || req.query?.promo || "");
-  const subtotalMxn = Number(req.query?.subtotal_mxn || req.query?.amount_mxn || 0);
+      const normalized = (rules || [])
+        .map(normalizePromo)
+        .filter((p) => p.active && !isExpired(p.expires_at));
 
-  if (!code) {
+      return send(
+        res,
+        jsonResponse(
+          200,
+          {
+            ok: true,
+            promos: normalized,
+            total: normalized.length,
+          },
+          origin
+        )
+      );
+    }
+
+    if (req.method === "POST") {
+      const body =
+        typeof req.body === "object"
+          ? req.body
+          : (() => {
+              try {
+                return JSON.parse(req.body || "{}");
+              } catch {
+                return {};
+              }
+            })();
+
+      const code = body?.code || body?.promo_code || "";
+      const subtotalCents = Number(body?.subtotal_cents || 0);
+
+      const result = validatePromo({ code, subtotalCents });
+
+      return send(
+        res,
+        jsonResponse(
+          200,
+          {
+            ok: true,
+            ...result,
+          },
+          origin
+        )
+      );
+    }
+
+    return send(
+      res,
+      jsonResponse(405, { ok: false, error: "Method not allowed" }, origin)
+    );
+  } catch (err) {
     return send(
       res,
       jsonResponse(
-        200,
+        500,
         {
-          ok: true,
-          rules: promos.rules,
-          count: promos.rules.length,
+          ok: false,
+          error: err?.message || "promos_failed",
         },
         origin
       )
     );
   }
-
-  const promo = promos.rules.find((r) => cleanCode(r.code) === code) || null;
-  const verdict = computeValidity(promo, subtotalMxn);
-
-  return send(
-    res,
-    jsonResponse(
-      200,
-      {
-        ok: true,
-        valid: verdict.valid,
-        reason: verdict.reason,
-        promo: promo && verdict.valid ? promo : null,
-        rules: promos.rules,
-      },
-      origin
-    )
-  );
 };
