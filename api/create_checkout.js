@@ -1,580 +1,610 @@
+// api/create_checkout.js
 "use strict";
 
-const shared = require("./_shared");
+const {
+  jsonResponse,
+  handleOptions,
+  supabaseAdmin,
+  normalizeQty,
+  itemsQtyFromAny,
+  getBaseUrl,
+  readJsonFile,
+  validateZip,
+  isUuid,
+  safeStr,
+  getEnviaQuote,
+  getFallbackShipping,
+  initStripe,
+  makeCheckoutIdempotencyKey,
+  resolveScoreOrgId,
+  readPublicSiteSettings,
+  sendTelegram,
+  SUPPORT_EMAIL,
+  SUPPORT_WHATSAPP_DISPLAY,
+} = require("./_shared");
 
-const jsonResponse = shared.jsonResponse;
-const handleOptions = shared.handleOptions;
-const supabaseAdmin = shared.supabaseAdmin;
-const getCatalogIndex = shared.getCatalogIndex;
-const initStripe = shared.initStripe;
-const makeCheckoutIdempotencyKey = shared.makeCheckoutIdempotencyKey;
-const normalizeQty = shared.normalizeQty || ((items) => (Array.isArray(items) ? items : []));
-const itemsQtyFromAny =
-  shared.itemsQtyFromAny ||
-  ((items) => (Array.isArray(items) ? items.reduce((s, i) => s + Number(i?.qty || 0), 0) : 0));
-const readJsonFile = shared.readJsonFile;
-const safeStr = shared.safeStr || ((v, d = "") => (typeof v === "string" && v.trim() ? v.trim() : d));
-const sendTelegram = shared.sendTelegram;
-const getFallbackShipping = shared.getFallbackShipping;
-const getEnviaQuote = shared.getEnviaQuote;
-const resolveScoreOrgId = shared.resolveScoreOrgId;
+const DEFAULT_CURRENCY = "MXN";
+const MAX_ITEMS = 120;
+const MAX_QTY_PER_ITEM = 99;
 
-const withNoStore = (resp) => {
-  const out = resp || {};
-  out.headers = out.headers || {};
-  out.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate";
-  out.headers["Pragma"] = "no-cache";
-  out.headers["Expires"] = "0";
-  return out;
-};
-
-const send = (res, resp) => {
-  const out = withNoStore(resp);
-  if (out.headers) {
-    Object.keys(out.headers).forEach((key) => res.setHeader(key, out.headers[key]));
+function send(res, payload) {
+  res.statusCode = payload.statusCode || 200;
+  for (const [key, value] of Object.entries(payload.headers || {})) {
+    res.setHeader(key, value);
   }
-  res.status(out.statusCode || 200).send(out.body);
-};
+  res.end(payload.body || "");
+}
 
-const parseBody = (req) => {
-  if (!req) return {};
-  if (req.body && typeof req.body === "object") return req.body;
+function getOrigin(req) {
+  return (
+    req?.headers?.origin ||
+    req?.headers?.Origin ||
+    ""
+  );
+}
 
-  const raw = typeof req.body === "string" ? req.body : "";
-  if (!raw) return {};
+function getBody(req) {
+  const body = req.body;
+  if (!body) return {};
+  if (typeof body === "object") return body;
 
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return {};
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
   }
-};
 
-const clampInt = (v, min, max) => {
+  return {};
+}
+
+function clampInt(v, min, max, fallback = min) {
   const n = Math.floor(Number(v));
-  if (!Number.isFinite(n)) return min;
+  if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, n));
-};
+}
 
-const moneyToCents = (value) => {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return 0;
-  return Math.round(n * 100);
-};
+function moneyToCents(v, fallback = 0) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return Math.max(0, Math.round(fallback));
+  return Math.max(0, Math.round(n));
+}
 
-const cleanCode = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, "");
+function normalizeEmail(v) {
+  return String(v || "").trim().toLowerCase();
+}
 
-const loadPromoRules = () => {
-  try {
-    const json = readJsonFile ? readJsonFile("data/promos.json") : null;
-    const source = json && typeof json === "object" ? json : {};
-    const rules = Array.isArray(source.rules) ? source.rules : Array.isArray(source.promos) ? source.promos : [];
-    return rules
-      .filter(Boolean)
-      .map((rule) => ({
-        code: cleanCode(rule.code),
-        type: String(rule.type || "").trim().toLowerCase(),
-        value: Number(rule.value || 0),
-        description: String(rule.description || "").trim(),
-        active: rule.active == null ? true : !!rule.active,
-        min_amount_mxn: Number(rule.min_amount_mxn || 0) || 0,
-        expires_at: rule.expires_at || null,
-      }))
-      .filter((rule) => rule.code);
-  } catch {
-    return [];
+function normalizePhone(v) {
+  return String(v || "").replace(/[^\d+]/g, "").trim();
+}
+
+function normalizeCountry(v) {
+  return String(v || "MX").trim().toUpperCase() || "MX";
+}
+
+function normalizeText(v, fallback = "") {
+  const s = typeof v === "string" ? v : v == null ? fallback : String(v);
+  return s.trim();
+}
+
+function uniq(arr) {
+  return Array.from(new Set((Array.isArray(arr) ? arr : []).filter(Boolean)));
+}
+
+function sanitizeItems(rawItems) {
+  const items = normalizeQty(rawItems).slice(0, MAX_ITEMS);
+
+  return items
+    .map((it) => ({
+      sku: normalizeText(it.sku),
+      qty: clampInt(it.qty, 1, MAX_QTY_PER_ITEM, 1),
+      size: normalizeText(it.size),
+      priceCents: clampInt(it.priceCents, 0, 100000000, 0),
+      title: normalizeText(it.title),
+    }))
+    .filter((it) => it.sku || it.title);
+}
+
+function itemsSummary(items) {
+  const list = Array.isArray(items) ? items : [];
+  return list
+    .map((it) => {
+      const qty = clampInt(it.qty, 1, MAX_QTY_PER_ITEM, 1);
+      const base = it.title || it.sku || "Producto";
+      const size = it.size ? ` [${it.size}]` : "";
+      return `${qty}x ${base}${size}`;
+    })
+    .join(" | ")
+    .slice(0, 500);
+}
+
+function readPromos() {
+  const file = readJsonFile("data/promos.json");
+  if (!file) return { rules: [] };
+  if (Array.isArray(file?.rules)) return file;
+  if (Array.isArray(file)) return { rules: file };
+  return { rules: [] };
+}
+
+function resolvePromoVerdict({ promoCode, subtotalCents, itemsCount }) {
+  const code = normalizeText(promoCode).toUpperCase();
+  if (!code) {
+    return {
+      applied: false,
+      discount_cents: 0,
+      promo: null,
+    };
   }
-};
 
-const findPromo = (body) => {
-  const code = cleanCode(
-    body?.promo?.code ||
-      body?.promo_code ||
-      body?.coupon ||
-      body?.coupon_code ||
-      body?.discount_code ||
-      ""
+  const promos = readPromos();
+  const now = new Date();
+
+  const rule = (promos.rules || []).find((r) => {
+    const active = r?.active !== false;
+    const matches = normalizeText(r?.code).toUpperCase() === code;
+    if (!active || !matches) return false;
+
+    if (r?.expires_at) {
+      const exp = new Date(r.expires_at);
+      if (!Number.isNaN(exp.getTime()) && exp < now) return false;
+    }
+
+    const minAmount = Number(r?.min_amount_mxn || 0);
+    if (Number.isFinite(minAmount) && minAmount > 0) {
+      if ((subtotalCents / 100) < minAmount) return false;
+    }
+
+    return true;
+  });
+
+  if (!rule) {
+    return {
+      applied: false,
+      discount_cents: 0,
+      promo: null,
+    };
+  }
+
+  let discountCents = 0;
+
+  if (rule.type === "percent") {
+    const pct = Number(rule.value || 0);
+    if (Number.isFinite(pct) && pct > 0) {
+      discountCents = Math.round(subtotalCents * pct);
+    }
+  } else if (rule.type === "fixed_mxn") {
+    discountCents = Math.round(Number(rule.value || 0) * 100);
+  }
+
+  discountCents = Math.max(0, Math.min(discountCents, subtotalCents));
+
+  return {
+    applied: discountCents > 0,
+    discount_cents: discountCents,
+    promo: {
+      code: rule.code || code,
+      type: rule.type || "fixed_mxn",
+      value: rule.value || 0,
+      description: rule.description || "",
+      itemsCount,
+    },
+  };
+}
+
+async function lookupProducts(sb, orgId, items) {
+  const skus = uniq(
+    items
+      .map((it) => normalizeText(it.sku))
+      .filter(Boolean)
   );
 
-  if (!code) return null;
+  if (!skus.length) return new Map();
 
-  const rules = loadPromoRules();
-  const found = rules.find((r) => cleanCode(r.code) === code) || null;
-  if (!found) return null;
+  const { data, error } = await sb
+    .from("products")
+    .select(
+      [
+        "id",
+        "name",
+        "sku",
+        "price_cents",
+        "price_mxn",
+        "stock",
+        "active",
+        "is_active",
+        "deleted_at",
+        "org_id",
+        "organization_id",
+      ].join(", ")
+    )
+    .in("sku", skus)
+    .or(`org_id.eq.${orgId},organization_id.eq.${orgId}`);
 
-  return found;
-};
+  if (error) throw error;
 
-const isExpired = (promo) => {
-  if (!promo?.expires_at) return false;
-  const d = new Date(promo.expires_at);
-  return !Number.isNaN(d.getTime()) && d.getTime() < Date.now();
-};
-
-const computePromo = (promo, subtotalCents) => {
-  if (!promo) return { promo: null, discount_cents: 0, free_shipping: false };
-  if (!promo.active) return { promo: null, discount_cents: 0, free_shipping: false };
-  if (isExpired(promo)) return { promo: null, discount_cents: 0, free_shipping: false };
-
-  if (subtotalCents < moneyToCents(promo.min_amount_mxn || 0)) {
-    return { promo: null, discount_cents: 0, free_shipping: false };
-  }
-
-  const type = String(promo.type || "").toLowerCase();
-  if (["free_shipping", "freeshipping"].includes(type)) {
-    return { promo, discount_cents: 0, free_shipping: true };
-  }
-
-  if (["percent", "percentage", "percent_off"].includes(type)) {
-    const raw = Number(promo.value || 0);
-    const rate = raw > 1 ? raw / 100 : raw;
-    const discount = Math.round(subtotalCents * (Number.isFinite(rate) ? rate : 0));
-    return { promo, discount_cents: Math.max(0, Math.min(subtotalCents, discount)), free_shipping: false };
-  }
-
-  if (["fixed", "fixed_mxn", "fixed_off"].includes(type)) {
-    const discount = moneyToCents(promo.value || 0);
-    return { promo, discount_cents: Math.max(0, Math.min(subtotalCents, discount)), free_shipping: false };
-  }
-
-  return { promo: null, discount_cents: 0, free_shipping: false };
-};
-
-const normalizeText = (s) => String(s ?? "").trim();
-const normalizeUrl = (u) => {
-  const s = String(u ?? "").trim();
-  if (!s) return "";
-  if (/^(https?:|data:|blob:)/i.test(s)) return s;
-  return s.startsWith("/") ? s : `/${s}`;
-};
-
-const getCatalogMap = () => {
-  try {
-    const out = typeof getCatalogIndex === "function" ? getCatalogIndex() : null;
-    if (out?.index instanceof Map) return out.index;
-    if (out?.index && typeof out.index === "object") return new Map(Object.entries(out.index));
-  } catch {}
-  const raw = readJsonFile ? readJsonFile("data/catalog.json") : null;
-  const products = Array.isArray(raw?.products) ? raw.products : [];
   const map = new Map();
-  for (const p of products) {
-    const sku = normalizeText(p?.sku);
-    if (sku) map.set(sku, p);
+  for (const row of Array.isArray(data) ? data : []) {
+    const sku = normalizeText(row?.sku).toUpperCase();
+    if (!sku) continue;
+    map.set(sku, row);
   }
   return map;
-};
+}
 
-const itemPriceCents = (item, catalogIndex) => {
-  const sku = normalizeText(item?.sku);
-  const fromCatalog = sku && catalogIndex?.get ? catalogIndex.get(sku) : null;
+function resolveItemPriceCents(item, productRow) {
+  const fromProduct =
+    Number(productRow?.price_cents) ||
+    Math.round(Number(productRow?.price_mxn || 0) * 100) ||
+    0;
 
-  const catalogPrice =
-    Number(fromCatalog?.price_cents) ||
-    (Number.isFinite(Number(fromCatalog?.price_mxn)) ? Math.round(Number(fromCatalog.price_mxn) * 100) : 0) ||
-    (Number.isFinite(Number(fromCatalog?.base_mxn)) ? Math.round(Number(fromCatalog.base_mxn) * 100) : 0);
+  const fromItem =
+    Number(item?.priceCents) ||
+    Math.round(Number(item?.price_cents || 0)) ||
+    0;
 
-  const clientPrice =
-    Number(item?.price_cents) ||
-    (Number.isFinite(Number(item?.priceCents)) ? Math.round(Number(item.priceCents)) : 0) ||
-    (Number.isFinite(Number(item?.price_mxn)) ? Math.round(Number(item.price_mxn) * 100) : 0);
+  return Math.max(0, fromProduct || fromItem || 0);
+}
 
-  return Math.max(0, catalogPrice || clientPrice || 0);
-};
+function buildLineItems(items, productMap) {
+  const lineItems = [];
 
-const itemTitle = (item, catalogIndex) => {
-  const sku = normalizeText(item?.sku);
-  const fromCatalog = sku && catalogIndex?.get ? catalogIndex.get(sku) : null;
-  return normalizeText(fromCatalog?.name || fromCatalog?.title || item?.name || item?.title || "Producto SCORE");
-};
-
-const itemImage = (item, catalogIndex) => {
-  const sku = normalizeText(item?.sku);
-  const fromCatalog = sku && catalogIndex?.get ? catalogIndex.get(sku) : null;
-  const imgs = Array.isArray(fromCatalog?.images) ? fromCatalog.images : [];
-  const candidate = imgs[0] || fromCatalog?.image_url || fromCatalog?.img || item?.image || "";
-  return normalizeUrl(candidate);
-};
-
-const expandUnits = (items, catalogIndex) => {
-  const units = [];
   for (const item of items) {
-    const qty = clampInt(item?.qty, 1, 99);
-    const priceCents = itemPriceCents(item, catalogIndex);
-    const title = itemTitle(item, catalogIndex);
-    const sku = normalizeText(item?.sku);
-    const size = normalizeText(item?.size || "");
-    for (let i = 0; i < qty; i += 1) {
-      units.push({
-        sku,
-        title,
-        size,
-        price_cents: priceCents,
-        image: itemImage(item, catalogIndex),
-      });
-    }
-  }
-  return units;
-};
+    const sku = normalizeText(item.sku).toUpperCase();
+    const product = sku ? productMap.get(sku) : null;
+    const qty = clampInt(item.qty, 1, MAX_QTY_PER_ITEM, 1);
+    const priceCents = resolveItemPriceCents(item, product);
 
-const allocateDiscount = (units, discountCents) => {
-  const subtotal = units.reduce((sum, u) => sum + Number(u.price_cents || 0), 0);
-  const totalDiscount = Math.max(0, Math.min(subtotal, Math.round(Number(discountCents || 0))));
-  if (!totalDiscount || !subtotal) {
-    return units.map((u) => ({ ...u, discount_cents: 0, net_cents: Math.max(0, Number(u.price_cents || 0)) }));
-  }
+    const title =
+      normalizeText(product?.name) ||
+      normalizeText(item.title) ||
+      normalizeText(item.sku) ||
+      "Producto";
 
-  const raw = units.map((u) => {
-    const exact = (Number(u.price_cents || 0) / subtotal) * totalDiscount;
-    const floor = Math.floor(exact);
-    return { ...u, exact, floor, frac: exact - floor };
-  });
+    if (!priceCents) continue;
 
-  let remainder = totalDiscount - raw.reduce((sum, u) => sum + u.floor, 0);
-  raw.sort((a, b) => b.frac - a.frac);
-
-  for (let i = 0; i < raw.length && remainder > 0; i += 1, remainder -= 1) {
-    raw[i].floor += 1;
-  }
-
-  return raw.map((u) => {
-    const discount_cents = Math.min(Number(u.price_cents || 0), Math.max(0, u.floor));
-    return {
-      ...u,
-      discount_cents,
-      net_cents: Math.max(0, Number(u.price_cents || 0) - discount_cents),
-    };
-  });
-};
-
-const parseCustomer = (body) => {
-  const customer = body?.customer && typeof body.customer === "object" ? body.customer : {};
-  return {
-    name: normalizeText(customer.name || body?.name || ""),
-    email: normalizeText(customer.email || body?.email || ""),
-    phone: normalizeText(customer.phone || body?.phone || ""),
-    address: normalizeText(customer.address || body?.address || ""),
-    postal: normalizeText(customer.postal || body?.postal || body?.shipPostal || ""),
-    country: normalizeText(customer.country || body?.country || "MX").toUpperCase() || "MX",
-    notes: normalizeText(customer.notes || body?.notes || ""),
-  };
-};
-
-const parseShipping = async (body, customer, totalQty) => {
-  const ship = body?.shipping && typeof body.shipping === "object" ? body.shipping : {};
-  const mode =
-    String(ship.mode || body?.ship_mode || body?.shipping_mode || "pickup").toLowerCase().trim() ===
-    "delivery"
-      ? "delivery"
-      : "pickup";
-
-  const country = String(ship.country || customer.country || "MX").toUpperCase() || "MX";
-  const postal = normalizeText(ship.postal || customer.postal || body?.postal || body?.shipPostal || "");
-  const fallback = typeof getFallbackShipping === "function" ? getFallbackShipping(country, totalQty) : null;
-
-  if (mode === "pickup") {
-    return {
-      mode,
-      country,
-      postal,
-      amount_cents: 0,
-      quote: { ok: true, provider: "pickup", label: "Pickup", amount_cents: 0, amount_mxn: 0 },
-    };
-  }
-
-  if (!postal) {
-    return {
-      mode,
-      country,
-      postal,
-      amount_cents: Number(fallback?.amount_cents || 0) || 0,
-      quote: fallback || { ok: true, provider: "fallback", label: "Envío estimado", amount_cents: 0, amount_mxn: 0 },
-    };
-  }
-
-  try {
-    const quote =
-      typeof getEnviaQuote === "function"
-        ? await getEnviaQuote({ zip: postal, country, items_qty: totalQty })
-        : null;
-
-    if (quote && Number.isFinite(Number(quote.amount_cents))) {
-      const amount_cents = Math.max(0, Math.round(Number(quote.amount_cents) || 0));
-      return {
-        mode,
-        country,
-        postal,
-        amount_cents,
-        quote: {
-          ok: quote.ok !== false,
-          provider: quote.provider || "envia",
-          label: quote.label || "Envío",
-          country,
-          amount_cents,
-          amount_mxn: Number.isFinite(Number(quote.amount_mxn)) ? Number(quote.amount_mxn) : amount_cents / 100,
-          raw: quote.raw ?? null,
-        },
-      };
-    }
-  } catch {}
-
-  return {
-    mode,
-    country,
-    postal,
-    amount_cents: Number(fallback?.amount_cents || 0) || 0,
-    quote: fallback || { ok: true, provider: "fallback", label: "Envío estimado", amount_cents: 0, amount_mxn: 0 },
-  };
-};
-
-const buildItemsSummary = (items) =>
-  items
-    .map((it) => {
-      const name = normalizeText(it?.title || it?.name || "Producto");
-      const qty = clampInt(it?.qty, 1, 99);
-      const size = normalizeText(it?.size || "");
-      return `${qty} x ${name}${size ? ` [${size}]` : ""}`;
-    })
-    .join(" | ");
-
-const resolveOrgId = async (sb) => {
-  if (typeof resolveScoreOrgId === "function") {
-    try {
-      return await resolveScoreOrgId(sb);
-    } catch {}
-  }
-  const envId = process.env.SCORE_ORG_ID || process.env.DEFAULT_ORG_ID;
-  if (envId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(envId).trim())) {
-    return String(envId).trim();
-  }
-  return "1f3b9980-a1c5-4557-b4eb-a75bb9a8aaa6";
-};
-
-module.exports = async (req, res) => {
-  const origin = req.headers.origin || req.headers.Origin || "*";
-
-  if (req.method === "OPTIONS") {
-    const optionsRes =
-      handleOptions?.({ headers: { origin } }) || {
-        statusCode: 204,
-        headers: {
-          "Access-Control-Allow-Origin": origin,
-          "Access-Control-Allow-Credentials": "true",
-          "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        },
-        body: "",
-      };
-    return send(res, optionsRes);
-  }
-
-  if (req.method !== "POST") {
-    return send(res, jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
-  }
-
-  const body = parseBody(req);
-  const customer = parseCustomer(body);
-
-  if (!customer.name || !customer.email || !customer.phone) {
-    return send(res, jsonResponse(400, { ok: false, error: "Completa nombre, correo y teléfono." }, origin));
-  }
-
-  const rawItems = Array.isArray(body.items) ? body.items : Array.isArray(body.cart) ? body.cart : [];
-  const normalizedItems = normalizeQty(rawItems);
-  const totalQty = itemsQtyFromAny(normalizedItems);
-
-  if (!normalizedItems.length || totalQty <= 0) {
-    return send(res, jsonResponse(400, { ok: false, error: "Tu carrito está vacío." }, origin));
-  }
-
-  const catalogIndex = getCatalogMap();
-  const units = expandUnits(normalizedItems, catalogIndex);
-  const subtotal_cents = units.reduce((sum, u) => sum + Number(u.price_cents || 0), 0);
-
-  const promo = findPromo(body);
-  const promoVerdict = computePromo(promo, subtotal_cents);
-
-  const shipping = await parseShipping(body, customer, totalQty);
-  const shipping_cents = promoVerdict.free_shipping ? 0 : Math.max(0, Number(shipping.amount_cents || 0) || 0);
-
-  const discountedUnits = allocateDiscount(units, promoVerdict.discount_cents);
-  const discountedSubtotal_cents = discountedUnits.reduce((sum, u) => sum + Number(u.net_cents || 0), 0);
-  const total_cents = Math.max(0, discountedSubtotal_cents + shipping_cents);
-
-  if (total_cents <= 0) {
-    return send(res, jsonResponse(400, { ok: false, error: "El total de la orden no puede ser cero." }, origin));
-  }
-
-  const paymentMethod = String(body.payment_method || body.paymentMethod || "card").toLowerCase().trim();
-  const selectedPaymentMethod = paymentMethod === "oxxo" ? "oxxo" : "card";
-
-  const baseUrl =
-    (typeof shared.getBaseUrl === "function" ? shared.getBaseUrl(req) : "") ||
-    (process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL || String(process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL).replace(/^https?:\/\//, "")}`
-      : "https://scorestore.vercel.app");
-
-  const cleanBaseUrl = baseUrl.replace(/\/+$/, "");
-  const successUrl = `${cleanBaseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${cleanBaseUrl}/cancel.html`;
-
-  const lineItems = discountedUnits.map((u, idx) => ({
-    quantity: 1,
-    price_data: {
-      currency: "mxn",
-      unit_amount: Math.max(1, Math.round(Number(u.net_cents || 0))),
-      product_data: {
-        name: `${u.title}${u.size ? ` · ${u.size}` : ""}`,
-        description: u.sku ? `SKU: ${u.sku}` : undefined,
-        images: u.image ? [u.image] : undefined,
-        metadata: {
-          sku: u.sku || "",
-          size: u.size || "",
-          unit_index: String(idx + 1),
-        },
-      },
-    },
-  }));
-
-  if (shipping_cents > 0) {
     lineItems.push({
-      quantity: 1,
+      quantity: qty,
       price_data: {
         currency: "mxn",
-        unit_amount: Math.max(1, Math.round(shipping_cents)),
         product_data: {
-          name: shipping.quote?.label ? `Envío · ${shipping.quote.label}` : "Envío",
-          description: shipping.mode === "delivery" ? "Entrega a domicilio" : "Recolección en tienda",
+          name: title.slice(0, 120),
+          metadata: {
+            sku: sku || normalizeText(item.sku),
+            size: normalizeText(item.size),
+          },
         },
+        unit_amount: priceCents,
       },
     });
   }
 
-  const stripe = initStripe();
+  return lineItems;
+}
 
-  const metadata = {
-    source: "scorestore-vercel",
-    shipping_mode: shipping.mode,
-    shipping_country: shipping.country || "",
-    shipping_postal: shipping.postal || "",
-    subtotal_cents: String(subtotal_cents),
-    discount_cents: String(promoVerdict.discount_cents || 0),
-    shipping_cents: String(shipping_cents || 0),
-    total_cents: String(total_cents),
-    items_count: String(discountedUnits.length),
-    items_qty: String(totalQty),
-    items_summary: buildItemsSummary(normalizedItems).slice(0, 450),
-    customer_name: customer.name.slice(0, 120),
-    customer_email: customer.email.slice(0, 120),
-    customer_phone: customer.phone.slice(0, 40),
-    promo_code: promoVerdict.promo?.code || "",
-  };
+function buildShippingLineItem(shippingCents) {
+  const cents = Math.max(0, Math.round(Number(shippingCents || 0)));
+  if (!cents) return null;
 
-  const sessionParams = {
-    mode: "payment",
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    line_items: lineItems,
-    customer_email: customer.email,
-    payment_method_types: selectedPaymentMethod === "oxxo" ? ["oxxo"] : ["card"],
-    payment_method_collection: "always",
-    billing_address_collection: "required",
-    phone_number_collection: { enabled: true },
-    allow_promotion_codes: false,
-    locale: "es",
-    metadata,
-    shipping_address_collection:
-      shipping.mode === "delivery"
-        ? {
-            allowed_countries: ["MX", "US"],
-          }
-        : undefined,
-    payment_method_options:
-      selectedPaymentMethod === "oxxo"
-        ? {
-            oxxo: { expires_after_days: 3 },
-          }
-        : undefined,
-  };
-
-  const checkoutIdempotencyKey = makeCheckoutIdempotencyKey
-    ? makeCheckoutIdempotencyKey(
-        {
-          customer_email: customer.email,
-          subtotal_cents,
-          discount_cents: promoVerdict.discount_cents || 0,
-          shipping_cents,
-          total_cents,
-          items_summary: metadata.items_summary,
-          payment_method: selectedPaymentMethod,
+  return {
+    quantity: 1,
+    price_data: {
+      currency: "mxn",
+      product_data: {
+        name: "Envío",
+        metadata: {
+          kind: "shipping",
         },
-        body.req_id || body.request_id || ""
-      )
-    : undefined;
+      },
+      unit_amount: cents,
+    },
+  };
+}
+
+function getCheckoutBaseUrl(req) {
+  try {
+    return getBaseUrl(req);
+  } catch {
+    return process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || "https://scorestore.vercel.app";
+  }
+}
+
+function normalizeCustomer(body = {}, site = {}) {
+  const contact = site?.contact || {};
+  return {
+    name:
+      normalizeText(body?.customer?.name) ||
+      normalizeText(body?.name) ||
+      "Cliente Final",
+    email:
+      normalizeEmail(body?.customer?.email) ||
+      normalizeEmail(body?.email) ||
+      normalizeEmail(contact?.email) ||
+      normalizeEmail(SUPPORT_EMAIL) ||
+      "cliente@scorestore.com",
+    phone:
+      normalizePhone(body?.customer?.phone) ||
+      normalizePhone(body?.phone) ||
+      normalizePhone(contact?.phone) ||
+      "",
+  };
+}
+
+function normalizeShipping(body = {}, site = {}) {
+  const shipping = body?.shipping && typeof body.shipping === "object" ? body.shipping : body;
+
+  return {
+    mode: normalizeText(shipping?.mode || body?.shipping_mode || "delivery").toLowerCase(),
+    country: normalizeCountry(shipping?.country || body?.shipping_country || "MX"),
+    postal: normalizeText(shipping?.postal || shipping?.postal_code || body?.shipping_postal_code || ""),
+    city: normalizeText(shipping?.city || ""),
+    state: normalizeText(shipping?.state || ""),
+    quote: shipping?.quote || null,
+  };
+}
+
+async function resolveShippingQuote({ shipping, itemsQty }) {
+  if (shipping.mode === "pickup") {
+    return {
+      ok: true,
+      provider: "pickup",
+      label: "Recoger en tienda",
+      country: shipping.country,
+      amount_cents: 0,
+      amount_mxn: 0,
+      raw: null,
+    };
+  }
+
+  if (shipping.postal) {
+    const validated = validateZip(shipping.postal, shipping.country);
+    if (!validated) {
+      throw new Error("CP / ZIP inválido para cotización de envío.");
+    }
+    shipping.postal = validated;
+  }
 
   try {
-    const session = await stripe.checkout.sessions.create(
-      sessionParams,
-      checkoutIdempotencyKey ? { idempotencyKey: checkoutIdempotencyKey } : undefined
+    const quote = await getEnviaQuote({
+      zip: shipping.postal,
+      country: shipping.country,
+      items_qty: itemsQty,
+    });
+
+    return quote;
+  } catch (e) {
+    const fallback = getFallbackShipping(shipping.country, itemsQty);
+    return {
+      ...fallback,
+      warning: String(e?.message || e || "Cotización de envío no disponible"),
+    };
+  }
+}
+
+async function createStripeSession({
+  stripe,
+  baseUrl,
+  customer,
+  shipping,
+  lineItems,
+  orderMeta,
+  totalCents,
+}) {
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: "payment",
+      currency: DEFAULT_CURRENCY.toLowerCase(),
+      customer_email: customer.email,
+      line_items: lineItems,
+      shipping_address_collection:
+        shipping.mode === "pickup"
+          ? undefined
+          : {
+              allowed_countries: shipping.country === "US" ? ["US"] : ["MX", "US"],
+            },
+      phone_number_collection: {
+        enabled: true,
+      },
+      success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/cancel.html?session_id={CHECKOUT_SESSION_ID}`,
+      metadata: {
+        ...orderMeta,
+        total_cents: String(totalCents),
+        currency: DEFAULT_CURRENCY,
+      },
+      payment_intent_data: {
+        metadata: {
+          ...orderMeta,
+          total_cents: String(totalCents),
+          currency: DEFAULT_CURRENCY,
+        },
+      },
+    },
+    {
+      idempotencyKey: orderMeta.idempotency_key,
+    }
+  );
+
+  return session;
+}
+
+async function insertOrder(sb, row) {
+  const { error } = await sb.from("orders").insert([row]);
+  if (error) throw error;
+}
+
+async function main(req, res) {
+  const origin = getOrigin(req);
+
+  try {
+    if (req.method === "OPTIONS") {
+      const response = handleOptions({ headers: req.headers });
+      send(res, response);
+      return;
+    }
+
+    if (req.method !== "POST") {
+      send(
+        res,
+        jsonResponse(405, { ok: false, error: "Method not allowed" }, origin)
+      );
+      return;
+    }
+
+    const body = getBody(req);
+    const sb = supabaseAdmin();
+    const stripe = initStripe();
+
+    const baseUrl = getCheckoutBaseUrl(req);
+    const site = await readPublicSiteSettings().catch(() => null);
+
+    const orgId = await resolveScoreOrgId(sb, body?.org_id || body?.organization_id || body?.orgId || "");
+    if (!isUuid(orgId)) {
+      throw new Error("No se pudo resolver la organización activa.");
+    }
+
+    const rawItems = Array.isArray(body?.items)
+      ? body.items
+      : Array.isArray(body?.cart)
+        ? body.cart
+        : [];
+    const items = sanitizeItems(rawItems);
+
+    if (!items.length) {
+      throw new Error("El carrito está vacío.");
+    }
+
+    const customer = normalizeCustomer(body, site);
+    if (!customer.email || !customer.email.includes("@")) {
+      throw new Error("Correo del cliente inválido.");
+    }
+
+    const shipping = normalizeShipping(body, site);
+    const itemsQty = itemsQtyFromAny(items);
+    const productMap = await lookupProducts(sb, orgId, items).catch(() => new Map());
+
+    const subtotalCents = items.reduce((sum, item) => {
+      const sku = normalizeText(item.sku).toUpperCase();
+      const product = sku ? productMap.get(sku) : null;
+      const priceCents = resolveItemPriceCents(item, product);
+      return sum + priceCents * clampInt(item.qty, 1, MAX_QTY_PER_ITEM, 1);
+    }, 0);
+
+    if (subtotalCents <= 0) {
+      throw new Error("No fue posible calcular el subtotal del carrito.");
+    }
+
+    const promoVerdict = resolvePromoVerdict({
+      promoCode: body?.promo_code || body?.promoCode || body?.coupon || "",
+      subtotalCents,
+      itemsCount: items.length,
+    });
+
+    const shippingQuote = await resolveShippingQuote({
+      shipping,
+      itemsQty,
+    });
+
+    const shippingCents = moneyToCents(shippingQuote.amount_cents || 0);
+    const discountCents = moneyToCents(promoVerdict.discount_cents || 0);
+    const totalCents = Math.max(0, subtotalCents - discountCents + shippingCents);
+
+    const metadata = {
+      org_id: orgId,
+      organization_id: orgId,
+      customer_email: customer.email,
+      customer_phone: customer.phone || "",
+      shipping_mode: shipping.mode,
+      shipping_country: shipping.country,
+      shipping_postal_code: shipping.postal || "",
+      items_summary: itemsSummary(items),
+      promo_code: normalizeText(promoVerdict?.promo?.code || body?.promo_code || body?.promoCode || "").toUpperCase(),
+    };
+
+    const lineItems = buildLineItems(items, productMap);
+    const shippingLine = buildShippingLineItem(shippingCents);
+    if (shippingLine) lineItems.push(shippingLine);
+
+    if (!lineItems.length) {
+      throw new Error("No se pudieron construir los productos del checkout.");
+    }
+
+    const idempotencyKey = makeCheckoutIdempotencyKey(
+      {
+        orgId,
+        customer: customer.email,
+        items,
+        shipping,
+        promo: promoVerdict?.promo?.code || "",
+        subtotalCents,
+        discountCents,
+        shippingCents,
+        totalCents,
+      },
+      body?.request_id || body?.requestId || req.headers["x-request-id"] || ""
     );
 
+    const session = await createStripeSession({
+      stripe,
+      baseUrl,
+      customer,
+      shipping,
+      lineItems,
+      orderMeta: {
+        ...metadata,
+        idempotency_key: idempotencyKey,
+      },
+      totalCents,
+    });
+
+    const row = {
+      stripe_session_id: session.id,
+      checkout_session_id: session.id,
+      status: session.status || "open",
+      payment_status: session.payment_status || "unpaid",
+      customer_name: customer.name,
+      customer_email: customer.email,
+      customer_phone: customer.phone,
+      shipping_mode: shipping.mode,
+      shipping_country: shipping.country,
+      shipping_postal_code: shipping.postal,
+      subtotal_cents: subtotalCents,
+      amount_subtotal_cents: subtotalCents,
+      discount_cents: promoVerdict.discount_cents || 0,
+      amount_discount_cents: promoVerdict.discount_cents || 0,
+      shipping_cents: shippingCents,
+      amount_shipping_cents: shippingCents,
+      total_cents: totalCents,
+      amount_total_cents: totalCents,
+      amount_subtotal_mxn: subtotalCents / 100,
+      amount_discount_mxn: (promoVerdict.discount_cents || 0) / 100,
+      amount_shipping_mxn: shippingCents / 100,
+      amount_total_mxn: totalCents / 100,
+      currency: "MXN",
+      promo_code: promoVerdict.promo?.code || "",
+      items_summary: metadata.items_summary,
+      items: items,
+      items_json: items,
+      customer_details: {
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+      },
+      shipping_details: {
+        mode: shipping.mode,
+        country: shipping.country,
+        postal: shipping.postal,
+        quote: shippingQuote || null,
+      },
+      metadata,
+      org_id: orgId,
+      organization_id: orgId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
     try {
-      const sb = typeof supabaseAdmin === "function" ? supabaseAdmin() : null;
-      if (sb) {
-        const orgId = await resolveOrgId(sb);
-        const itemsJson = normalizedItems.map((item) => ({
-          sku: item.sku,
-          qty: clampInt(item.qty, 1, 99),
-          size: normalizeText(item.size || ""),
-        }));
-
-        const row = {
-          stripe_session_id: session.id,
-          checkout_session_id: session.id,
-          status: session.status || "open",
-          payment_status: session.payment_status || "unpaid",
-          customer_name: customer.name,
-          customer_email: customer.email,
-          customer_phone: customer.phone,
-          shipping_mode: shipping.mode,
-          shipping_country: shipping.country,
-          shipping_postal_code: shipping.postal,
-          subtotal_cents,
-          amount_subtotal_cents: subtotal_cents,
-          discount_cents: promoVerdict.discount_cents || 0,
-          amount_discount_cents: promoVerdict.discount_cents || 0,
-          shipping_cents,
-          amount_shipping_cents: shipping_cents,
-          total_cents,
-          amount_total_cents: total_cents,
-          amount_subtotal_mxn: subtotal_cents / 100,
-          amount_discount_mxn: (promoVerdict.discount_cents || 0) / 100,
-          amount_shipping_mxn: shipping_cents / 100,
-          amount_total_mxn: total_cents / 100,
-          currency: "MXN",
-          promo_code: promoVerdict.promo?.code || "",
-          items_summary: metadata.items_summary,
-          items: itemsJson,
-          items_json: itemsJson,
-          customer_details: {
-            name: customer.name,
-            email: customer.email,
-            phone: customer.phone,
-          },
-          shipping_details: {
-            mode: shipping.mode,
-            country: shipping.country,
-            postal: shipping.postal,
-            quote: shipping.quote || null,
-          },
-          metadata,
-          org_id: orgId,
-          organization_id: orgId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        await sb.from("orders").insert([row]);
-      }
+      await insertOrder(sb, row);
     } catch (e) {
       console.error("[create_checkout] order insert failed:", e?.message || e);
     }
@@ -586,15 +616,15 @@ module.exports = async (req, res) => {
             "🛒 <b>Nuevo checkout creado</b>",
             `Cliente: ${customer.name}`,
             `Email: ${customer.email}`,
-            `Total: $${(total_cents / 100).toFixed(2)} MXN`,
-            `Pago: ${selectedPaymentMethod.toUpperCase()}`,
+            `Total: $${(totalCents / 100).toFixed(2)} MXN`,
+            `Pago: ${String(body?.payment_method || body?.paymentMethod || "stripe").toUpperCase()}`,
             `Sesión: ${session.id}`,
           ].join("\n")
         );
       } catch {}
     }
 
-    return send(
+    send(
       res,
       jsonResponse(
         200,
@@ -607,18 +637,22 @@ module.exports = async (req, res) => {
           payment_status: session.payment_status || "unpaid",
           status: session.status || "open",
           currency: "MXN",
-          subtotal_cents,
+          subtotal_cents: subtotalCents,
           discount_cents: promoVerdict.discount_cents || 0,
-          shipping_cents,
-          total_cents,
+          shipping_cents: shippingCents,
+          total_cents: totalCents,
           customer_email: customer.email,
           shipping_mode: shipping.mode,
+          shipping_country: shipping.country,
+          shipping_postal_code: shipping.postal || "",
+          promo_code: promoVerdict.promo?.code || "",
+          items_summary: metadata.items_summary,
         },
         origin
       )
     );
   } catch (err) {
-    return send(
+    send(
       res,
       jsonResponse(
         500,
@@ -630,4 +664,7 @@ module.exports = async (req, res) => {
       )
     );
   }
-};
+}
+
+module.exports = main;
+module.exports.default = main;
