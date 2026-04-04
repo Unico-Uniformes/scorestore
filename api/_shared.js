@@ -31,10 +31,8 @@ const getCorsAllowlist = () => {
 };
 
 const isAllowedOrigin = (origin) => {
-  if (!origin) return true; // server-to-server / same-origin fallback
+  if (!origin) return true;
   if (origin.startsWith("http://localhost")) return true;
-
-  // Always allow Vercel preview and production deployments
   if (origin.endsWith(".vercel.app")) return true;
   if (origin === VERCEL_PROD_URL) return true;
 
@@ -48,8 +46,8 @@ const corsHeaders = (origin) => {
   const safeOrigin = isAllowedOrigin(origin) ? origin || VERCEL_PROD_URL : VERCEL_PROD_URL;
   return {
     "Access-Control-Allow-Origin": safeOrigin,
-    "Access-Control-Allow-Headers": "Content-Type, stripe-signature, x-org-id, x-envia-token",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, stripe-signature, x-org-id, x-envia-token, authorization",
+    "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
@@ -62,7 +60,7 @@ const jsonResponse = (statusCode, data, origin) => {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
       },
-      body: JSON.stringify({ error: "Forbidden Origin" }),
+      body: JSON.stringify({ ok: false, error: "Forbidden Origin" }),
     };
   }
 
@@ -89,18 +87,18 @@ const handleOptions = (event) => {
    SAFE UTILITIES
    ========================================================= */
 
-const safeJsonParse = (raw) => {
+const safeJsonParse = (raw, fallback = null) => {
   try {
-    if (!raw) return null;
+    if (!raw) return fallback;
     return JSON.parse(raw);
   } catch {
-    return null;
+    return fallback;
   }
 };
 
-const clampInt = (v, min, max) => {
+const clampInt = (v, min, max, fallback = min) => {
   const n = Math.floor(Number(v));
-  if (!Number.isFinite(n)) return min;
+  if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, n));
 };
 
@@ -109,7 +107,7 @@ const normalizeQty = (items) => {
   return items
     .map((it) => ({
       sku: String(it?.sku || it?.id || "").trim(),
-      qty: clampInt(it?.qty, 1, 99),
+      qty: clampInt(it?.qty, 1, 99, 1),
       size: it?.size ? String(it.size).trim() : "",
       priceCents: Number.isFinite(Number(it?.priceCents))
         ? Number(it.priceCents)
@@ -118,7 +116,7 @@ const normalizeQty = (items) => {
           : 0,
       title: it?.title ? String(it.title).trim() : "",
     }))
-    .filter((it) => it.sku);
+    .filter((it) => it.sku || it.title);
 };
 
 const itemsQtyFromAny = (items) =>
@@ -189,11 +187,7 @@ const supabaseAdmin = (() => {
   let initError = null;
 
   return () => {
-    if (initError) {
-      console.error("Supabase client failed to initialize:", initError);
-      return null;
-    }
-
+    if (initError) return null;
     if (client) return client;
     if (!isSupabaseConfigured()) return null;
 
@@ -570,6 +564,7 @@ const createEnviaLabel = async ({ shipping_country, stripe_session, items_qty })
 
   const url = `${ENVIA_API_URL}/ship/generate`;
   let res;
+
   try {
     res = await fetch(url, {
       method: "POST",
@@ -577,17 +572,42 @@ const createEnviaLabel = async ({ shipping_country, stripe_session, items_qty })
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error("Conexión fallida al servidor de Envía.");
+    throw new Error("No se pudo conectar con Envía.com");
   }
 
-  const contentType = res.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    throw new Error(`Respuesta no-JSON de Envía (${res.status})`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.message || "No se pudo generar la guía");
   }
 
-  const data = await res.json();
-  if (data?.error) throw new Error(data.error.message || "Error al crear la guía en Envía.com");
-  return data?.data || data;
+  return {
+    ok: true,
+    raw: data,
+    label_url:
+      data?.label_url ||
+      data?.labelUrl ||
+      data?.data?.label_url ||
+      data?.data?.labelUrl ||
+      null,
+    tracking_number:
+      data?.tracking_number ||
+      data?.trackingNumber ||
+      data?.data?.tracking_number ||
+      data?.data?.trackingNumber ||
+      null,
+    carrier:
+      data?.carrier ||
+      data?.data?.carrier ||
+      null,
+    service:
+      data?.service ||
+      data?.data?.service ||
+      null,
+    shipment_status:
+      data?.status ||
+      data?.data?.status ||
+      "created",
+  };
 };
 
 /* =========================================================
@@ -595,33 +615,72 @@ const createEnviaLabel = async ({ shipping_country, stripe_session, items_qty })
    ========================================================= */
 
 const initStripe = () => {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new Error("STRIPE_SECRET_KEY no configurada");
-  if (!Stripe) throw new Error("Dependencia 'stripe' no instalada");
-  return new Stripe(key, { apiVersion: "2024-06-20" });
-};
+  const key = process.env.STRIPE_SECRET_KEY || "";
+  if (!key || !Stripe) return null;
 
-const readRawBody = (event) => {
-  const body = event?.body || "";
-  if (event?.isBase64Encoded) return Buffer.from(body, "base64");
-  return Buffer.from(body, "utf8");
-};
-
-const makeCheckoutIdempotencyKey = (params, req_id) => {
-  if (req_id) return String(req_id);
-  const raw = JSON.stringify(params || {});
-  const hash = crypto.createHash("sha256").update(raw).digest("hex");
-  return `checkout_req_${hash}`;
+  try {
+    return new Stripe(key, {
+      apiVersion: "2024-06-20",
+    });
+  } catch (e) {
+    console.error("Stripe init failed:", e);
+    return null;
+  }
 };
 
 /* =========================================================
-   SCORE ORG / SITE SETTINGS
+   BODY / IDEMPOTENCY / ORG RESOLUTION
    ========================================================= */
 
-const resolveScoreOrgId = async (sb) => {
-  const envId = process.env.SCORE_ORG_ID || process.env.DEFAULT_ORG_ID;
-  if (envId && isUuid(envId)) return String(envId).trim();
+const readRawBody = async (req) => {
+  if (!req) return Buffer.from("");
 
+  if (Buffer.isBuffer(req.body)) return req.body;
+  if (typeof req.body === "string") return Buffer.from(req.body, "utf8");
+  if (req.rawBody) return Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(String(req.rawBody));
+
+  if (typeof req.arrayBuffer === "function") {
+    const ab = await req.arrayBuffer();
+    return Buffer.from(ab);
+  }
+
+  return new Promise((resolve) => {
+    const chunks = [];
+    req.on?.("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    req.on?.("end", () => resolve(Buffer.concat(chunks)));
+    req.on?.("error", () => resolve(Buffer.from("")));
+  });
+};
+
+const makeCheckoutIdempotencyKey = (req, body = {}) => {
+  const basis = {
+    email: safeStr(body?.customer_email || body?.email || "").trim().toLowerCase(),
+    phone: safeStr(body?.customer_phone || body?.phone || "").trim(),
+    shipping_country: safeStr(body?.shipping_country || body?.country || "MX").trim().toUpperCase(),
+    shipping_zip: safeStr(body?.shipping_zip || body?.postal_code || body?.zip || "").trim(),
+    items: normalizeQty(body?.items || body?.cart || []).map((i) => ({
+      sku: safeStr(i.sku).trim(),
+      qty: clampInt(i.qty, 1, 99, 1),
+      size: safeStr(i.size).trim(),
+      priceCents: clampInt(i.priceCents, 0, 100000000, 0),
+    })),
+    total: safeStr(
+      body?.total_cents ??
+        body?.amount_total_cents ??
+        body?.total ??
+        ""
+    ),
+  };
+
+  const fingerprint = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(basis))
+    .digest("hex");
+
+  return `${req?.headers?.["x-request-id"] || "checkout"}:${fingerprint}`;
+};
+
+const resolveScoreOrgId = async (sb) => {
   let orgId = DEFAULT_SCORE_ORG_ID;
 
   try {
@@ -633,6 +692,15 @@ const resolveScoreOrgId = async (sb) => {
       .maybeSingle();
 
     if (byId?.id) return orgId;
+
+    const { data: bySlug } = await sb
+      .from("organizations")
+      .select("id")
+      .eq("slug", "score-store")
+      .limit(1)
+      .maybeSingle();
+
+    if (bySlug?.id) return bySlug.id;
 
     const { data: byName } = await sb
       .from("organizations")
@@ -683,15 +751,15 @@ const getDefaultPublicSiteSettings = () => ({
   updated_at: null,
 });
 
-const readPublicSiteSettings = async () => {
+const readPublicSiteSettings = async (sb = null, orgId = null) => {
   const defaults = getDefaultPublicSiteSettings();
-  const sb = supabaseAdmin();
-  if (!sb) return defaults;
+  const client = sb || supabaseAdmin();
+  if (!client) return defaults;
 
   try {
-    const orgId = await resolveScoreOrgId(sb);
+    const resolvedOrgId = orgId || (await resolveScoreOrgId(client));
 
-    const { data, error } = await sb
+    const { data, error } = await client
       .from("site_settings")
       .select(`
         hero_title,
@@ -711,7 +779,7 @@ const readPublicSiteSettings = async () => {
         whatsapp_e164,
         whatsapp_display
       `)
-      .or(`org_id.eq.${orgId},organization_id.eq.${orgId}`)
+      .or(`org_id.eq.${resolvedOrgId},organization_id.eq.${resolvedOrgId}`)
       .order("updated_at", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(1)
@@ -796,10 +864,6 @@ const sendTelegram = async (text) => {
     console.log("[telegram] warn:", e?.message || e);
   }
 };
-
-/* =========================================================
-   EXPORTS
-   ========================================================= */
 
 module.exports = {
   jsonResponse,
