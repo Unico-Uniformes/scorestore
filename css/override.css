@@ -1,44 +1,39 @@
 /* =========================================================
    SCORE STORE — override.css
-   Fusión limpia / Vercel-ready / no destructivo
-   ========================================================= */
+   Capa de ajuste final para producción real.
+   No reemplaza styles.css: lo refuerza.
+========================================================= */
 
 /* =========================================================
-   ICONOS ASISTENTE
-   ========================================================= */
+   ICONOS / UTILIDADES
+========================================================= */
 .assistant-icon{
   width: 18px;
   height: 18px;
   fill: currentColor;
   stroke: none;
   display: inline-block;
+  flex: 0 0 auto;
 }
-.assistant-icon--small{ width:16px; height:16px; }
-.assistant-icon--menu{ width:18px; height:18px; margin-right:10px; }
+.assistant-icon--small{ width: 16px; height: 16px; }
+.assistant-icon--menu{ width: 18px; height: 18px; margin-right: 10px; }
 
-.pulse-svg{ animation: pulseGlow 2.4s ease-in-out infinite; }
-
-@keyframes pulseGlow{
-  0%,100%{
-    filter: drop-shadow(0 0 0 rgba(225,6,0,0));
-    opacity:.9;
-    transform: scale(1);
-  }
-  50%{
-    filter: drop-shadow(0 0 10px rgba(225,6,0,.55));
-    opacity:1;
-    transform: scale(1.06);
-  }
+.pulse-svg{
+  animation: pulseGlow 2.4s ease-in-out infinite;
 }
 
 /* =========================================================
-   VARIABLES / BASE DE ESTABILIDAD
-   ========================================================= */
+   VARIABLES DE AJUSTE
+========================================================= */
 :root{
   --topbar-h: 74px;
   --glass-blur: 16px;
   --glass-blur-strong: 22px;
   --brand-red: #e10600;
+  --brand-dark: #0f0f0f;
+  --brand-light: #ffffff;
+  --ui-border: rgba(10, 10, 10, 0.08);
+  --ui-border-strong: rgba(10, 10, 10, 0.14);
 }
 
 @media (max-width: 768px){
@@ -50,19 +45,26 @@
 }
 
 /* =========================================================
-   ESTRUCTURA BASE Y Z-INDEX
-   ========================================================= */
+   ESTRUCTURA BASE / Z-INDEX
+========================================================= */
 .topbar{
   z-index: 2100;
   position: sticky;
   top: 0;
+  background: rgba(255,255,255,0.82);
+  border-bottom: 1px solid rgba(10,10,10,0.08);
+}
+
+.topbar__inner{
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .promo-bar{
   position: sticky;
   top: var(--topbar-h);
   z-index: 2000;
-  background: linear-gradient(135deg, rgba(225, 6, 0, 0.98), rgba(0, 0, 0, 0.95));
+  background: linear-gradient(135deg, rgba(225, 6, 0, 0.98), rgba(0, 0, 0, 0.96));
   color: #fff;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
@@ -86,10 +88,9 @@
 
 /* =========================================================
    GLASSMORPHISM OPTIMIZADO
-   ========================================================= */
+========================================================= */
 .glass-panel,
 .vfx-glass-container,
-.topbar,
 .glass-drawer,
 .glass-header,
 .modal,
@@ -107,298 +108,385 @@
   -webkit-backdrop-filter: blur(var(--glass-blur-strong));
 }
 
-/* =========================================================
-   REDUCCIÓN DE COSTO DE RENDER
-   ========================================================= */
-#catalogCarouselSection,
-.partners,
-.footer{
-  content-visibility: auto;
-  contain-intrinsic-size: 900px;
-}
-
-@media (max-width: 520px){
-  .catcard,
-  .card{
-    box-shadow: 0 10px 24px rgba(0,0,0,0.10) !important;
-  }
-
-  .hero__particles{
-    display:none;
-  }
+.glass-panel,
+.vfx-glass-container,
+.glass-drawer,
+.glass-header{
+  background: rgba(255,255,255,0.90);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 18px 50px rgba(0,0,0,.10);
 }
 
 /* =========================================================
-   ESTABILIDAD VISUAL / IMÁGENES
-   ========================================================= */
-.partners__row img{
-  height: 36px;
-  width: auto;
-  display: block;
+   BOTONES / CONTROLES
+========================================================= */
+.btn,
+.btn-link,
+.legal-btn,
+.iconbtn,
+.cart-toggle{
+  -webkit-tap-highlight-color: transparent;
 }
 
-.brand__logo,
-.splash__logo,
-.footer__brand img,
-.hero__desert,
-.catcard__logo,
-.card__track img,
-.pm__track img,
-.cartitem__img img{
-  display:block;
+.btn:focus-visible,
+.btn-link:focus-visible,
+.legal-btn:focus-visible,
+.iconbtn:focus-visible,
+.cart-toggle:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible{
+  outline: 3px solid rgba(225, 6, 0, 0.24);
+  outline-offset: 2px;
 }
 
-.brand__logo{
-  width: 120px;
-  height: auto;
+.btn--primary,
+.legal-btn--primary,
+.btn-link--primary{
+  box-shadow: 0 12px 28px rgba(225, 6, 0, 0.22);
 }
 
-.splash__logo{
-  width: 220px;
-  max-width: min(58vw, 220px);
-  height: auto;
+.btn--primary:hover,
+.legal-btn--primary:hover,
+.btn-link--primary:hover{
+  box-shadow: 0 16px 34px rgba(225, 6, 0, 0.28);
 }
 
-.footer__brand img{
-  width: 120px;
-  height: auto;
+.btn--secondary,
+.btn--ghost,
+.legal-btn--ghost,
+.btn-link--secondary{
+  border-color: rgba(10,10,10,0.08);
 }
 
-.hero__desert{
-  width: min(280px, 58vw);
-  height: auto;
+.btn--secondary:hover,
+.btn--ghost:hover,
+.legal-btn--ghost:hover,
+.btn-link--secondary:hover{
+  background: rgba(10,10,10,0.08);
 }
 
-/* Logos de categorías */
-.catcard__logo{
-  height: auto !important;
-  width: auto;
-  max-width: 180px;
-  object-fit: contain;
-  display: block;
-  margin: 0 auto;
-}
-
-/* Imágenes de productos: no tocar el encuadre funcional del JS */
-.card__media,
-.pm__media{
+/* =========================================================
+   HERO / SPLASH
+========================================================= */
+.hero__media{
+  position: relative;
   overflow: hidden;
-  isolation: isolate;
 }
 
-.card__track{
-  scroll-snap-stop: always;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
-  min-width: 100%;
-  min-height: 100%;
-}
-
-.card__track img{
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center;
-  padding: 20px;
-}
-
-.pm__track{
-  scroll-snap-stop: always;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
-  min-width: 100%;
-}
-
-.pm__track img{
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center;
-  padding: 30px;
-}
-
-.cartitem__img{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-.cartitem__img img{
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-/* =========================================================
-   CARD / CATEGORY META
-   ========================================================= */
-.catcard__meta{
-  margin-top: 14px;
-  text-align: center;
-  color: #ffffff;
-  font-weight: 900;
-}
-
-.catcard__title{
-  font-size: 15px;
-  letter-spacing: .4px;
-  line-height: 1.1;
-}
-
-.catcard__sub{
-  margin-top: 6px;
-  font-size: 12px;
-  color: rgba(255,255,255,0.82);
-  font-weight: 800;
-}
-
-/* =========================================================
-   CARRUSELES: SWIPE + PEEK + SNAP
-   ========================================================= */
-.carousel-track{
-  display: flex;
-  gap: 16px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-  padding: 0 16px 20px 16px;
-  scroll-padding: 16px;
-  scroll-snap-stop: always;
-  overscroll-behavior-x: contain;
-}
-
-.carousel-track::-webkit-scrollbar{
-  display:none;
-}
-
-.card,
-.catcard{
-  flex: 0 0 280px;
-  scroll-snap-align: start;
-  max-width: 85vw;
-}
-
-/* Fade lateral opcional para carruseles */
-.carousel-fade{
-  pointer-events:none;
+.hero__media::after{
+  content: "";
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 54px;
-  z-index: 10;
-}
-
-.carousel-fade--left{
-  left: 0;
-  background: linear-gradient(90deg, rgba(0,0,0,0.28), rgba(0,0,0,0));
-}
-
-.carousel-fade--right{
-  right: 0;
-  background: linear-gradient(270deg, rgba(0,0,0,0.28), rgba(0,0,0,0));
-}
-
-/* Hint elegante de swipe */
-.product-swipe-hint{
-  position:absolute;
-  right: 16px;
-  top: 16px;
-  z-index: 10;
-  display:flex;
-  align-items:center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 50px;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: #fff;
-  font-weight: 800;
-  font-size: 11px;
-  text-transform: uppercase;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.04), rgba(0,0,0,0.22)),
+    radial-gradient(circle at top right, rgba(225,6,0,0.10), transparent 28%);
   pointer-events: none;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
-.product-swipe-hint__arr{
-  display:inline-block;
-  font-size: 14px;
+.splash__logo-wrap{
+  position: relative;
 }
 
-.product-swipe-hint.is-hide{
-  opacity: 0;
-  transform: translateX(20px);
+.splash__laser{
+  position: absolute;
+  inset: auto 12% 0 12%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(225,6,0,.9), rgba(255,255,255,.95), rgba(225,6,0,.9), transparent);
+  box-shadow: 0 0 18px rgba(225,6,0,.45);
+  animation: laserPulse 1.8s ease-in-out infinite;
 }
 
-.product-swipe-hint.is-pulse .product-swipe-hint__arr{
-  animation: hintArrow 1.2s ease-in-out infinite;
+.splash__bar-container{
+  width: min(320px, 72vw);
 }
 
-@keyframes hintArrow{
-  0%,100%{
-    transform: translateX(0);
-    opacity: .85;
-  }
-  50%{
-    transform: translateX(6px);
-    opacity: 1;
-  }
-}
-
-/* =========================================================
-   PROGRESS DEL CARRUSEL
-   ========================================================= */
-.carousel-progress{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-top: 10px;
-  width: min(420px, 92vw);
-}
-
-.carousel-progress__bar{
-  flex: 1;
+.splash__bar{
+  width: 100%;
   height: 8px;
   border-radius: 999px;
-  background: rgba(0,0,0,0.18);
-  border: 1px solid rgba(255,255,255,0.12);
-  overflow:hidden;
+  overflow: hidden;
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.08);
 }
 
-.carousel-progress__fill{
-  display:block;
-  height:100%;
-  width:0%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(225,6,0,0.95), rgba(255,255,255,0.65));
+.splash__barFill{
+  width: 44%;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(225,6,0,0.0), rgba(225,6,0,1), rgba(255,255,255,0.75));
+  box-shadow: 0 0 22px rgba(225, 6, 0, 0.32);
+  animation: loadingBar 1.5s cubic-bezier(.2,.9,.2,1) infinite;
 }
 
-.carousel-progress__text{
-  min-width: 64px;
-  text-align:right;
-  font-weight: 900;
+.splash__text{
   font-size: 12px;
-  color: rgba(255,255,255,0.92);
-  text-shadow: 0 2px 10px rgba(0,0,0,0.35);
+  font-weight: 900;
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.72);
 }
 
 /* =========================================================
-   AJUSTES MÓVILES
-   ========================================================= */
-@media (max-width: 768px){
-  .splash__logo{
-    max-width: min(64vw, 200px);
+   NAV / HEADER
+========================================================= */
+.brand{
+  min-width: 0;
+}
+
+.brand__text{
+  color: #0f0f0f;
+}
+
+.top-nav a{
+  color: rgba(10,10,10,0.78);
+}
+
+.top-nav a:hover{
+  color: var(--brand-dark);
+}
+
+.cart-toggle{
+  background: #0f0f0f;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* =========================================================
+   CARDS / PRODUCT GRID
+========================================================= */
+.product-card{
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.product-card:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 20px 50px rgba(0,0,0,.12);
+  border-color: rgba(225,6,0,0.18);
+}
+
+.product-card__media-btn{
+  width: 100%;
+  display: block;
+}
+
+.product-card__media{
+  aspect-ratio: 1 / 1;
+}
+
+.product-card__price{
+  color: #0f0f0f;
+}
+
+.chip{
+  border: 1px solid rgba(10,10,10,0.06);
+}
+
+.chip--subtle{
+  background: rgba(225, 6, 0, 0.08);
+  color: var(--brand-red);
+}
+
+/* =========================================================
+   CHECKOUT / DRAWER
+========================================================= */
+.drawer{
+  background:
+    linear-gradient(180deg, rgba(7,12,20,0.96), rgba(11,17,28,0.92));
+  color: #fff;
+  border-color: rgba(255,255,255,0.08);
+}
+
+.drawer .mini-label,
+.drawer .helper-text,
+.drawer .panel__copy{
+  color: rgba(255,255,255,0.86);
+}
+
+.drawer__totals{
+  border-top-color: rgba(255,255,255,0.10);
+}
+
+.cart-item{
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.cart-item:hover{
+  transform: translateY(-1px);
+  background: rgba(255,255,255,0.075);
+  border-color: rgba(255,255,255,0.14);
+}
+
+.cart-item__controls button{
+  transition: transform .16s ease, background .16s ease, border-color .16s ease;
+}
+
+.cart-item__controls button:hover{
+  transform: translateY(-1px);
+  background: rgba(255,255,255,0.10);
+}
+
+.cart-item__remove{
+  background: rgba(225, 6, 0, 0.14);
+  border-color: rgba(225, 6, 0, 0.26) !important;
+}
+
+/* =========================================================
+   FORMULARIOS
+========================================================= */
+.field input,
+.field select,
+.field textarea,
+.promo-row input{
+  background: rgba(255,255,255,0.98);
+  border-color: rgba(10,10,10,0.10);
+}
+
+.field input:hover,
+.field select:hover,
+.field textarea:hover,
+.promo-row input:hover{
+  border-color: rgba(225,6,0,0.18);
+}
+
+.field input::placeholder,
+.field textarea::placeholder,
+.promo-row input::placeholder{
+  color: rgba(10,10,10,0.40);
+}
+
+/* =========================================================
+   PÁGINAS SUCCESS / CANCEL / LEGAL
+========================================================= */
+.success-page,
+.cancel-page,
+.legal-page{
+  color: #0f0f0f;
+}
+
+.success-card,
+.cancel-panel,
+.legal-content{
+  border: 1px solid rgba(10,10,10,0.08);
+}
+
+.success-hero,
+.success-panel,
+.legal-box,
+.cancel-support{
+  background: rgba(255,255,255,0.94);
+}
+
+.success-hero{
+  border-bottom-color: rgba(10,10,10,0.08);
+}
+
+.success-emoji{
+  border: 1px solid rgba(10,10,10,0.06);
+}
+
+.detail-item,
+.support-row,
+.contact-row{
+  background: rgba(10,10,10,0.04);
+  border: 1px solid rgba(10,10,10,0.06);
+}
+
+.detail-item span,
+.support-row span,
+.contact-row span{
+  color: rgba(10,10,10,0.56);
+}
+
+.footer-note,
+.legal-footer,
+.success-copy,
+.cancel-copy,
+.legal-box p,
+.legal-box li{
+  color: rgba(10,10,10,0.72);
+}
+
+.cancel-bg{
+  filter: grayscale(1) brightness(0.28);
+}
+
+/* =========================================================
+   FOOTER
+========================================================= */
+.site-footer,
+.footer{
+  border-top: 1px solid rgba(10,10,10,0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.74), rgba(255,255,255,0.94));
+}
+
+.footer-contact-link{
+  transition: opacity .16s ease, transform .16s ease;
+}
+
+.footer-contact-link:hover{
+  opacity: .9;
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   TOASTS / BANNERS
+========================================================= */
+.cookie-banner__inner{
+  box-shadow: 0 18px 48px rgba(0,0,0,.12);
+}
+
+.sales-toast{
+  background: rgba(7,12,20,0.96);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* =========================================================
+   ANIMACIONES
+========================================================= */
+@keyframes pulseGlow{
+  0%,100%{
+    filter: drop-shadow(0 0 0 rgba(225,6,0,0));
+    opacity:.9;
+    transform: scale(1);
+  }
+  50%{
+    filter: drop-shadow(0 0 10px rgba(225,6,0,.55));
+    opacity:1;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes laserPulse{
+  0%,100%{ opacity:.45; transform: scaleX(.96); }
+  50%{ opacity:1; transform: scaleX(1.02); }
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 1024px){
+  .promo-bar__inner{
+    flex-wrap: wrap;
   }
 
-  .hero__desert{
-    width: min(220px, 62vw);
+  .section__tools{
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px){
+  .topbar{
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
 
   .promo-bar__text{
     font-size: 12px;
+  }
+
+  .hero__desert{
+    width: min(220px, 62vw);
   }
 
   .carousel-track{
@@ -407,6 +495,19 @@
     scroll-padding-left: 10px;
     scroll-padding-right: 72px;
   }
+
+  .cookie-banner{
+    bottom: 10px;
+  }
+
+  .cookie-banner__inner{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cookie-banner__actions{
+    justify-content: flex-end;
+  }
 }
 
 @media (max-width: 520px){
@@ -414,15 +515,37 @@
     font-size: 11px;
     padding: 7px 10px;
   }
+
+  .topbar__inner{
+    gap: 10px;
+  }
+
+  .cart-toggle{
+    min-height: 42px;
+  }
+
+  .brand__logo{
+    height: 36px;
+  }
+
+  .success-hero,
+  .success-panel,
+  .legal-box,
+  .cancel-panel{
+    padding: 18px;
+  }
 }
 
 /* =========================================================
-   OBSERVACIÓN IMPORTANTE
-   =========================================================
-   Este override NO bloquea el splash ni oculta imágenes.
-   Si los productos siguen sin verse, el origen está en:
-   - catálogo /data/catalog.json o /api/catalog
-   - normalización en main.js
-   - rutas en image_url / img / images
-   - safeUrl() o valores vacíos en el JSON
-   ========================================================= */
+   NOTAS OPERATIVAS
+========================================================= */
+/*
+  Este archivo no debe duplicar estilos críticos de styles.css.
+  Su función es afinar:
+  - glassmorphism
+  - z-index
+  - botones
+  - microinteracciones
+  - páginas success/cancel/legal
+  - compatibilidad móvil
+*/
