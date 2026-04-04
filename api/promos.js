@@ -1,44 +1,21 @@
-// api/promos.js
 "use strict";
 
-const { jsonResponse, handleOptions, readJsonFile } = require("./_shared");
+const fs = require("fs");
+const path = require("path");
 
 const DEFAULT_PROMOS = {
+  store: {
+    name: "SCORE STORE",
+    currency: "MXN",
+  },
   rules: [
-    {
-      code: "SCORE25",
-      type: "percent",
-      value: 0.25,
-      description: "25% OFF por Inauguración",
-      active: true,
-      min_amount_mxn: 1000,
-      expires_at: "2026-12-31T23:59:59Z",
-    },
-    {
-      code: "BAJA25",
-      type: "percent",
-      value: 0.25,
-      description: "25% OFF Cupón Baja",
-      active: true,
-      min_amount_mxn: 0,
-      expires_at: "2026-12-31T23:59:59Z",
-    },
     {
       code: "SCORE10",
       type: "percent",
-      value: 0.1,
-      description: "10% OFF Fans",
+      value: 10,
+      description: "10% de descuento en productos seleccionados de la tienda.",
       active: true,
-      min_amount_mxn: 500,
-      expires_at: "2027-01-01T00:00:00Z",
-    },
-    {
-      code: "BAJA200",
-      type: "fixed_mxn",
-      value: 200,
-      description: "$200 MXN OFF en tu carrito",
-      active: true,
-      min_amount_mxn: 1500,
+      min_amount_mxn: 999,
       expires_at: null,
     },
     {
@@ -71,6 +48,11 @@ const send = (res, resp) => {
 };
 
 const cleanCode = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, "");
+const cleanText = (v, fallback = "") => {
+  const s = typeof v === "string" ? v : v == null ? fallback : String(v);
+  return s.trim();
+};
+
 const moneyToCents = (value) => {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
@@ -89,13 +71,25 @@ const isExpired = (promo) => {
   return expires.getTime() < Date.now();
 };
 
+const readJsonFile = (relPath) => {
+  try {
+    const p1 = path.join(process.cwd(), relPath);
+    const p2 = path.join(__dirname, "..", relPath);
+    const file = fs.existsSync(p1) ? p1 : p2;
+    if (!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+};
+
 const normalizeRule = (rule) => {
   if (!rule || typeof rule !== "object") return null;
 
   const code = cleanCode(rule.code);
   if (!code) return null;
 
-  const type = String(rule.type || "").trim().toLowerCase();
+  const type = cleanText(rule.type || "").toLowerCase();
   const value = Number(rule.value || 0);
   const minAmount = Number(rule.min_amount_mxn || 0);
   const active = rule.active == null ? true : !!rule.active;
@@ -105,7 +99,7 @@ const normalizeRule = (rule) => {
     code,
     type,
     value: Number.isFinite(value) ? value : 0,
-    description: String(rule.description || "").trim(),
+    description: cleanText(rule.description || ""),
     active,
     min_amount_mxn: Number.isFinite(minAmount) ? minAmount : 0,
     expires_at: expiresAt,
@@ -114,7 +108,7 @@ const normalizeRule = (rule) => {
 
 const loadPromos = () => {
   try {
-    const json = readJsonFile ? readJsonFile("data/promos.json") : null;
+    const json = readJsonFile("data/promos.json");
     const source = json && typeof json === "object" ? json : DEFAULT_PROMOS;
     const rules = Array.isArray(source.rules)
       ? source.rules
@@ -123,9 +117,9 @@ const loadPromos = () => {
         : [];
 
     const normalized = rules.map(normalizeRule).filter(Boolean);
-    return { rules: normalized };
+    return { rules: normalized, store: source.store || DEFAULT_PROMOS.store };
   } catch {
-    return { rules: [] };
+    return { rules: [], store: DEFAULT_PROMOS.store };
   }
 };
 
@@ -192,7 +186,7 @@ module.exports = async (req, res) => {
   const origin = req.headers.origin || req.headers.Origin || "*";
 
   if (req.method === "OPTIONS") {
-    const optionsRes = handleOptions?.({ headers: { origin } }) || {
+    return send(res, {
       statusCode: 204,
       headers: {
         "Access-Control-Allow-Origin": origin,
@@ -201,13 +195,18 @@ module.exports = async (req, res) => {
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
       },
       body: "",
-    };
-
-    return send(res, optionsRes);
+    });
   }
 
   if (req.method !== "GET") {
-    return send(res, jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
+    return send(
+      res,
+      {
+        statusCode: 405,
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify({ ok: false, error: "Method not allowed" }),
+      }
+    );
   }
 
   const promos = loadPromos();
@@ -218,37 +217,65 @@ module.exports = async (req, res) => {
   if (!code) {
     return send(
       res,
-      jsonResponse(
-        200,
-        {
+      {
+        statusCode: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Credentials": "true",
+          "Access-Control-Allow-Methods": "GET,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Vary": "Origin",
+        },
+        body: JSON.stringify({
           ok: true,
+          store: promos.store,
           rules: promos.rules,
           count: promos.rules.length,
-        },
-        origin
-      )
+        }),
+      }
     );
   }
 
   const promo = promos.rules.find((r) => cleanCode(r.code) === code) || null;
   const verdict = computeValidity(promo, subtotalMxn);
-  const promoMath = verdict.valid ? computePromo(promo, subtotalCents) : { promo: null, discount_cents: 0, free_shipping: false };
+  const promoMath = verdict.valid
+    ? computePromo(promo, subtotalCents)
+    : { promo: null, discount_cents: 0, free_shipping: false };
 
   return send(
     res,
-    jsonResponse(
-      200,
-      {
-        ok: true,
-        valid: verdict.valid,
-        reason: verdict.reason,
-        promo: verdict.valid ? promoMath.promo : null,
-        discount_cents: promoMath.discount_cents,
-        free_shipping: promoMath.free_shipping,
-        rules: promos.rules,
-        count: promos.rules.length,
+    {
+      statusCode: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Methods": "GET,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Vary": "Origin",
       },
-      origin
-    )
+      body: JSON.stringify({
+        ok: true,
+        store: promos.store,
+        query: {
+          code,
+          subtotal_mxn: subtotalMxn,
+          subtotal_cents: subtotalCents,
+        },
+        validity: verdict,
+        ...promoMath,
+        promo: promoMath.promo
+          ? {
+              code: promoMath.promo.code,
+              type: promoMath.promo.type,
+              value: promoMath.promo.value,
+              description: promoMath.promo.description,
+              min_amount_mxn: promoMath.promo.min_amount_mxn,
+              expires_at: promoMath.promo.expires_at,
+            }
+          : null,
+      }),
+    }
   );
 };
