@@ -1,22 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-
   <url>
     <loc>https://scorestore.vercel.app/</loc>
     <changefreq>daily</changefreq>
-    <priority>1.0</priority>
+    <priority>1.00</priority>
+    <lastmod>2026-04-03</lastmod>
   </url>
 
   <url>
     <loc>https://scorestore.vercel.app/index.html</loc>
     <changefreq>daily</changefreq>
-    <priority>0.9</priority>
+    <priority>0.98</priority>
+    <lastmod>2026-04-03</lastmod>
   </url>
 
   <url>
     <loc>https://scorestore.vercel.app/legal.html</loc>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>0.50</priority>
+    <lastmod>2026-04-03</lastmod>
   </url>
 
+  <url>
+    <loc>https://scorestore.vercel.app/success.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.45</priority>
+    <lastmod>2026-04-03</lastmod>
+  </url>
+
+  <url>
+    <loc>https://scorestore.vercel.app/cancel.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.45</priority>
+    <lastmod>2026-04-03</lastmod>
+  </url>
 </urlset>
