@@ -1,389 +1,716 @@
+// api/catalog.js
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
+const {
+  jsonResponse,
+  handleOptions,
+  rateLimit,
+  supabaseAdmin,
+  safeStr,
+  readJsonFile,
+  resolveScoreOrgId,
+  readPublicSiteSettings,
+  sendTelegram,
+  normalizeQty,
+  itemsQtyFromAny,
+} = require("./_shared");
 
-const DEFAULT_STORE = {
-  name: "SCORE STORE",
-  slug: "score-store",
-  currency: "MXN",
-};
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash";
+const GEMINI_API_BASE =
+  process.env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com/v1beta";
 
-const CATEGORY_CONFIG = [
-  {
-    uiId: "BAJA1000",
-    name: "BAJA 1000",
-    logo: "/assets/logo-baja1000.webp",
-    mapFrom: ["BAJA1000", "BAJA_1000", "EDICION_2025", "OTRAS_EDICIONES", "BAJA_1000_2025"],
-  },
-  {
-    uiId: "BAJA500",
-    name: "BAJA 500",
-    logo: "/assets/logo-baja500.webp",
-    mapFrom: ["BAJA500", "BAJA_500"],
-  },
-  {
-    uiId: "BAJA400",
-    name: "BAJA 400",
-    logo: "/assets/logo-baja400.webp",
-    mapFrom: ["BAJA400", "BAJA_400"],
-  },
-  {
-    uiId: "SF250",
-    name: "SAN FELIPE 250",
-    logo: "/assets/logo-sf250.webp",
-    mapFrom: ["SF250", "SF_250"],
-  },
-];
+const MAX_MESSAGE_LEN = 1800;
+const MAX_REPLY_LEN = 1400;
 
-const noStoreHeaders = {
-  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-  Pragma: "no-cache",
-  Expires: "0",
-  "Content-Type": "application/json; charset=utf-8",
-};
+function send(res, payload) {
+  const out = payload || {};
+  out.headers = out.headers || {};
+  out.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate";
+  out.headers["Pragma"] = "no-cache";
+  out.headers["Expires"] = "0";
 
-function json(res, status, payload, origin = "*") {
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Cache-Control", noStoreHeaders["Cache-Control"]);
-  res.setHeader("Pragma", noStoreHeaders.Pragma);
-  res.setHeader("Expires", noStoreHeaders.Expires);
-  res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Vary", "Origin");
-  res.end(JSON.stringify(payload ?? {}));
+  res.statusCode = out.statusCode || 200;
+  Object.entries(out.headers).forEach(([k, v]) => res.setHeader(k, v));
+  res.end(out.body || "");
 }
 
-function cleanText(v) {
-  if (v == null) return "";
-  return String(v).trim();
+function getOrigin(req) {
+  return req?.headers?.origin || req?.headers?.Origin || "*";
 }
 
-function toNumber(value, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
+function safeNum(v, d = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
 }
 
-function safeUrl(u) {
-  const value = cleanText(u);
-  if (!value) return "";
-  if (/^https?:\/\//i.test(value) || value.startsWith("/")) return value;
-  return "";
+function clampText(v, max = MAX_MESSAGE_LEN) {
+  return String(v ?? "").trim().slice(0, max);
 }
 
-function normalizeSectionToUi(sectionId) {
-  const sid = cleanText(sectionId);
-  const found = CATEGORY_CONFIG.find((c) => c.mapFrom.includes(sid));
-  return found ? found.uiId : "BAJA1000";
+function normalizeLower(v) {
+  return safeStr(v).trim().toLowerCase();
 }
 
-function inferCollection(p) {
-  const sid = cleanText(p?.sectionId || p?.section_id || p?.section || p?.categoryId || "");
-  if (sid === "EDICION_2025") return "Edición 2025";
-  if (sid === "OTRAS_EDICIONES") return "Otras ediciones";
-  return cleanText(p?.collection || p?.sub_section || "");
+function parseBody(req) {
+  const body = req?.body;
+
+  if (body && typeof body === "object" && !Buffer.isBuffer(body)) {
+    return body;
+  }
+
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+function parseMode(req, body) {
+  const url = new URL(req.url, "http://localhost");
+  const q = safeStr(url.searchParams.get("mode") || url.searchParams.get("type") || "").trim().toLowerCase();
+  const b = safeStr(body?.mode || body?.type || body?.assistant || "").trim().toLowerCase();
+
+  return b || q || (body?.message ? "assistant" : "catalog");
+}
+
+function parseOrgId(req, body) {
+  const url = new URL(req.url, "http://localhost");
+  return safeStr(
+    body?.org_id ||
+      body?.orgId ||
+      body?.organization_id ||
+      url.searchParams.get("org_id") ||
+      url.searchParams.get("orgId") ||
+      url.searchParams.get("organization_id") ||
+      ""
+  ).trim();
+}
+
+function parseMessage(body = {}) {
+  const msg = body?.message ?? body?.prompt ?? body?.text ?? body?.input ?? "";
+  return clampText(msg);
+}
+
+function parseContext(body = {}) {
+  const ctx = body?.context && typeof body.context === "object" ? body.context : {};
+
+  return {
+    currentProduct: safeStr(ctx.currentProduct || ctx.product || ctx.currentSku || body?.currentProduct || ""),
+    currentSku: safeStr(ctx.currentSku || ctx.sku || body?.currentSku || ""),
+    cartItems: safeStr(ctx.cartItems || ctx.cart || body?.cartItems || ""),
+    cartTotal: safeStr(ctx.cartTotal || ctx.total || body?.cartTotal || ""),
+    shipMode: safeStr(ctx.shipMode || ctx.shippingMode || body?.shipMode || ""),
+    orderId: safeStr(ctx.orderId || ctx.order_id || body?.orderId || ""),
+    actionHint: safeStr(ctx.actionHint || ctx.action || body?.actionHint || ""),
+    category: safeStr(ctx.category || ctx.section || body?.category || ""),
+  };
+}
+
+function normalizeAssetPath(input) {
+  let s = String(input ?? "").trim();
+  if (!s) return "";
+  if (/^(https?:|data:|blob:)/i.test(s)) return s;
+  s = s.replaceAll("\\", "/");
+  return s.startsWith("/") ? s : `/${s.replace(/^\/+/, "")}`;
+}
+
+function getProductSku(p) {
+  return safeStr(p?.sku || p?.id || p?.slug || p?.title || p?.name || "").trim();
+}
+
+function getProductName(p) {
+  return safeStr(p?.name || p?.title || "Producto SCORE").trim();
+}
+
+function getProductDescription(p) {
+  return safeStr(p?.description || "").trim();
+}
+
+function getProductPriceCents(p) {
+  if (Number.isFinite(Number(p?.price_cents))) return Math.max(0, Math.round(Number(p.price_cents)));
+  if (Number.isFinite(Number(p?.price_mxn))) return Math.max(0, Math.round(Number(p.price_mxn) * 100));
+  if (Number.isFinite(Number(p?.base_mxn))) return Math.max(0, Math.round(Number(p.base_mxn) * 100));
+  return 0;
+}
+
+function getProductImages(p) {
+  const raw = Array.isArray(p?.images)
+    ? p.images
+    : typeof p?.images === "string"
+      ? safeJsonParse(p.images, [])
+      : [];
+
+  const list = [];
+  if (p?.image_url || p?.img || p?.image) list.push(p.image_url || p.img || p.image);
+  for (const img of raw) list.push(img);
+
+  return [...new Set(list.map(normalizeAssetPath).filter(Boolean))];
+}
+
+function getProductSectionUi(p) {
+  const raw = safeStr(
+    p?.uiSection || p?.sectionId || p?.section_id || p?.category || p?.collection || p?.sub_section || ""
+  )
+    .trim()
+    .toUpperCase();
+
+  if (!raw) return "";
+  if (raw.includes("1000")) return "BAJA1000";
+  if (raw.includes("500")) return "BAJA500";
+  if (raw.includes("400")) return "BAJA400";
+  if (raw.includes("250") || raw.includes("SF")) return "SF250";
+  return raw.replace(/[^A-Z0-9]/g, "");
+}
+
+function getStockLabel(p) {
+  const stock = safeNum(p?.stock, null);
+  if (!Number.isFinite(stock)) return "Disponible";
+  if (stock <= 0) return "Sin stock por ahora";
+  if (stock <= 3) return "Últimas piezas";
+  return "Disponible";
+}
+
+function normalizeCategory(row) {
+  const id = safeStr(row?.id || row?.uiId || row?.section_id || row?.sectionId || "").trim().toUpperCase();
+  if (!id) return null;
+
+  return {
+    id,
+    uiId: id,
+    name: safeStr(row?.name || row?.title || id.replace(/_/g, " ")).trim(),
+    logo: normalizeAssetPath(row?.logo || row?.image || "/assets/logo-score.webp"),
+    section_id: safeStr(row?.section_id || row?.sectionId || id).trim(),
+    count: safeNum(row?.count, 0),
+    active: row?.active == null ? true : !!row.active,
+  };
 }
 
 function normalizeProduct(row) {
   if (!row || typeof row !== "object") return null;
 
-  const images = Array.isArray(row.images)
-    ? row.images
-    : row.image_url || row.img || row.image
-      ? [row.image_url || row.img || row.image]
-      : [];
-
-  const sizes = Array.isArray(row.sizes) && row.sizes.length
-    ? row.sizes
-    : ["S", "M", "L", "XL", "XXL"];
-
-  const priceFrom =
-    Number.isFinite(Number(row.price_cents)) ? Math.round(Number(row.price_cents)) :
-    Number.isFinite(Number(row.price_mxn)) ? Math.round(Number(row.price_mxn) * 100) :
-    Number.isFinite(Number(row.base_mxn)) ? Math.round(Number(row.base_mxn) * 100) :
-    Number.isFinite(Number(row.price)) ? Math.round(Number(row.price) * 100) :
-    0;
-
-  const sectionRaw = cleanText(
-    row.sectionId || row.section_id || row.section || row.categoryId || ""
-  );
-
-  const sku = cleanText(row.sku || row.id || row.slug || "");
-  const name = cleanText(row.name || row.title || "Producto SCORE");
-  const title = cleanText(row.title || row.name || "Producto SCORE");
-  const description = cleanText(row.description || "");
-  const primaryImage = safeUrl(row.image_url || row.img || row.image || images[0] || "");
+  const images = getProductImages(row);
+  const sectionUi = getProductSectionUi(row);
 
   return {
     ...row,
-    id: cleanText(row.id || sku),
-    sku,
-    title,
-    name,
-    description,
-    sectionId: sectionRaw,
-    section_id: sectionRaw,
-    uiSection: normalizeSectionToUi(sectionRaw),
-    collection: inferCollection(row),
-    sub_section: inferCollection(row),
-    category: cleanText(row.category || ""),
-    image: primaryImage,
-    image_url: primaryImage,
-    img: primaryImage,
-    images: images.map(safeUrl).filter(Boolean),
-    sizes: sizes.map((x) => cleanText(x)).filter(Boolean),
-    price_cents: priceFrom,
-    price_mxn: Number.isFinite(Number(row.price_mxn)) ? Number(row.price_mxn) : priceFrom / 100,
-    base_mxn: Number.isFinite(Number(row.base_mxn)) ? Number(row.base_mxn) : priceFrom / 100,
+    id: safeStr(row.id || row.sku || row.slug || "").trim(),
+    sku: safeStr(row.sku || row.id || row.slug || "").trim(),
+    name: getProductName(row),
+    title: getProductName(row),
+    description: getProductDescription(row),
+    uiSection: sectionUi || "SCORE",
+    sectionId: safeStr(row.sectionId || row.section_id || "").trim(),
+    section_id: safeStr(row.section_id || row.sectionId || "").trim(),
+    collection: safeStr(row.collection || row.sub_section || "").trim(),
+    sub_section: safeStr(row.sub_section || row.collection || "").trim(),
+    category: safeStr(row.category || "").trim(),
     rank: Number.isFinite(Number(row.rank)) ? Math.round(Number(row.rank)) : 999,
-    stock: row.stock == null ? null : toNumber(row.stock, 0),
+    stock: Number.isFinite(Number(row.stock)) ? Math.round(Number(row.stock)) : null,
     active: row.active == null ? true : !!row.active,
     is_active: row.is_active == null ? true : !!row.is_active,
     deleted_at: row.deleted_at || null,
+    price_cents: getProductPriceCents(row),
+    price_mxn: Number.isFinite(Number(row.price_mxn)) ? Number(row.price_mxn) : getProductPriceCents(row) / 100,
+    base_mxn: Number.isFinite(Number(row.base_mxn)) ? Number(row.base_mxn) : getProductPriceCents(row) / 100,
+    img: normalizeAssetPath(row.img || row.image || row.image_url || images[0] || ""),
+    image_url: normalizeAssetPath(row.image_url || row.img || row.image || images[0] || ""),
+    image: normalizeAssetPath(row.image || row.image_url || row.img || images[0] || ""),
+    images,
+    sizes: Array.isArray(row.sizes)
+      ? row.sizes.map((x) => safeStr(x).trim()).filter(Boolean)
+      : safeJsonParse(row.sizes, []).map((x) => safeStr(x).trim()).filter(Boolean),
+    metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : {},
   };
 }
 
-function normalizeSection(row) {
-  if (!row || typeof row !== "object") return null;
-
-  const id = cleanText(row.id || row.slug || row.section_id || row.sectionId || "");
-  if (!id) return null;
-
-  const cfg = CATEGORY_CONFIG.find((c) => c.uiId === id || c.mapFrom.includes(id));
-
-  return {
-    id,
-    uiId: cfg?.uiId || id,
-    name: cleanText(row.name || row.title || cfg?.name || id),
-    logo: safeUrl(row.logo || row.image || cfg?.logo || ""),
-    section_id: cleanText(row.section_id || row.sectionId || id),
-    count: Number.isFinite(Number(row.count)) ? Number(row.count) : 0,
-    active: row.active == null ? true : !!row.active,
-  };
-}
-
-function attachCounts(sections, products) {
-  const map = new Map();
-
-  for (const p of Array.isArray(products) ? products : []) {
-    const key = cleanText(p.sectionId || p.section_id || p.uiSection || "BAJA1000");
-    map.set(key, (map.get(key) || 0) + 1);
+function attachCounts(sections, list) {
+  const counts = new Map();
+  for (const p of Array.isArray(list) ? list : []) {
+    const key = getProductSectionUi(p);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) || 0) + 1);
   }
 
-  return sections.map((s) => ({
+  return (Array.isArray(sections) ? sections : []).map((s) => ({
     ...s,
-    count: map.get(cleanText(s.section_id || s.id || s.uiId)) || 0,
+    count: counts.get(s.uiId || s.id || "") || 0,
   }));
 }
 
-function buildSectionsFromProducts(products) {
+function buildSectionsFromProducts(list) {
   const map = new Map();
 
-  for (const p of Array.isArray(products) ? products : []) {
-    const sectionId = cleanText(p.sectionId || p.section_id || p.uiSection || "BAJA1000");
-    if (!map.has(sectionId)) {
-      const cfg = CATEGORY_CONFIG.find((c) => c.uiId === sectionId || c.mapFrom.includes(sectionId));
-      map.set(sectionId, {
-        id: sectionId,
-        uiId: cfg?.uiId || sectionId,
-        name: cfg?.name || sectionId.replace(/_/g, " "),
-        logo: cfg?.logo || "",
-        section_id: sectionId,
+  for (const p of Array.isArray(list) ? list : []) {
+    const key = getProductSectionUi(p) || "SCORE";
+
+    if (!map.has(key)) {
+      map.set(key, {
+        id: key,
+        uiId: key,
+        name: key.replace(/_/g, " "),
+        logo: "/assets/logo-score.webp",
+        section_id: key,
         count: 0,
         active: true,
       });
     }
-    const current = map.get(sectionId);
-    current.count += 1;
+
+    map.get(key).count += 1;
   }
 
-  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "es"));
+  return Array.from(map.values()).sort((a, b) => {
+    const order = ["BAJA1000", "BAJA500", "BAJA400", "SF250"];
+    const ia = order.indexOf(a.uiId);
+    const ib = order.indexOf(b.uiId);
+    if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    return a.name.localeCompare(b.name, "es");
+  });
 }
 
-function readJsonFile(relPath) {
-  try {
-    const p1 = path.join(process.cwd(), relPath);
-    const p2 = path.join(__dirname, "..", relPath);
-    const file = fs.existsSync(p1) ? p1 : p2;
-    if (!fs.existsSync(file)) return null;
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-function shouldIncludeInactive(req) {
-  const value =
-    req.query?.include_inactive ||
-    req.query?.includeInactive ||
-    req.query?.drafts ||
-    "0";
-
-  return ["1", "true", "yes", "on"].includes(String(value).trim().toLowerCase());
-}
-
-function parsePayload(raw) {
-  const data = raw && typeof raw === "object" ? raw : {};
-
-  const rawSections = Array.isArray(data.sections)
-    ? data.sections
-    : Array.isArray(data.categories)
-      ? data.categories
-      : [];
-
-  const rawProducts = Array.isArray(data.products)
-    ? data.products
-    : Array.isArray(data.items)
-      ? data.items
-      : [];
-
-  const products = rawProducts.map(normalizeProduct).filter(Boolean);
-  let sections = rawSections.map(normalizeSection).filter(Boolean);
-
-  if (!sections.length) {
-    sections = buildSectionsFromProducts(products);
-  } else {
-    sections = attachCounts(sections, products);
-  }
+function statsFromProducts(list) {
+  const items = Array.isArray(list) ? list : [];
+  const activeProducts = items.filter((p) => p.active !== false && p.is_active !== false && !p.deleted_at).length;
+  const lowStockProducts = items.filter((p) => safeNum(p.stock, 999) > 0 && safeNum(p.stock, 999) <= 5).length;
 
   return {
-    ok: true,
-    store: data.store && typeof data.store === "object" ? data.store : DEFAULT_STORE,
-    sections,
-    categories: sections,
-    products,
-    items: products,
+    activeProducts,
+    lowStockProducts,
+    featuredProducts: items.filter((p) => safeNum(p.rank, 999) <= 12).length,
   };
 }
 
-async function loadCatalogSource() {
-  const fromJson = readJsonFile("data/catalog.json");
-  if (fromJson && typeof fromJson === "object") return fromJson;
+function buildCatalogResponse(source = {}) {
+  const rawProducts = Array.isArray(source.products) ? source.products : [];
+  const rawCategories = Array.isArray(source.categories) ? source.categories : [];
+  const products = rawProducts.map(normalizeProduct).filter(Boolean);
+  const categories = (rawCategories.length ? rawCategories : buildSectionsFromProducts(products))
+    .map(normalizeCategory)
+    .filter(Boolean);
 
-  return { products: [], sections: [], categories: [] };
+  return {
+    products,
+    categories: rawCategories.length ? attachCounts(categories, products) : categories,
+    stats: statsFromProducts(products),
+    store: {
+      org_id: safeStr(source?.store?.org_id || source?.org_id || ""),
+      name: safeStr(source?.store?.name || source?.store?.hero_title || source?.hero_title || "SCORE STORE"),
+      hero_title: safeStr(source?.store?.hero_title || source?.hero_title || "SCORE STORE"),
+      hero_image: safeStr(source?.store?.hero_image || source?.hero_image || ""),
+      promo_active: !!(source?.store?.promo_active ?? source?.promo_active),
+      promo_text: safeStr(source?.store?.promo_text || source?.promo_text || ""),
+      maintenance_mode: !!(source?.store?.maintenance_mode ?? source?.maintenance_mode),
+      contact: source?.store?.contact || source?.contact || {},
+      home: source?.store?.home || source?.home || {},
+      socials: source?.store?.socials || source?.socials || {},
+    },
+  };
 }
 
-async function loadStoreInfo() {
-  const defaults = { ...DEFAULT_STORE };
+async function loadCatalogFromJsonOrDb(orgId = "") {
+  const json = readJsonFile("data/catalog.json");
+  if (json && (Array.isArray(json.products) || Array.isArray(json.categories))) {
+    return buildCatalogResponse(json);
+  }
 
-  try {
-    const site = readJsonFile("data/site.json");
-    if (site && typeof site === "object") {
-      const title = cleanText(site.hero_title || site.name || "");
-      if (title) defaults.name = title;
+  const sb = supabaseAdmin();
+  if (!sb) return buildCatalogResponse({ products: [], categories: [] });
+
+  let resolvedOrgId = orgId;
+  if (!resolvedOrgId) {
+    try {
+      resolvedOrgId = await resolveScoreOrgId(sb);
+    } catch {
+      resolvedOrgId = "";
     }
-  } catch {}
+  }
 
-  return defaults;
+  const [settings, productsRes, categoriesRes] = await Promise.all([
+    typeof readPublicSiteSettings === "function"
+      ? readPublicSiteSettings(sb, resolvedOrgId).catch(() => null)
+      : Promise.resolve(null),
+    sb
+      .from("products")
+      .select(
+        "id, name, title, sku, description, price_cents, price_mxn, base_mxn, stock, category, section_id, sub_section, rank, img, image_url, images, sizes, active, is_active, deleted_at, metadata, created_at, updated_at"
+      )
+      .or(`org_id.eq.${resolvedOrgId},organization_id.eq.${resolvedOrgId}`)
+      .order("rank", { ascending: true })
+      .limit(100),
+    sb
+      .from("site_settings")
+      .select("*")
+      .or(`org_id.eq.${resolvedOrgId},organization_id.eq.${resolvedOrgId}`)
+      .maybeSingle(),
+  ]);
+
+  const products = Array.isArray(productsRes?.data) ? productsRes.data : [];
+  const categories = Array.isArray(categoriesRes?.data) ? categoriesRes.data : [];
+
+  return buildCatalogResponse({
+    products,
+    categories,
+    org_id: resolvedOrgId,
+    ...settings,
+    store: settings || {},
+  });
 }
 
-module.exports = async (req, res) => {
-  const origin = req.headers.origin || req.headers.Origin || "*";
+function normalizeReply(text) {
+  return String(text || "")
+    .replace(/\[ACTION:[A-Z_]+(?::[^\]]+)?\]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, MAX_REPLY_LEN);
+}
 
-  try {
-    if (req.method === "OPTIONS") {
-      return json(res, 204, {}, origin);
-    }
+function extractActionMarkers(text) {
+  const raw = String(text || "");
+  const actions = [];
+  const regex = /\[ACTION:([A-Z_]+)(?::([^\]]+))?\]/g;
 
-    if (req.method !== "GET") {
-      return json(res, 405, { ok: false, error: "Method not allowed" }, origin);
-    }
+  for (const match of raw.matchAll(regex)) {
+    actions.push({
+      action: safeStr(match[1]).toUpperCase(),
+      value: safeStr(match[2]).trim(),
+    });
+  }
 
-    const rawCatalog = await loadCatalogSource();
-    const store = await loadStoreInfo();
+  return actions;
+}
 
-    const normalized = parsePayload({
-      ...rawCatalog,
-      store: {
-        ...(rawCatalog?.store && typeof rawCatalog.store === "object" ? rawCatalog.store : {}),
-        ...store,
+function normalizeGeminiError(err) {
+  const msg = String(err?.message || err || "");
+  if (/model.*not found|404/i.test(msg)) return "El modelo de IA configurado no está disponible.";
+  if (/api key|unauth|permission|denied|401|403/i.test(msg)) return "La IA no tiene permiso o llave válida.";
+  return "La IA no pudo completar la solicitud.";
+}
+
+function buildPublicPrompt({ store, stats, products, categories, context }) {
+  const contact = store?.contact || {};
+  const home = store?.home || {};
+  const socials = store?.socials || {};
+
+  const publicEmail = safeStr(contact.email || process.env.SUPPORT_EMAIL || "ventas.unicotextil@gmail.com");
+  const publicPhone = safeStr(contact.phone || process.env.SUPPORT_PHONE || "6642368701");
+  const publicWhatsApp = safeStr(
+    contact.whatsapp_display || process.env.SUPPORT_WHATSAPP_DISPLAY || "664 236 8701"
+  );
+  const supportHours = safeStr(home.support_hours || "");
+  const shippingNote = safeStr(home.shipping_note || "");
+  const returnsNote = safeStr(home.returns_note || "");
+  const promoText = safeStr(store?.promo_text || "");
+  const heroTitle = safeStr(store?.hero_title || store?.name || "SCORE STORE");
+  const maintenanceMode = !!store?.maintenance_mode;
+
+  const productsPreview = (Array.isArray(products) ? products : [])
+    .slice(0, 24)
+    .map((p) => {
+      const stock = safeStr(getStockLabel(p));
+      return `- ${getProductName(p)} | SKU:${getProductSku(p)} | ${money(getProductPriceCents(p))} | ${stock}`;
+    })
+    .join("\n");
+
+  const categoryPreview = (Array.isArray(categories) ? categories : [])
+    .slice(0, 12)
+    .map((c) => `- ${safeStr(c.name)} (${safeStr(c.uiId)})`)
+    .join("\n");
+
+  return `
+Eres el asistente público de Score Store.
+
+Objetivo:
+- Ayudar a clientes a comprar.
+- Resolver dudas sobre productos, tallas, envíos, pagos, promo y contacto.
+- Responder breve, claro y comercial.
+
+Reglas:
+- No inventes stock, precios ni tiempos exactos.
+- Si no sabes un dato, dilo directo.
+- Si el cliente pide ayuda humana, usa solo estos datos:
+  Correo: ${publicEmail}
+  WhatsApp: ${publicWhatsApp}
+  Teléfono: ${publicPhone}
+  Horario: ${supportHours || "No especificado"}
+- Si preguntan por envíos, usa la nota pública:
+  ${shippingNote || "No disponible"}
+- Si preguntan por devoluciones, usa la nota pública:
+  ${returnsNote || "No disponible"}
+- Si el modo mantenimiento está activo, menciónalo con prudencia.
+- Si ves intención clara de compra del producto actual, termina con:
+  [ACTION:ADD_TO_CART:${safeStr(context.currentSku || context.currentProduct || "")}]
+- Si el usuario quiere abrir carrito o pagar, termina con:
+  [ACTION:OPEN_CART]
+
+Contexto público:
+- Tienda: ${heroTitle}
+- Promo visible: ${promoText || "Sin promo activa"}
+- Mantenimiento: ${maintenanceMode ? "sí" : "no"}
+- Productos activos: ${stats?.activeProducts ?? "N/D"}
+- Productos con stock bajo: ${stats?.lowStockProducts ?? "N/D"}
+- Categorías visibles:
+${categoryPreview || "- N/D"}
+
+Productos visibles:
+${productsPreview || "- N/D"}
+
+Contexto del usuario:
+- Producto actual: ${safeStr(context.currentProduct || "Ninguno")}
+- SKU actual: ${safeStr(context.currentSku || "Ninguno")}
+- Carrito: ${safeStr(context.cartItems || "Sin datos")}
+- Total visible: ${safeStr(context.cartTotal || "Sin datos")}
+- Modo envío: ${safeStr(context.shipMode || "Sin datos")}
+- Pedido foco: ${safeStr(context.orderId || "Ninguno")}
+- Sugerencia: ${safeStr(context.actionHint || "Ninguna")}
+- Sección/categoría: ${safeStr(context.category || "No definida")}
+
+Redes públicas:
+- Facebook: ${safeStr(socials.facebook || "")}
+- Instagram: ${safeStr(socials.instagram || "")}
+- YouTube: ${safeStr(socials.youtube || "")}
+`.trim();
+}
+
+async function callGemini({ apiKey, model, systemText, userText }) {
+  const url = `${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `${systemText}\n\nUSUARIO:\n${userText}`,
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.25,
+        topP: 0.9,
+        maxOutputTokens: 1024,
       },
-    });
+    }),
+  });
 
-    const q = cleanText(req.query?.q || req.query?.search || "");
-    const section = cleanText(req.query?.section || req.query?.sectionId || req.query?.uiSection || "");
-    const includeInactive = shouldIncludeInactive(req);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `Gemini HTTP ${res.status}`);
+  }
 
-    let products = Array.isArray(normalized.products) ? [...normalized.products] : [];
+  const text =
+    data?.candidates?.[0]?.content?.parts
+      ?.map((p) => safeStr(p?.text || ""))
+      .join("")
+      .trim() || "";
 
-    if (!includeInactive) {
-      products = products.filter((p) => p.active !== false && p.is_active !== false && !p.deleted_at);
-    }
+  return text || "";
+}
 
-    if (section) {
-      const target = section.toUpperCase();
-      products = products.filter((p) => {
-        const candidates = [
-          cleanText(p.sectionId).toUpperCase(),
-          cleanText(p.section_id).toUpperCase(),
-          cleanText(p.uiSection).toUpperCase(),
-          cleanText(p.category).toUpperCase(),
-        ];
-        return candidates.includes(target);
-      });
-    }
+function fallbackReply(message, store, contact) {
+  const m = normalizeLower(message);
+  const email = safeStr(contact?.email || process.env.SUPPORT_EMAIL || "ventas.unicotextil@gmail.com");
+  const whatsapp = safeStr(
+    contact?.whatsapp_display || process.env.SUPPORT_WHATSAPP_DISPLAY || "664 236 8701"
+  );
+  const phone = safeStr(contact?.phone || process.env.SUPPORT_PHONE || "6642368701");
+  const shippingNote = safeStr(store?.home?.shipping_note || "");
+  const returnsNote = safeStr(store?.home?.returns_note || "");
+  const promoText = safeStr(store?.promo_text || "");
 
-    if (q) {
-      const needle = q.toLowerCase();
-      products = products.filter((p) => {
-        const hay = [
-          p.name,
-          p.title,
-          p.description,
-          p.sku,
-          p.collection,
-          p.sub_section,
-          p.category,
-          p.sectionId,
-          p.section_id,
-        ]
-          .map((v) => cleanText(v))
-          .join(" ")
-          .toLowerCase();
+  if (m.includes("envío") || m.includes("envio")) {
+    return `Puedo ayudarte con envíos. ${shippingNote || "Se calculan según destino y método disponible."} Soporte: ${whatsapp} · ${email}`;
+  }
 
-        return hay.includes(needle);
-      });
-    }
+  if (m.includes("promo") || m.includes("cupón") || m.includes("cupon") || m.includes("descuento")) {
+    return promoText
+      ? `Promo visible: ${promoText}`
+      : `No veo una promoción activa en este momento. Puedo ayudarte a revisar el carrito.`;
+  }
 
-    products.sort((a, b) => {
-      const ra = Number.isFinite(Number(a.rank)) ? Number(a.rank) : 999;
-      const rb = Number.isFinite(Number(b.rank)) ? Number(b.rank) : 999;
-      if (ra !== rb) return ra - rb;
-      return cleanText(a.name).localeCompare(cleanText(b.name), "es");
-    });
+  if (m.includes("talla") || m.includes("medida") || m.includes("size")) {
+    return `Las tallas dependen del producto. Si me dices la prenda te ayudo a elegir.`;
+  }
 
-    const sections = attachCounts(
-      Array.isArray(normalized.sections) ? normalized.sections : [],
-      products
-    );
+  if (m.includes("devol") || m.includes("cambio") || m.includes("return")) {
+    return returnsNote
+      ? returnsNote
+      : `Los cambios y devoluciones dependen del caso. Soporte: ${phone} · ${email}`;
+  }
 
-    return json(
-      res,
+  return `Estoy listo para ayudarte con catálogo, tallas, envío y checkout. Si necesitas soporte humano: ${whatsapp} · ${email}`;
+}
+
+async function maybeNotifyTelegram(message) {
+  if (typeof sendTelegram !== "function") return;
+
+  try {
+    await sendTelegram(message);
+  } catch {}
+}
+
+async function handleCatalog(req) {
+  const origin = getOrigin(req);
+  const rl = rateLimit(req);
+
+  if (!rl.ok) {
+    return jsonResponse(429, { ok: false, error: "rate_limited" }, origin);
+  }
+
+  const body = parseBody(req);
+  const mode = parseMode(req, body);
+
+  if (mode !== "assistant") {
+    const orgId = parseOrgId(req, body);
+    const catalog = await loadCatalogFromJsonOrDb(orgId);
+
+    return jsonResponse(
       200,
       {
         ok: true,
-        store: normalized.store,
-        sections,
-        categories: sections,
-        products,
-        items: products,
-        total: products.length,
-        query: q || "",
-        section: section || "",
+        mode: "catalog",
+        ...catalog,
       },
       origin
     );
-  } catch (error) {
-    return json(
-      res,
-      500,
-      {
-        ok: false,
-        error: String(error?.message || error || "No se pudo cargar el catálogo"),
+  }
+
+  const message = parseMessage(body);
+  if (!message) {
+    return jsonResponse(400, { ok: false, error: "Se requiere un mensaje válido." }, origin);
+  }
+
+  const orgId = parseOrgId(req, body);
+  const context = parseContext(body);
+  const catalog = await loadCatalogFromJsonOrDb(orgId);
+
+  let resolvedOrgId = orgId;
+  if (!resolvedOrgId && catalog?.store?.org_id) {
+    resolvedOrgId = catalog.store.org_id;
+  }
+
+  if (!resolvedOrgId) {
+    const sb = supabaseAdmin();
+    if (sb) {
+      try {
+        resolvedOrgId = await resolveScoreOrgId(sb);
+      } catch {
+        resolvedOrgId = "";
+      }
+    }
+  }
+
+  const systemText = buildPublicPrompt({
+    store: catalog.store,
+    stats: catalog.stats,
+    products: catalog.products,
+    categories: catalog.categories,
+    context,
+  });
+
+  const preferredModel = safeStr(process.env.GEMINI_MODEL || GEMINI_MODEL).trim();
+  const fallbackModel = safeStr(process.env.GEMINI_FALLBACK_MODEL || GEMINI_FALLBACK_MODEL).trim();
+
+  let replyText = "";
+  let usedModel = preferredModel || "fallback";
+
+  if (GEMINI_API_KEY) {
+    try {
+      replyText = await callGemini({
+        apiKey: GEMINI_API_KEY,
+        model: preferredModel,
+        systemText,
+        userText: message,
+      });
+    } catch (e) {
+      const errMsg = String(e?.message || e || "");
+      const looksLikeModelIssue = /model.*not found|404/i.test(errMsg);
+
+      if (looksLikeModelIssue && fallbackModel && fallbackModel !== preferredModel) {
+        usedModel = fallbackModel;
+        replyText = await callGemini({
+          apiKey: GEMINI_API_KEY,
+          model: fallbackModel,
+          systemText,
+          userText: message,
+        });
+      } else {
+        replyText = fallbackReply(message, catalog.store, catalog.store?.contact || {});
+        usedModel = "fallback";
+      }
+    }
+  } else {
+    replyText = fallbackReply(message, catalog.store, catalog.store?.contact || {});
+    usedModel = "fallback";
+  }
+
+  const rawReply = safeStr(replyText || fallbackReply(message, catalog.store, catalog.store?.contact || {}));
+  const reply = normalizeReply(rawReply);
+  const actions = extractActionMarkers(rawReply);
+
+  if (actions.length) {
+    await maybeNotifyTelegram(
+      [
+        "💬 <b>Score Store AI</b>",
+        `Org: ${resolvedOrgId || catalog.store?.org_id || "N/D"}`,
+        `Actions: ${actions.map((a) => `${a.action}${a.value ? `:${a.value}` : ""}`).join(", ")}`,
+      ].join("\n")
+    );
+  }
+
+  return jsonResponse(
+    200,
+    {
+      ok: true,
+      mode: "assistant",
+      org_id: resolvedOrgId || catalog.store?.org_id || "",
+      reply,
+      actions,
+      model: usedModel,
+      store: {
+        name: catalog.store?.name || "SCORE STORE",
+        hero_title: catalog.store?.hero_title || "SCORE STORE",
+        promo_active: !!catalog.store?.promo_active,
+        promo_text: safeStr(catalog.store?.promo_text || ""),
       },
-      origin
+    },
+    origin
+  );
+}
+
+module.exports = async (req, res) => {
+  try {
+    if (req.method === "OPTIONS") {
+      return send(res, handleOptions({ headers: req.headers }));
+    }
+
+    if (req.method !== "GET" && req.method !== "POST") {
+      return send(res, jsonResponse(405, { ok: false, error: "Method not allowed" }, getOrigin(req)));
+    }
+
+    const payload = await handleCatalog(req);
+    return send(res, payload);
+  } catch (err) {
+    return send(
+      res,
+      jsonResponse(
+        500,
+        {
+          ok: false,
+          error: err?.message || "No fue posible procesar el catálogo.",
+        },
+        getOrigin(req)
+      )
     );
   }
 };
