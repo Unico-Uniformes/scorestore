@@ -13,7 +13,7 @@ const {
   sendTelegram,
   normalizeQty,
   itemsQtyFromAny,
-} = require("./_shared");
+} = require("../lib/_shared");
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
@@ -443,7 +443,7 @@ Reglas:
   ${returnsNote || "No disponible"}
 - Si el modo mantenimiento está activo, menciónalo con prudencia.
 - Si ves intención clara de compra del producto actual, termina con:
-  [ACTION:ADD_TO_CART:${safeStr(context.currentSku || context.currentProduct || "")}]
+  [ACTION:ADD_TO_CART:${safeStr(context.currentSku || context.currentProduct || "") }]
 - Si el usuario quiere abrir carrito o pagar, termina con:
   [ACTION:OPEN_CART]
 
