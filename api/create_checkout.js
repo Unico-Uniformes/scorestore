@@ -10,25 +10,25 @@ const {
   getBaseUrl,
   readJsonFile,
   validateZip,
-  isUuid,
   safeStr,
   getEnviaQuote,
   getFallbackShipping,
   initStripe,
   makeCheckoutIdempotencyKey,
   resolveScoreOrgId,
-  readPublicSiteSettings,
   sendTelegram,
   SUPPORT_EMAIL,
   SUPPORT_WHATSAPP_DISPLAY,
 } = require("./_shared");
 
 const { rateLimit } = require("./_rate_limit");
-const { checkIdempotency, saveIdempotency } = require("./_idempotency");
+const { checkIdempotency, saveIdempotency } = require("../lib/idempotency");
 
 const DEFAULT_CURRENCY = "MXN";
 const MAX_ITEMS = 120;
 const MAX_QTY_PER_ITEM = 99;
+const DEFAULT_SUCCESS_PATH = "/success.html";
+const DEFAULT_CANCEL_PATH = "/cancel.html";
 
 function send(res, payload) {
   res.statusCode = payload.statusCode || 200;
@@ -43,7 +43,7 @@ function getOrigin(req) {
 }
 
 function getBody(req) {
-  const body = req.body;
+  const body = req?.body;
   if (!body) return {};
   if (typeof body === "object") return body;
 
@@ -106,324 +106,395 @@ function sanitizeItems(rawItems) {
 }
 
 function buildItemsSummary(items) {
-  return items
-    .map((it) => {
-      const size = it.size ? ` / ${it.size}` : "";
-      return `${it.qty}x ${it.title || it.sku}${size}`;
+  return (Array.isArray(items) ? items : [])
+    .map((item) => {
+      const qty = clampInt(item.qty, 1, MAX_QTY_PER_ITEM, 1);
+      const title = normalizeText(item.title || item.sku || "Producto");
+      const size = normalizeText(item.size || "");
+      return `${qty}x ${title}${size ? ` [${size}]` : ""}`;
     })
-    .join(" · ");
+    .join(" · ")
+    .slice(0, 500);
 }
 
-function computeSubtotalCents(items) {
-  return items.reduce((sum, it) => sum + clampInt(it.priceCents, 0, 100000000, 0) * clampInt(it.qty, 1, MAX_QTY_PER_ITEM, 1), 0);
-}
-
-function readPromoRules() {
+function readPromos() {
   const raw = readJsonFile("data/promos.json");
-  const rules = Array.isArray(raw?.rules) ? raw.rules : [];
-  return rules
-    .map((r) => ({
-      code: normalizeText(r?.code || "").toUpperCase(),
-      type: normalizeText(r?.type || "").toLowerCase(),
-      value: Number(r?.value || r?.value_mxn || 0),
-      active: r?.active !== false,
-      min_amount_mxn: Number(r?.min_amount_mxn || 0),
-      expires_at: r?.expires_at || null,
-      description: normalizeText(r?.description || ""),
-    }))
-    .filter((r) => r.code);
-}
+  if (!raw) return { store: {}, rules: [] };
 
-function isExpired(expiresAt) {
-  if (!expiresAt) return false;
-  const d = new Date(expiresAt);
-  return Number.isFinite(d.getTime()) ? d.getTime() < Date.now() : false;
-}
-
-function applyPromo(promoCode, subtotalCents, shippingCents) {
-  const code = normalizeText(promoCode).toUpperCase();
-  if (!code) {
-    return {
-      promo: null,
-      discount_cents: 0,
-      shipping_cents: shippingCents,
-      free_shipping: false,
-    };
-  }
-
-  const rules = readPromoRules();
-  const promo = rules.find((r) => r.code === code) || null;
-
-  if (!promo || !promo.active || isExpired(promo.expires_at)) {
-    return {
-      promo: null,
-      discount_cents: 0,
-      shipping_cents: shippingCents,
-      free_shipping: false,
-    };
-  }
-
-  const minSubtotal = moneyToCents(promo.min_amount_mxn || 0);
-  if (subtotalCents < minSubtotal) {
-    return {
-      promo: null,
-      discount_cents: 0,
-      shipping_cents: shippingCents,
-      free_shipping: false,
-    };
-  }
-
-  const type = promo.type;
-  if (type === "free_shipping" || type === "freeshipping") {
-    return {
-      promo,
-      discount_cents: 0,
-      shipping_cents: 0,
-      free_shipping: true,
-    };
-  }
-
-  if (type === "fixed" || type === "fixed_mxn" || type === "fixed_off") {
-    const discount = Math.min(subtotalCents, moneyToCents(promo.value));
-    return {
-      promo,
-      discount_cents: discount,
-      shipping_cents: shippingCents,
-      free_shipping: false,
-    };
-  }
-
-  if (type === "percent" || type === "percentage" || type === "percent_off") {
-    const rate = promo.value > 1 ? promo.value / 100 : promo.value;
-    const discount = Math.min(subtotalCents, Math.max(0, Math.round(subtotalCents * rate)));
-    return {
-      promo,
-      discount_cents: discount,
-      shipping_cents: shippingCents,
-      free_shipping: false,
-    };
+  if (Array.isArray(raw)) {
+    return { store: {}, rules: raw };
   }
 
   return {
-    promo: null,
-    discount_cents: 0,
-    shipping_cents: shippingCents,
-    free_shipping: false,
+    store: raw.store || raw.meta || {},
+    rules: Array.isArray(raw.rules)
+      ? raw.rules
+      : Array.isArray(raw.promos)
+        ? raw.promos
+        : [],
   };
 }
 
-function getShippingMode(country, quote, shippingAmountCents) {
-  const c = normalizeCountry(country);
-  if (quote?.provider === "pickup") return "pickup";
-  if (shippingAmountCents <= 0) return "pickup";
-
-  if (quote?.provider === "envia") {
-    if (c === "US") return "envia_us";
-    return "envia_mx";
-  }
-
-  return c === "US" ? "envia_us" : "envia_mx";
+function cleanCode(v) {
+  return String(v || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, "");
 }
 
-async function fetchProductPrices(sb, orgId, items) {
-  const skuList = uniq(items.map((i) => normalizeText(i.sku)).filter(Boolean));
-
-  if (!skuList.length) return items;
-
-  const { data, error } = await sb
-    .from("products")
-    .select("sku,name,title,price_cents,price_mxn,base_mxn,active,is_active,deleted_at")
-    .or(`org_id.eq.${orgId},organization_id.eq.${orgId}`)
-    .in("sku", skuList);
-
-  if (error) {
-    throw error;
+function computePromoVerdict(promo, subtotalCents, shippingCents) {
+  if (!promo) {
+    return {
+      valid: false,
+      promo: null,
+      discount_cents: 0,
+      free_shipping: false,
+    };
   }
 
-  const bySku = new Map(
-    (Array.isArray(data) ? data : []).map((p) => [normalizeText(p.sku), p])
+  const now = Date.now();
+  const expiresAt = promo.expires_at ? Date.parse(promo.expires_at) : NaN;
+  if (Number.isFinite(expiresAt) && expiresAt < now) {
+    return {
+      valid: false,
+      promo: null,
+      discount_cents: 0,
+      free_shipping: false,
+    };
+  }
+
+  const minAmountMxn = Number(promo.min_amount_mxn || promo.min_amount || 0);
+  const minAmountCents = Number.isFinite(minAmountMxn) ? Math.round(minAmountMxn * 100) : 0;
+  if (minAmountCents > 0 && subtotalCents < minAmountCents) {
+    return {
+      valid: false,
+      promo: null,
+      discount_cents: 0,
+      free_shipping: false,
+    };
+  }
+
+  const type = cleanCode(promo.type || promo.kind || "");
+  const value = Number(promo.value || promo.amount || promo.percent || 0);
+
+  let discountCents = 0;
+  let freeShipping = false;
+
+  if (type === "FREE_SHIPPING") {
+    freeShipping = true;
+    discountCents = 0;
+  } else if (type === "PERCENT" || type === "PERCENTAGE" || type === "PCT") {
+    const pct = Number.isFinite(value) ? value : 0;
+    discountCents = Math.max(0, Math.round((subtotalCents * pct) / 100));
+  } else if (type === "FIXED" || type === "AMOUNT" || type === "DISCOUNT") {
+    const fixed = Number.isFinite(value) ? value : 0;
+    discountCents = Math.max(0, Math.round(fixed * 100));
+  } else if (type === "SHIPPING") {
+    freeShipping = true;
+  }
+
+  discountCents = Math.min(Math.max(0, discountCents), subtotalCents);
+
+  return {
+    valid: true,
+    promo: {
+      code: cleanCode(promo.code),
+      type: promo.type || promo.kind || "fixed",
+      value: promo.value ?? 0,
+      description: promo.description || "",
+      min_amount_mxn: promo.min_amount_mxn ?? null,
+      expires_at: promo.expires_at ?? null,
+    },
+    discount_cents: discountCents,
+    free_shipping: freeShipping,
+    shipping_cents_override: freeShipping ? 0 : Math.max(0, shippingCents),
+  };
+}
+
+function resolveCustomer(body = {}) {
+  const name = normalizeText(
+    body.customer_name ||
+      body.name ||
+      body.full_name ||
+      body.checkout_name ||
+      ""
   );
 
-  return items.map((item) => {
-    const product = bySku.get(normalizeText(item.sku));
-    if (!product) return item;
+  const email = normalizeEmail(
+    body.customer_email ||
+      body.email ||
+      body.checkout_email ||
+      ""
+  );
 
-    const title = normalizeText(product.title || product.name || item.title || item.sku);
-    const priceCents =
-      Number.isFinite(Number(product.price_cents))
-        ? Math.round(Number(product.price_cents))
-        : Number.isFinite(Number(product.price_mxn))
-          ? Math.round(Number(product.price_mxn) * 100)
-          : Number.isFinite(Number(product.base_mxn))
-            ? Math.round(Number(product.base_mxn) * 100)
-            : item.priceCents;
+  const phone = normalizePhone(
+    body.customer_phone ||
+      body.phone ||
+      body.checkout_phone ||
+      ""
+  );
 
-    return {
-      ...item,
-      title,
-      priceCents: Math.max(0, priceCents),
-    };
-  });
+  return {
+    name: name || "Cliente SCORE",
+    email,
+    phone: phone || "0000000000",
+  };
+}
+
+function resolveShipping(body = {}) {
+  const shippingCountry = normalizeCountry(
+    body.shipping_country || body.country || "MX"
+  );
+
+  const shippingZip = normalizeText(
+    body.shipping_zip ||
+      body.postal_code ||
+      body.zip ||
+      body.postal ||
+      ""
+  );
+
+  const validatedZip = validateZip(shippingZip, shippingCountry);
+  if (!validatedZip) {
+    throw new Error("CP/ZIP inválido");
+  }
+
+  return {
+    shippingCountry,
+    shippingZip: validatedZip,
+  };
+}
+
+function resolveItems(body = {}) {
+  const raw = Array.isArray(body.items)
+    ? body.items
+    : Array.isArray(body.cart)
+      ? body.cart
+      : [];
+
+  const items = sanitizeItems(raw);
+
+  if (!items.length) {
+    throw new Error("El carrito está vacío");
+  }
+
+  if (items.length > MAX_ITEMS) {
+    throw new Error("Demasiados artículos en el carrito");
+  }
+
+  for (const item of items) {
+    if (!item.sku && !item.title) {
+      throw new Error("Hay artículos inválidos en el carrito");
+    }
+    if (item.qty < 1) {
+      throw new Error("Cantidad inválida en el carrito");
+    }
+    if (item.qty > MAX_QTY_PER_ITEM) {
+      throw new Error("Cantidad por artículo excedida");
+    }
+  }
+
+  return items;
+}
+
+function calcSubtotalCents(items) {
+  return items.reduce((sum, item) => {
+    const qty = clampInt(item.qty, 1, MAX_QTY_PER_ITEM, 1);
+    const unit = clampInt(item.priceCents, 0, 100000000, 0);
+    return sum + qty * unit;
+  }, 0);
+}
+
+function buildLineItems(items) {
+  return items.map((item) => ({
+    quantity: clampInt(item.qty, 1, MAX_QTY_PER_ITEM, 1),
+    price_data: {
+      currency: "mxn",
+      product_data: {
+        name: item.title || item.sku,
+        description: item.size ? `Talla: ${item.size}` : undefined,
+        metadata: {
+          sku: item.sku,
+          size: item.size || "",
+        },
+      },
+      unit_amount: clampInt(item.priceCents, 0, 100000000, 0),
+    },
+  }));
+}
+
+function buildMetadata({
+  orgId,
+  customer,
+  shippingCountry,
+  shippingZip,
+  shippingMode,
+  promoVerdict,
+  subtotalCents,
+  discountCents,
+  finalShippingCents,
+  totalCents,
+  items,
+}) {
+  return {
+    org_id: orgId,
+    organization_id: orgId,
+    customer_email: customer.email,
+    customer_phone: customer.phone,
+    shipping_country: shippingCountry,
+    shipping_zip: shippingZip,
+    shipping_mode: shippingMode,
+    promo_code: promoVerdict.promo?.code || "",
+    subtotal_cents: String(subtotalCents),
+    discount_cents: String(discountCents),
+    shipping_cents: String(finalShippingCents),
+    total_cents: String(totalCents),
+    items_summary: buildItemsSummary(items),
+    items_qty: String(itemsQtyFromAny(items)),
+  };
 }
 
 async function main(req, res) {
   const origin = getOrigin(req);
 
+  if (req.method === "OPTIONS") {
+    return send(res, handleOptions({ headers: req.headers || {} }));
+  }
+
+  if (req.method !== "POST") {
+    return send(
+      res,
+      jsonResponse(405, { ok: false, error: "Method not allowed" }, origin)
+    );
+  }
+
+  const rl = rateLimit(req);
+  if (!rl.ok) {
+    return send(
+      res,
+      jsonResponse(
+        429,
+        {
+          ok: false,
+          error: "rate_limited",
+          retry_after_ms: Math.max(0, rl.resetAt - Date.now()),
+        },
+        origin
+      )
+    );
+  }
+
+  const body = getBody(req);
+
   try {
-    if (req.method === "OPTIONS") {
-      return send(res, handleOptions({ headers: req.headers }));
+    const customer = resolveCustomer(body);
+    if (!customer.email) {
+      throw new Error("Correo del cliente requerido");
     }
 
-    if (req.method !== "POST") {
-      return send(
-        res,
-        jsonResponse(405, { ok: false, error: "Method not allowed" }, origin)
-      );
+    if (!/@/.test(customer.email)) {
+      throw new Error("Correo inválido");
     }
 
-    const rl = rateLimit(req);
-    if (!rl.ok) {
-      return send(
-        res,
-        jsonResponse(429, { ok: false, error: "rate_limited" }, origin)
-      );
-    }
+    const { shippingCountry, shippingZip } = resolveShipping(body);
+    const items = resolveItems(body);
 
-    const body = getBody(req);
-    const idempotencyKey = makeCheckoutIdempotencyKey
-      ? makeCheckoutIdempotencyKey(req, body)
-      : normalizeText(req.headers["idempotency-key"] || "");
+    const shippingMode = normalizeText(body.shipping_mode || body.shippingMode || "envia")
+      .toLowerCase() || "envia";
 
-    const idem = checkIdempotency(idempotencyKey);
-    if (!idem.ok && idem.cached) {
-      return send(res, idem.cached);
-    }
+    const itemsQty = itemsQtyFromAny(items);
+    const subtotalCents = calcSubtotalCents(items);
+    const promoCode = cleanCode(body.promo_code || body.promoCode || "");
 
     const sb = supabaseAdmin();
-    if (!sb) {
-      return send(
-        res,
-        jsonResponse(500, { ok: false, error: "Supabase not configured" }, origin)
-      );
+    const orgId = await resolveScoreOrgId(sb);
+
+    const promos = readPromos();
+    const promo =
+      promos.rules.find((r) => cleanCode(r.code) === promoCode) ||
+      null;
+
+    let shippingQuote = null;
+    let finalShippingCents = 0;
+
+    try {
+      shippingQuote = await getEnviaQuote({
+        zip: shippingZip,
+        country: shippingCountry,
+        items_qty: itemsQty,
+      });
+      finalShippingCents = clampInt(shippingQuote.amount_cents, 0, 100000000, 0);
+    } catch {
+      shippingQuote = getFallbackShipping(shippingCountry, itemsQty);
+      finalShippingCents = clampInt(shippingQuote.amount_cents, 0, 100000000, 0);
+    }
+
+    const promoVerdict = computePromoVerdict(promo, subtotalCents, finalShippingCents);
+    const discountCents = promoVerdict.discount_cents;
+    finalShippingCents = promoVerdict.free_shipping ? 0 : finalShippingCents;
+
+    const totalCents = Math.max(0, subtotalCents - discountCents + finalShippingCents);
+    if (totalCents <= 0) {
+      throw new Error("El total del checkout no es válido");
     }
 
     const stripe = initStripe();
     if (!stripe) {
-      return send(
-        res,
-        jsonResponse(500, { ok: false, error: "Stripe not configured" }, origin)
-      );
+      throw new Error("Stripe no está configurado");
     }
 
-    const orgId = await resolveScoreOrgId(sb).catch(() => null);
-    if (!orgId) {
-      return send(
-        res,
-        jsonResponse(500, { ok: false, error: "No se pudo resolver la organización" }, origin)
-      );
+    const baseUrl = getBaseUrl(req);
+    const successUrl = `${baseUrl}${DEFAULT_SUCCESS_PATH}?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}${DEFAULT_CANCEL_PATH}`;
+
+    const idempotencyKey =
+      makeCheckoutIdempotencyKey(req, body) ||
+      safeStr(req?.headers?.["idempotency-key"] || req?.headers?.["Idempotency-Key"] || "");
+
+    const idemCheck = checkIdempotency(idempotencyKey);
+    if (!idemCheck.ok && idemCheck.cached) {
+      return send(res, idemCheck.cached);
     }
 
-    const customer = {
-      name: normalizeText(body.customer_name || body.name || ""),
-      email: normalizeEmail(body.customer_email || body.email || ""),
-      phone: normalizePhone(body.customer_phone || body.phone || ""),
-    };
+    const lineItems = buildLineItems(items);
 
-    const shippingCountry = normalizeCountry(body.shipping_country || body.country || "MX");
-    const shippingZip = normalizeText(body.shipping_zip || body.postal_code || body.zip || "");
+    const metadata = buildMetadata({
+      orgId,
+      customer,
+      shippingCountry,
+      shippingZip,
+      shippingMode,
+      promoVerdict,
+      subtotalCents,
+      discountCents,
+      finalShippingCents,
+      totalCents,
+      items,
+    });
 
-    let items = sanitizeItems(body.items || body.cart || []);
-    if (!items.length) {
-      return send(
-        res,
-        jsonResponse(400, { ok: false, error: "El carrito está vacío." }, origin)
-      );
-    }
-
-    items = await fetchProductPrices(sb, orgId, items);
-
-    const subtotalCents = computeSubtotalCents(items);
-    const itemsQty = itemsQtyFromAny(items);
-
-    const promoCode = normalizeText(body.promo_code || body.promoCode || "").toUpperCase();
-    const baseShippingCents = clampInt(body.shipping_amount_cents || body.shippingCents || 0, 0, 100000000, 0);
-
-    let shippingQuote = null;
-    let shippingCents = baseShippingCents;
-
-    if (shippingZip) {
-      const validatedZip = validateZip(shippingZip, shippingCountry);
-      if (!validatedZip) {
-        return send(
-          res,
-          jsonResponse(400, { ok: false, error: "Código postal inválido." }, origin)
-        );
-      }
-
-      try {
-        shippingQuote = await getEnviaQuote({
-          zip: validatedZip,
-          country: shippingCountry,
-          items_qty: itemsQty,
-        });
-        shippingCents = clampInt(shippingQuote?.amount_cents || shippingQuote?.amountCents || 0, 0, 100000000, baseShippingCents);
-      } catch {
-        const fb = getFallbackShipping(shippingCountry, itemsQty);
-        shippingQuote = fb;
-        shippingCents = clampInt(fb?.amount_cents || 0, 0, 100000000, baseShippingCents);
-      }
-    }
-
-    const promoVerdict = applyPromo(promoCode, subtotalCents, shippingCents);
-    const discountCents = clampInt(promoVerdict.discount_cents || 0, 0, subtotalCents, 0);
-    const finalShippingCents = promoVerdict.free_shipping ? 0 : shippingCents;
-    const totalCents = Math.max(0, subtotalCents - discountCents + finalShippingCents);
-
-    if (totalCents <= 0) {
-      return send(
-        res,
-        jsonResponse(400, { ok: false, error: "El total debe ser mayor a cero." }, origin)
-      );
-    }
-
-    const baseUrl = getBaseUrl({ headers: req.headers });
-    const successUrl = `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${baseUrl}/cancel.html`;
-
-    const shippingMode = getShippingMode(shippingCountry, shippingQuote, finalShippingCents);
-
-    const lineItems = items.map((item) => ({
-      quantity: clampInt(item.qty, 1, MAX_QTY_PER_ITEM, 1),
-      price_data: {
-        currency: "mxn",
-        product_data: {
-          name: item.title || item.sku,
-          description: item.size ? `Talla: ${item.size}` : undefined,
-          metadata: {
-            sku: item.sku,
-            size: item.size || "",
-          },
-        },
-        unit_amount: clampInt(item.priceCents, 0, 100000000, 0),
-      },
-    }));
-
-    const metadata = {
-      org_id: orgId,
-      organization_id: orgId,
-      customer_email: customer.email,
-      customer_phone: customer.phone,
-      shipping_country: shippingCountry,
-      shipping_zip: shippingZip,
-      shipping_mode: shippingMode,
-      promo_code: promoVerdict.promo?.code || promoCode || "",
-      subtotal_cents: String(subtotalCents),
-      discount_cents: String(discountCents),
-      shipping_cents: String(finalShippingCents),
-      total_cents: String(totalCents),
-      items_summary: buildItemsSummary(items),
-      items_qty: String(itemsQty),
-    };
+    const shippingOptions =
+      finalShippingCents > 0
+        ? [
+            {
+              shipping_rate_data: {
+                type: "fixed_amount",
+                fixed_amount: {
+                  amount: finalShippingCents,
+                  currency: "mxn",
+                },
+                display_name:
+                  shippingQuote?.label ||
+                  (shippingCountry === "US" ? "Envío USA" : "Envío MX"),
+                delivery_estimate: shippingQuote?.eta
+                  ? {
+                      minimum: { unit: "business_day", value: 2 },
+                      maximum: { unit: "business_day", value: 7 },
+                    }
+                  : undefined,
+              },
+            },
+          ]
+        : [];
 
     const session = await stripe.checkout.sessions.create(
       {
@@ -440,28 +511,7 @@ async function main(req, res) {
         phone_number_collection: { enabled: true },
         line_items: lineItems,
         metadata,
-        shipping_options: finalShippingCents > 0
-          ? [
-              {
-                shipping_rate_data: {
-                  type: "fixed_amount",
-                  fixed_amount: {
-                    amount: finalShippingCents,
-                    currency: "mxn",
-                  },
-                  display_name:
-                    shippingQuote?.label ||
-                    (shippingCountry === "US" ? "Envío USA" : "Envío MX"),
-                  delivery_estimate: shippingQuote?.eta
-                    ? {
-                        minimum: { unit: "business_day", value: 2 },
-                        maximum: { unit: "business_day", value: 7 },
-                      }
-                    : undefined,
-                },
-              },
-            ]
-          : [],
+        shipping_options: shippingOptions,
         payment_intent_data: {
           metadata,
         },
@@ -496,7 +546,7 @@ async function main(req, res) {
       currency: DEFAULT_CURRENCY,
       promo_code: promoVerdict.promo?.code || "",
       items_summary: metadata.items_summary,
-      items: items,
+      items,
       items_json: items,
       customer_details: {
         name: customer.name,
@@ -514,13 +564,15 @@ async function main(req, res) {
       updated_at: new Date().toISOString(),
     };
 
-    try {
-      const { error } = await sb.from("orders").upsert(row, {
-        onConflict: "checkout_session_id",
-      });
-      if (error) throw error;
-    } catch (e) {
-      console.error("[create_checkout] order upsert failed:", e?.message || e);
+    if (sb) {
+      try {
+        const { error } = await sb.from("orders").upsert(row, {
+          onConflict: "checkout_session_id",
+        });
+        if (error) throw error;
+      } catch (e) {
+        console.error("[create_checkout] order upsert failed:", e?.message || e);
+      }
     }
 
     if (typeof sendTelegram === "function") {
@@ -544,6 +596,7 @@ async function main(req, res) {
         ok: true,
         url: session.url,
         checkout_url: session.url,
+        session_url: session.url,
         session_id: session.id,
         id: session.id,
         payment_status: session.payment_status || "unpaid",
