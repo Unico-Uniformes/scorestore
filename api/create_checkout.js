@@ -10,25 +10,25 @@ const {
   getBaseUrl,
   readJsonFile,
   validateZip,
+  isUuid,
   safeStr,
   getEnviaQuote,
   getFallbackShipping,
   initStripe,
   makeCheckoutIdempotencyKey,
   resolveScoreOrgId,
+  readPublicSiteSettings,
   sendTelegram,
   SUPPORT_EMAIL,
   SUPPORT_WHATSAPP_DISPLAY,
-} = require("./_shared");
+} = require("../lib/_shared");
 
-const { rateLimit } = require("./_rate_limit");
+const { rateLimit } = require("../lib/_rate_limit");
 const { checkIdempotency, saveIdempotency } = require("../idempotency");
 
 const DEFAULT_CURRENCY = "MXN";
 const MAX_ITEMS = 120;
 const MAX_QTY_PER_ITEM = 99;
-const DEFAULT_SUCCESS_PATH = "/success.html";
-const DEFAULT_CANCEL_PATH = "/cancel.html";
 
 function send(res, payload) {
   res.statusCode = payload.statusCode || 200;
@@ -43,7 +43,7 @@ function getOrigin(req) {
 }
 
 function getBody(req) {
-  const body = req?.body;
+  const body = req.body;
   if (!body) return {};
   if (typeof body === "object") return body;
 
@@ -444,8 +444,8 @@ async function main(req, res) {
     }
 
     const baseUrl = getBaseUrl(req);
-    const successUrl = `${baseUrl}${DEFAULT_SUCCESS_PATH}?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${baseUrl}${DEFAULT_CANCEL_PATH}`;
+    const successUrl = `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}/cancel.html`;
 
     const idempotencyKey =
       makeCheckoutIdempotencyKey(req, body) ||
@@ -564,13 +564,15 @@ async function main(req, res) {
       updated_at: new Date().toISOString(),
     };
 
-    try {
-      const { error } = await sb.from("orders").upsert(row, {
-        onConflict: "checkout_session_id",
-      });
-      if (error) throw error;
-    } catch (e) {
-      console.error("[create_checkout] order upsert failed:", e?.message || e);
+    if (sb) {
+      try {
+        const { error } = await sb.from("orders").upsert(row, {
+          onConflict: "checkout_session_id",
+        });
+        if (error) throw error;
+      } catch (e) {
+        console.error("[create_checkout] order upsert failed:", e?.message || e);
+      }
     }
 
     if (typeof sendTelegram === "function") {
@@ -594,6 +596,7 @@ async function main(req, res) {
         ok: true,
         url: session.url,
         checkout_url: session.url,
+        session_url: session.url,
         session_id: session.id,
         id: session.id,
         payment_status: session.payment_status || "unpaid",
