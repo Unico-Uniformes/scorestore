@@ -1,4 +1,4 @@
-// api/_checkout_status.js
+// api/checkout_status.js
 "use strict";
 
 const {
@@ -34,12 +34,24 @@ function getQuery(req) {
 
 function normalizeSessionId(req) {
   const q = getQuery(req);
-  return safeStr(q.session_id || q.sessionId || q.checkout_session_id || q.checkoutSessionId || "").trim();
+  return safeStr(
+    q.session_id ||
+      q.sessionId ||
+      q.checkout_session_id ||
+      q.checkoutSessionId ||
+      ""
+  ).trim();
 }
 
 function normalizePaymentIntentId(req) {
   const q = getQuery(req);
-  return safeStr(q.payment_intent || q.paymentIntent || q.payment_intent_id || q.paymentIntentId || "").trim();
+  return safeStr(
+    q.payment_intent ||
+      q.paymentIntent ||
+      q.payment_intent_id ||
+      q.paymentIntentId ||
+      ""
+  ).trim();
 }
 
 function normalizeShipMode(mode) {
@@ -168,7 +180,7 @@ function buildPayload(order, stripeSession, paymentIntent, charge) {
         ""
     );
 
-  const payload = {
+  return {
     ok: true,
     id: order?.id || sessionId || paymentIntent?.id || "",
     session_id: sessionId,
@@ -183,21 +195,19 @@ function buildPayload(order, stripeSession, paymentIntent, charge) {
     ),
     payment_status: paymentStatus,
     status,
-    customer_name:
-      safeStr(
-        order?.customer_name ||
-          customerDetails?.name ||
-          paymentIntent?.charges?.data?.[0]?.billing_details?.name ||
-          ""
-      ),
+    customer_name: safeStr(
+      order?.customer_name ||
+        customerDetails?.name ||
+        paymentIntent?.charges?.data?.[0]?.billing_details?.name ||
+        ""
+    ),
     customer_email: customerEmail,
-    customer_phone:
-      safeStr(
-        order?.customer_phone ||
-          customerDetails?.phone ||
-          paymentIntent?.shipping?.phone ||
-          ""
-      ),
+    customer_phone: safeStr(
+      order?.customer_phone ||
+        customerDetails?.phone ||
+        paymentIntent?.shipping?.phone ||
+        ""
+    ),
     shipping_mode: shippingMode,
     shipping_country: safeStr(
       order?.shipping_country ||
@@ -232,8 +242,6 @@ function buildPayload(order, stripeSession, paymentIntent, charge) {
     updated_at: order?.updated_at || null,
     created_at: order?.created_at || null,
   };
-
-  return payload;
 }
 
 async function fetchStripeSession(stripe, sessionId) {
@@ -256,79 +264,272 @@ async function fetchPaymentIntent(stripe, paymentIntentId) {
   return intent || null;
 }
 
-async function fetchCharge(stripe, chargeId) {
-  if (!stripe || !chargeId) return null;
+async function fetchStripeChargeFromIntent(stripe, paymentIntentId) {
+  if (!stripe || !paymentIntentId) return null;
+
+  const intent = await fetchPaymentIntent(stripe, paymentIntentId);
+  const chargeId =
+    intent?.latest_charge ||
+    intent?.charges?.data?.[0]?.id ||
+    null;
+
+  if (!chargeId) return null;
+
   const charge = await stripe.charges.retrieve(chargeId, {
     expand: ["payment_intent", "balance_transaction"],
   });
+
   return charge || null;
 }
 
-module.exports = async (req, res) => {
-  const origin = getOrigin(req);
+async function fetchOrderBySession(sb, orgId, sessionId) {
+  const sid = safeStr(sessionId || "").trim();
+  if (!sid) return null;
 
-  if (req.method === "OPTIONS") {
-    return send(res, handleOptions({ headers: req.headers }));
-  }
+  const { data, error } = await sb
+    .from("orders")
+    .select("*")
+    .or(`checkout_session_id.eq.${sid},stripe_session_id.eq.${sid}`)
+    .or(`org_id.eq.${orgId},organization_id.eq.${orgId}`)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (req.method !== "GET") {
-    return send(res, jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
-  }
+  if (error) throw error;
+  return data || null;
+}
+
+async function fetchOrderByPaymentIntent(sb, orgId, paymentIntentId) {
+  const pi = safeStr(paymentIntentId || "").trim();
+  if (!pi) return null;
+
+  const { data, error } = await sb
+    .from("orders")
+    .select("*")
+    .eq("stripe_payment_intent_id", pi)
+    .or(`org_id.eq.${orgId},organization_id.eq.${orgId}`)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data || null;
+}
+
+function buildStripePatch(order, stripeSession, paymentIntent) {
+  const shippingDetails = stripeSession?.shipping_details || null;
+  const customerDetails = stripeSession?.customer_details || null;
+  const paymentStatus = safeStr(
+    stripeSession?.payment_status ||
+      paymentIntent?.status ||
+      order?.payment_status ||
+      "unpaid"
+  ).toLowerCase();
+
+  const orderStatus = paymentStatus === "paid"
+    ? "paid"
+    : paymentStatus === "refunded"
+      ? "refunded"
+      : paymentStatus === "failed"
+        ? "failed"
+        : safeStr(stripeSession?.status || order?.status || "open").toLowerCase();
+
+  const amountTotalCents =
+    Number(stripeSession?.amount_total || paymentIntent?.amount || order?.amount_total_cents || 0) || 0;
+
+  return {
+    stripe_session_id: safeStr(stripeSession?.id || order?.stripe_session_id || order?.checkout_session_id || ""),
+    checkout_session_id: safeStr(stripeSession?.id || order?.checkout_session_id || order?.stripe_session_id || ""),
+    stripe_payment_intent_id: safeStr(
+      paymentIntent?.id ||
+        stripeSession?.payment_intent?.id ||
+        stripeSession?.payment_intent ||
+        order?.stripe_payment_intent_id ||
+        ""
+    ),
+    status: orderStatus,
+    payment_status: paymentStatus,
+    paid_at: paymentStatus === "paid" ? new Date().toISOString() : order?.paid_at || null,
+    refunded_at: paymentStatus === "refunded" ? new Date().toISOString() : order?.refunded_at || null,
+    customer_email: safeStr(
+      order?.customer_email ||
+        stripeSession?.customer_email ||
+        paymentIntent?.receipt_email ||
+        customerDetails?.email ||
+        ""
+    ),
+    customer_name: safeStr(
+      order?.customer_name ||
+        customerDetails?.name ||
+        paymentIntent?.charges?.data?.[0]?.billing_details?.name ||
+        ""
+    ),
+    customer_phone: safeStr(
+      order?.customer_phone ||
+        customerDetails?.phone ||
+        paymentIntent?.shipping?.phone ||
+        ""
+    ),
+    shipping_mode: safeStr(order?.shipping_mode || shippingDetails?.mode || stripeSession?.metadata?.shipping_mode || ""),
+    shipping_country: safeStr(
+      order?.shipping_country ||
+        shippingDetails?.address?.country ||
+        stripeSession?.shipping_details?.address?.country ||
+        "MX"
+    ),
+    shipping_postal_code: safeStr(
+      order?.shipping_postal_code ||
+        shippingDetails?.address?.postal_code ||
+        stripeSession?.shipping_details?.address?.postal_code ||
+        ""
+    ),
+    amount_subtotal_cents: Number(order?.amount_subtotal_cents || stripeSession?.amount_subtotal || 0) || 0,
+    amount_discount_cents: Number(order?.amount_discount_cents || stripeSession?.total_details?.amount_discount || 0) || 0,
+    amount_shipping_cents: Number(order?.amount_shipping_cents || stripeSession?.shipping_cost?.amount_total || 0) || 0,
+    amount_total_cents: amountTotalCents,
+    amount_total_mxn: amountTotalCents / 100,
+    updated_at: new Date().toISOString(),
+    shipping_details: shippingDetails || order?.shipping_details || null,
+    customer_details: customerDetails || order?.customer_details || null,
+    metadata: stripeSession?.metadata || paymentIntent?.metadata || order?.metadata || {},
+    items_summary: safeStr(order?.items_summary || stripeSession?.metadata?.items_summary || ""),
+  };
+}
+
+async function maybeSyncOrderFromStripe(sb, order, stripeSession, paymentIntent) {
+  if (!order?.id) return null;
+
+  const patch = buildStripePatch(order, stripeSession, paymentIntent);
 
   try {
-    const sb = supabaseAdmin();
-    if (!sb) {
-      return send(res, jsonResponse(500, { ok: false, error: "supabase_not_configured" }, origin));
+    const { error } = await sb
+      .from("orders")
+      .update(patch)
+      .or(`org_id.eq.${order.org_id || order.organization_id},organization_id.eq.${order.org_id || order.organization_id}`)
+      .eq("id", order.id);
+
+    if (error) throw error;
+  } catch (e) {
+    console.error("[checkout_status] order sync failed:", e?.message || e);
+  }
+
+  return patch;
+}
+
+async function main(req, res) {
+  const origin = getOrigin(req);
+
+  try {
+    if (req.method === "OPTIONS") {
+      return send(res, handleOptions({ headers: req.headers }));
+    }
+
+    if (req.method !== "GET" && req.method !== "POST") {
+      return send(
+        res,
+        jsonResponse(405, { ok: false, error: "Method not allowed" }, origin)
+      );
     }
 
     const sessionId = normalizeSessionId(req);
     const paymentIntentId = normalizePaymentIntentId(req);
-    const stripe = initStripe();
+
+    if (!sessionId && !paymentIntentId) {
+      return send(
+        res,
+        jsonResponse(
+          400,
+          { ok: false, error: "Falta session_id o payment_intent." },
+          origin
+        )
+      );
+    }
+
+    const sb = supabaseAdmin();
+    if (!sb) {
+      return send(
+        res,
+        jsonResponse(500, { ok: false, error: "Supabase not configured" }, origin)
+      );
+    }
+
+    const stripe = initStripe ? initStripe() : null;
+    const orgId =
+      (await resolveScoreOrgId?.(sb).catch(() => null)) || DEFAULT_SCORE_ORG_ID;
 
     let stripeSession = null;
     let paymentIntent = null;
     let charge = null;
 
-    if (stripe && sessionId) {
+    if (sessionId) {
       try {
         stripeSession = await fetchStripeSession(stripe, sessionId);
-      } catch {}
-
-      if (!stripeSession && paymentIntentId) {
-        try {
-          paymentIntent = await fetchPaymentIntent(stripe, paymentIntentId);
-        } catch {}
+      } catch (e) {
+        console.error("[checkout_status] stripe session error:", e?.message || e);
       }
     }
 
-    const { data: order } = await sb
-      .from("orders")
-      .select("*")
-      .or(
-        sessionId
-          ? `checkout_session_id.eq.${sessionId},stripe_session_id.eq.${sessionId}`
-          : paymentIntentId
-            ? `stripe_payment_intent_id.eq.${paymentIntentId}`
-            : "id.neq.null"
-      )
-      .limit(1)
-      .maybeSingle();
+    if (!stripeSession && paymentIntentId) {
+      try {
+        paymentIntent = await fetchPaymentIntent(stripe, paymentIntentId);
+        charge = await fetchStripeChargeFromIntent(stripe, paymentIntentId);
+      } catch (e) {
+        console.error("[checkout_status] payment intent error:", e?.message || e);
+      }
+    }
 
-    const data = buildPayload(order || {}, stripeSession, paymentIntent, charge);
+    if (!stripeSession && !paymentIntent) {
+      return send(
+        res,
+        jsonResponse(
+          404,
+          { ok: false, error: "No se encontró la sesión en Stripe." },
+          origin
+        )
+      );
+    }
 
+    const order =
+      (stripeSession &&
+        (await fetchOrderBySession(sb, orgId, stripeSession.id).catch(() => null))) ||
+      (paymentIntentId &&
+        (await fetchOrderByPaymentIntent(sb, orgId, paymentIntentId).catch(() => null))) ||
+      null;
+
+    if (order && stripeSession && !paymentIntent) {
+      try {
+        const pi = stripeSession.payment_intent;
+        const piId = typeof pi === "string" ? pi : pi?.id;
+        if (piId) {
+          paymentIntent = await fetchPaymentIntent(stripe, piId).catch(() => null);
+          charge = paymentIntent
+            ? await fetchStripeChargeFromIntent(stripe, piId).catch(() => null)
+            : null;
+        }
+      } catch {}
+    }
+
+    const payload = buildPayload(order, stripeSession, paymentIntent, charge);
+
+    if (order?.id) {
+      await maybeSyncOrderFromStripe(sb, order, stripeSession, paymentIntent);
+    }
+
+    return send(res, jsonResponse(200, payload, origin));
+  } catch (err) {
     return send(
       res,
       jsonResponse(
-        200,
+        500,
         {
-          ok: true,
-          data,
+          ok: false,
+          error: err?.message || "No fue posible verificar el estado del checkout.",
         },
         origin
       )
     );
-  } catch (error) {
-    console.error("[checkout_status] error:", error?.message || error);
-    return send(res, jsonResponse(500, { ok: false, error: "checkout_status_failed" }, origin));
   }
-};
+}
+
+module.exports = main;
+module.exports.default = main;
