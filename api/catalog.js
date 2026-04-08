@@ -7,6 +7,7 @@ const {
   rateLimit,
   supabaseAdmin,
   safeStr,
+  safeJsonParse,
   readJsonFile,
   resolveScoreOrgId,
   readPublicSiteSettings,
@@ -43,6 +44,17 @@ function getOrigin(req) {
 function safeNum(v, d = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : d;
+}
+
+function money(cents) {
+  const value = Number(cents);
+  if (!Number.isFinite(value)) return "$0.00";
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value / 100);
 }
 
 function clampText(v, max = MAX_MESSAGE_LEN) {
@@ -443,7 +455,7 @@ Reglas:
   ${returnsNote || "No disponible"}
 - Si el modo mantenimiento está activo, menciónalo con prudencia.
 - Si ves intención clara de compra del producto actual, termina con:
-  [ACTION:ADD_TO_CART:${safeStr(context.currentSku || context.currentProduct || "") }]
+  [ACTION:ADD_TO_CART:${safeStr(context.currentSku || context.currentProduct || "")}]
 - Si el usuario quiere abrir carrito o pagar, termina con:
   [ACTION:OPEN_CART]
 
