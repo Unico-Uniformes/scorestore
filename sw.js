@@ -93,7 +93,6 @@ async function staleWhileRevalidate(req, cacheName, event) {
 
 self.addEventListener("install", (event) => {
   event.waitUntil(safePrecache());
-  // No forzar skipWaiting para evitar cambios bruscos entre versiones.
 });
 
 self.addEventListener("activate", (event) => {
@@ -122,7 +121,6 @@ self.addEventListener("fetch", (event) => {
   if (req.mode === "navigate") return;
   if (shouldNeverCache(req.url)) return;
 
-  // Next chunks (hashed) => cache-first
   if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith(cacheFirst(req, STATIC_CACHE));
     return;
