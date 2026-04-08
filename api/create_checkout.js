@@ -24,7 +24,7 @@ const {
 } = require("../lib/_shared");
 
 const { rateLimit } = require("../lib/_rate_limit");
-const { checkIdempotency, saveIdempotency } = require("../idempotency");
+const { checkIdempotency, saveIdempotency } = require("../lib/idempotency");
 
 const DEFAULT_CURRENCY = "MXN";
 const MAX_ITEMS = 120;
