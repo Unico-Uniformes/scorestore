@@ -21,10 +21,12 @@ function walkJsFiles(dir, base = dir) {
 
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
+
     if (entry.isDirectory()) {
       out.push(...walkJsFiles(full, base));
       continue;
     }
+
     if (entry.isFile() && entry.name.endsWith(".js")) {
       out.push(path.relative(base, full).replaceAll(path.sep, "/"));
     }
