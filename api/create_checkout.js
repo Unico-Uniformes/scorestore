@@ -29,6 +29,8 @@ const { checkIdempotency, saveIdempotency } = require("../idempotency");
 const DEFAULT_CURRENCY = "MXN";
 const MAX_ITEMS = 120;
 const MAX_QTY_PER_ITEM = 99;
+const DEFAULT_SUCCESS_PATH = "/success.html";
+const DEFAULT_CANCEL_PATH = "/cancel.html";
 
 function send(res, payload) {
   res.statusCode = payload.statusCode || 200;
@@ -43,7 +45,7 @@ function getOrigin(req) {
 }
 
 function getBody(req) {
-  const body = req.body;
+  const body = req?.body;
   if (!body) return {};
   if (typeof body === "object") return body;
 
@@ -444,8 +446,8 @@ async function main(req, res) {
     }
 
     const baseUrl = getBaseUrl(req);
-    const successUrl = `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${baseUrl}/cancel.html`;
+    const successUrl = `${baseUrl}${DEFAULT_SUCCESS_PATH}?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}${DEFAULT_CANCEL_PATH}`;
 
     const idempotencyKey =
       makeCheckoutIdempotencyKey(req, body) ||
