@@ -9,7 +9,7 @@ const SUPABASE_JWT_SECRET =
   "";
 
 function getToken(req) {
-  const h = req?.headers || {};
+  const h = req.headers || {};
   const auth = h.authorization || h.Authorization || "";
   if (!auth.startsWith("Bearer ")) return "";
   return auth.replace("Bearer ", "").trim();
