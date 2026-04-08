@@ -109,10 +109,6 @@ function buildOrderUpdate({
   const now = new Date().toISOString();
   const tracking = normalizeTracking(trackingNumber);
 
-  const cost = Number.isFinite(Number(enviaCostMaybe))
-    ? Math.max(0, Math.round(Number(enviaCostMaybe)))
-    : null;
-
   const update = {
     updated_at: now,
     org_id: orgId,
@@ -123,7 +119,9 @@ function buildOrderUpdate({
     shipping_carrier: normalizeText(carrier),
     tracking_number: tracking || null,
     carrier: normalizeText(carrier) || null,
-    envia_cost_cents: cost, // ✅ FIX: eliminado campo con acento
+    envia_cost_cents: Number.isFinite(Number(enviaCostMaybe))
+      ? Math.max(0, Math.round(Number(enviaCostMaybe)))
+      : null,
   };
 
   if (shipmentBucket === "delivered") {
@@ -174,52 +172,106 @@ function getQueryCandidates(payload = {}) {
   };
 }
 
-async function findOrderByCandidates(sb, { stripeSessionId, trackingNumber, orderId }) {
-  const candidates = [];
+for (const query of candidates) {
+  if (!query) continue;
 
-  if (orderId) {
-    candidates.push(
-      sb.from("orders").select("*").eq("id", orderId).limit(1).maybeSingle()
-    );
+  const { data: order, error: orderErr } = await query;
+  if (orderErr || !order?.id) {
+    continue;
   }
 
-  if (stripeSessionId) {
-    candidates.push(
-      sb
-        .from("orders")
-        .select("*")
-        .or(`checkout_session_id.eq.${stripeSessionId},stripe_session_id.eq.${stripeSessionId}`)
-        .limit(1)
-        .maybeSingle()
-    );
-  }
+  return order;
+}
 
-  if (trackingNumber) {
-    candidates.push(
-      sb
-        .from("orders")
-        .select("*")
-        .or(`tracking_number.eq.${trackingNumber},envia_tracking_number.eq.${trackingNumber}`)
-        .limit(1)
-        .maybeSingle()
-    );
-  }
-
-  for (const query of candidates) {
-    if (!query) continue;
-
-    const { data: order, error: orderErr } = await query;
-    if (orderErr || !order?.id) continue;
-
-    return order;
-  }
-
-  return null;
+return null;
 }
 
 async function updateOrder(sb, orderId, update) {
-  const { error } = await sb.from("orders").update(update).eq("id", orderId);
+  const { error } = await sb
+    .from("orders")
+    .update(update)
+    .eq("id", orderId);
+
   if (error) throw error;
+}
+
+async function upsertLabel(
+  sb,
+  payload,
+  order,
+  { orgId, stripeSessionId },
+  rawStatus,
+  shipmentBucket,
+  carrier,
+  trackingNumber,
+  enviaCostMaybe
+) {
+  const now = new Date().toISOString();
+
+  await sb.from("shipping_labels").upsert(
+    {
+      id: payload?.id || crypto.randomUUID(),
+      org_id: orgId,
+      organization_id: orgId,
+      order_id: order.id,
+      stripe_session_id:
+        stripeSessionId ||
+        order.checkout_session_id ||
+        order.stripe_session_id ||
+        null,
+      provider: "envia",
+      status_raw: rawStatus || null,
+      status_bucket: shipmentBucket || null,
+      carrier: carrier || null,
+      tracking_number: trackingNumber || null,
+      envia_cost_cents: Number.isFinite(Number(enviaCostMaybe))
+        ? Math.max(0, Math.round(Number(enviaCostMaybe)))
+        : null,
+      raw: payload,
+      created_at: now,
+      updated_at: now,
+    },
+    { onConflict: "order_id" }
+  );
+}
+
+async function insertWebhookLog(
+  sb,
+  payload,
+  order,
+  { orgId, stripeSessionId },
+  rawStatus,
+  carrier,
+  trackingNumber
+) {
+  const now = new Date().toISOString();
+
+  await sb.from("webhook_logs").insert({
+    id: payload?.id || crypto.randomUUID(),
+    org_id: orgId,
+    organization_id: orgId,
+    source: "envia",
+    provider: "envia",
+    order_id: order.id,
+    stripe_session_id:
+      stripeSessionId ||
+      order.checkout_session_id ||
+      order.stripe_session_id ||
+      null,
+    status_raw: rawStatus || null,
+    carrier: carrier || null,
+    tracking_number: trackingNumber || null,
+    raw: payload,
+    created_at: now,
+    updated_at: now,
+  });
+}
+
+async function maybeNotifyTelegram(message) {
+  if (typeof sendTelegram !== "function") return;
+  try {
+    await sendTelegram(message);
+  } catch {}
 }
 
 async function verifyWebhookSignature(rawBody, signature) {
@@ -243,18 +295,30 @@ module.exports = async (req, res) => {
     }
 
     if (req.method !== "POST") {
-      return send(res, jsonResponse(405, { ok: false, error: "Method not allowed" }, origin));
+      return send(
+        res,
+        jsonResponse(405, { ok: false, error: "Method not allowed" }, origin)
+      );
     }
 
     const rawBody = await readRawBody(req);
     const signature = getSignature(req);
+    const signatureOk = await verifyWebhookSignature(rawBody, signature);
 
-    if (!(await verifyWebhookSignature(rawBody, signature))) {
-      return send(res, jsonResponse(400, { ok: false, error: "Invalid webhook signature" }, origin));
+    if (!signatureOk) {
+      return send(
+        res,
+        jsonResponse(
+          400,
+          { ok: false, error: "Invalid webhook signature" },
+          origin
+        )
+      );
     }
 
     const payload = parsePayload(req, rawBody);
-    const { stripeSessionId, trackingNumber, orderId } = getQueryCandidates(payload);
+    const { stripeSessionId, trackingNumber, orderId } =
+      getQueryCandidates(payload);
 
     const rawStatus = normalizeText(
       payload.status ||
@@ -269,9 +333,24 @@ module.exports = async (req, res) => {
     const shipmentBucket = (() => {
       const s = normalizeLower(rawStatus);
       if (!s) return "pending";
-      if (["delivered", "delivered_to_customer", "completed"].includes(s)) return "delivered";
-      if (["in_transit", "transit", "shipping", "shipped", "picked_up"].includes(s)) return "in_transit";
-      if (["issue", "problem", "failed", "exception", "returned"].includes(s)) return "issue";
+      if (
+        ["delivered", "delivered_to_customer", "completed"].includes(s)
+      )
+        return "delivered";
+      if (
+        [
+          "in_transit",
+          "transit",
+          "shipping",
+          "shipped",
+          "picked_up",
+        ].includes(s)
+      )
+        return "in_transit";
+      if (
+        ["issue", "problem", "failed", "exception", "returned"].includes(s)
+      )
+        return "issue";
       return "pending";
     })();
 
@@ -292,20 +371,36 @@ module.exports = async (req, res) => {
 
     const sb = supabaseAdmin();
     if (!sb) {
-      return send(res, jsonResponse(500, { ok: false, error: "Supabase not configured" }, origin));
+      return send(
+        res,
+        jsonResponse(
+          500,
+          { ok: false, error: "Supabase not configured" },
+          origin
+        )
+      );
     }
 
     const orgId = await resolveScoreOrgId(sb);
 
-    const order = await findOrderByCandidates(sb, {
+    const query = await findOrderByCandidates(sb, {
       stripeSessionId,
       trackingNumber,
       orderId,
     });
 
-    if (!order) {
-      return send(res, jsonResponse(200, { ok: true, ignored: true }, origin));
+    if (!query) {
+      return send(
+        res,
+        jsonResponse(
+          200,
+          { ok: true, ignored: true, reason: "no_match_keys" },
+          origin
+        )
+      );
     }
+
+    const order = query;
 
     const update = buildOrderUpdate({
       rawStatus,
@@ -316,7 +411,50 @@ module.exports = async (req, res) => {
       enviaCostMaybe,
     });
 
+    const currentStatus = normalizeLower(order?.status);
+
+    if (shipmentBucket === "delivered") {
+      update.status = "fulfilled";
+      update.fulfilled_at = new Date().toISOString();
+      update.shipped_at = new Date().toISOString();
+    } else if (shipmentBucket === "in_transit") {
+      if (currentStatus !== "fulfilled") {
+        update.status =
+          currentStatus === "paid" ? "paid" : currentStatus || "paid";
+      }
+      update.shipped_at = new Date().toISOString();
+    } else if (shipmentBucket === "issue") {
+      if (
+        currentStatus !== "refunded" &&
+        currentStatus !== "cancelled"
+      ) {
+        update.status = currentStatus || "paid";
+      }
+    }
+
     await updateOrder(sb, order.id, update);
+
+    await upsertLabel(
+      sb,
+      payload,
+      order,
+      { orgId, stripeSessionId },
+      rawStatus,
+      shipmentBucket,
+      carrier,
+      trackingNumber,
+      enviaCostMaybe
+    );
+
+    await insertWebhookLog(
+      sb,
+      payload,
+      order,
+      { orgId, stripeSessionId },
+      rawStatus,
+      carrier,
+      trackingNumber
+    );
 
     await maybeNotifyTelegram(
       [
@@ -330,11 +468,29 @@ module.exports = async (req, res) => {
         .join("\n")
     );
 
-    return send(res, jsonResponse(200, { ok: true, updated: true }, origin));
+    return send(
+      res,
+      jsonResponse(
+        200,
+        {
+          ok: true,
+          updated: true,
+          order_id: order.id,
+          shipment_status: rawStatus,
+          shipping_status: shipmentBucket,
+        },
+        origin
+      )
+    );
   } catch (e) {
     console.error("[envia_webhook] error:", e?.message || e);
-    return send(res, jsonResponse(500, { ok: false, error: "envia_webhook_failed" }, origin));
+    return send(
+      res,
+      jsonResponse(
+        500,
+        { ok: false, error: "envia_webhook_failed" },
+        origin
+      )
+    );
   }
 };
-
-module.exports.default = module.exports;
