@@ -7,7 +7,10 @@
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, max-age=0" }
+        { "key": "Cache-Control", "value": "no-store, max-age=0" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS,DELETE,PUT" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, Idempotency-Key" }
       ]
     },
     {
@@ -32,7 +35,8 @@
       "source": "/sw.js",
       "headers": [
         { "key": "Cache-Control", "value": "no-store" },
-        { "key": "Content-Type", "value": "application/javascript; charset=utf-8" }
+        { "key": "Content-Type", "value": "application/javascript; charset=utf-8" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
       ]
     },
     {
@@ -81,8 +85,20 @@
       "dest": "/api/index.js"
     },
     {
-      "src": "/$",
-      "dest": "/index.html"
+      "src": "/success",
+      "dest": "/success.html"
+    },
+    {
+      "src": "/cancel",
+      "dest": "/cancel.html"
+    },
+    {
+      "src": "/legal",
+      "dest": "/legal.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
     }
   ]
 }
