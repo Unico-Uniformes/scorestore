@@ -1,14 +1,17 @@
 /* =========================================================
    SCORE STORE — main.js
    Current structure compatible
-   - Cinematic intro with 4s fail-safe
+   - Cinematic intro with fixed 4s minimum visible time
    - /api/catalog as source for products + IA
    - /api/site_settings, /api/promos, /api/quote_shipping, /api/create_checkout
 ========================================================= */
 (() => {
   "use strict";
 
-  const APP_VERSION = "2026.04.10-intro-4s";
+  const APP_VERSION = "2026.04.10-intro-4s-final";
+  const INTRO_MIN_VISIBLE_MS = 4000;
+  const INTRO_FADE_MS = 800;
+
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
@@ -73,6 +76,7 @@
     heroTitle: $("#heroTitle"),
     heroText: $("#heroText"),
     heroTagline: $("#heroTagline"),
+    heroImage: $("#heroImage"),
 
     categoryGrid: $("#categoryGrid"),
     categoryHint: $("#categoryHint"),
@@ -199,9 +203,10 @@
   let loadingCatalog = false;
   let assistantBusy = false;
   let salesTimer = null;
-  let introTimer = null;
+  let introStartedAt = 0;
+  let introExitTimer = null;
   let introFailSafeTimer = null;
-  let splashClosing = false;
+  let introClosing = false;
   let serviceWorkerRegistered = false;
 
   const safeStr = (v, d = "") => (typeof v === "string" ? v : v == null ? d : String(v));
@@ -467,26 +472,6 @@
     return out;
   }
 
-  function readJsonFile(relPath) {
-    try {
-      const fs = require("fs");
-      const path = require("path");
-      const abs = path.join(process.cwd(), relPath);
-      if (!fs.existsSync(abs)) return null;
-      return JSON.parse(fs.readFileSync(abs, "utf8"));
-    } catch {
-      return null;
-    }
-  }
-
-  function safeGet(obj, path, fallback = "") {
-    try {
-      return path.split(".").reduce((acc, key) => acc?.[key], obj) ?? fallback;
-    } catch {
-      return fallback;
-    }
-  }
-
   function getOrigin(req) {
     return req?.headers?.origin || req?.headers?.Origin || "";
   }
@@ -624,42 +609,6 @@
     };
   }
 
-  function buildCatalogResponse(source = {}) {
-    const rawProducts = Array.isArray(source.products) ? source.products : [];
-    const rawCategories = Array.isArray(source.categories)
-      ? source.categories
-      : Array.isArray(source.sections)
-        ? source.sections
-        : [];
-
-    const productsOut = rawProducts.map(normalizeProduct).filter(Boolean);
-    const categoriesOut = rawCategories.length ? rawCategories.map(normalizeCategory).filter(Boolean) : buildSectionsFromProducts(productsOut);
-
-    return {
-      products: productsOut,
-      categories: rawCategories.length ? attachCounts(categoriesOut, productsOut) : categoriesOut,
-      sections: rawCategories.length ? attachCounts(categoriesOut, productsOut) : categoriesOut,
-      stats: {
-        activeProducts: productsOut.filter((p) => p.active !== false && p.is_active !== false && !p.deleted_at).length,
-        lowStockProducts: productsOut.filter((p) => Number(p.stock) > 0 && Number(p.stock) <= 5).length,
-        featuredProducts: productsOut.filter((p) => Number(p.rank) <= 12).length,
-      },
-      store: {
-        org_id: safeStr(source?.store?.org_id || source?.org_id || ""),
-        name: safeStr(source?.store?.name || source?.store?.hero_title || source?.hero_title || "SCORE STORE"),
-        hero_title: safeStr(source?.store?.hero_title || source?.hero_title || "SCORE STORE"),
-        hero_image: safeStr(source?.store?.hero_image || source?.hero_image || "/assets/hero.webp"),
-        promo_active: !!(source?.store?.promo_active ?? source?.promo_active),
-        promo_text: safeStr(source?.store?.promo_text || source?.promo_text || ""),
-        maintenance_mode: !!(source?.store?.maintenance_mode ?? source?.maintenance_mode),
-        contact: source?.store?.contact || source?.contact || {},
-        home: source?.store?.home || source?.home || {},
-        socials: source?.store?.socials || source?.socials || {},
-        theme: source?.store?.theme || source?.theme || {},
-      },
-    };
-  }
-
   function parseBody(req) {
     const body = req?.body;
     if (body && typeof body === "object" && !Buffer.isBuffer(body)) return body;
@@ -713,6 +662,17 @@
     };
   }
 
+  function moneyShort(cents) {
+    const n = Number(cents);
+    const value = Number.isFinite(n) ? n : 0;
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value / 100);
+  }
+
   function buildPublicPrompt({ store, stats, products, categories, context }) {
     const contact = store?.contact || {};
     const home = store?.home || {};
@@ -730,7 +690,7 @@
 
     const productsPreview = (Array.isArray(products) ? products : [])
       .slice(0, 24)
-      .map((p) => `- ${getProductName(p)} | SKU:${getProductSku(p)} | ${money(getProductPriceCents(p))} | ${getStockLabel(p)}`)
+      .map((p) => `- ${getProductName(p)} | SKU:${getProductSku(p)} | ${moneyShort(getProductPriceCents(p))} | ${getStockLabel(p)}`)
       .join("\n");
 
     const categoryPreview = (Array.isArray(categories) ? categories : [])
@@ -893,12 +853,6 @@ Redes públicas:
 
   async function handleCatalog(req) {
     const origin = getOrigin(req);
-    const rl = rateLimit(req);
-
-    if (!rl.ok) {
-      return jsonResponse(429, { ok: false, error: "rate_limited" }, origin);
-    }
-
     const body = parseBody(req);
     const mode = parseMode(req, body);
 
@@ -1027,6 +981,17 @@ Redes públicas:
     document.documentElement.classList.toggle("no-scroll", !!locked);
   }
 
+  function updateBodyLocks() {
+    const open = Boolean(
+      (els.cartDrawer && !els.cartDrawer.hidden) ||
+      (els.assistantDrawer && !els.assistantDrawer.hidden) ||
+      (els.productModal && !els.productModal.hidden) ||
+      (els.splash && !els.splash.hidden)
+    );
+    setBodyNoScroll(open);
+    if (els.overlay) els.overlay.hidden = !open;
+  }
+
   function refreshHeaderPromo() {
     if (!els.promoBar) return;
     const hidden = readStorage(STORAGE_KEYS.hiddenPromo, "0") === "1";
@@ -1067,15 +1032,12 @@ Redes públicas:
     if (els.heroText && home.hero_text) els.heroText.textContent = home.hero_text;
     if (els.heroTagline && siteSettings.hero_title) els.heroTagline.textContent = "Official Merchandise";
 
-    if (siteSettings.hero_image) {
-      const heroImg = $("#heroImage");
-      if (heroImg) {
-        heroImg.src = normalizeAssetPath(siteSettings.hero_image);
-        heroImg.onerror = () => {
-          heroImg.onerror = null;
-          heroImg.src = "/assets/hero.webp";
-        };
-      }
+    if (els.heroImage && siteSettings.hero_image) {
+      els.heroImage.src = normalizeAssetPath(siteSettings.hero_image);
+      els.heroImage.onerror = () => {
+        els.heroImage.onerror = null;
+        els.heroImage.src = "/assets/hero.webp";
+      };
     }
 
     if (siteSettings.promo_active && siteSettings.promo_text && els.promoBarText && !readStorage(STORAGE_KEYS.hiddenPromo, "0")) {
@@ -1633,6 +1595,7 @@ Redes públicas:
     els.cartDrawer.setAttribute("aria-hidden", "false");
     setBodyNoScroll(true);
     if (els.overlay) els.overlay.hidden = false;
+    updateBodyLocks();
   }
 
   function closeCart() {
@@ -1649,6 +1612,7 @@ Redes públicas:
     els.assistantDrawer.setAttribute("aria-hidden", "false");
     setBodyNoScroll(true);
     if (els.overlay) els.overlay.hidden = false;
+    updateBodyLocks();
     if (els.assistantInput) setTimeout(() => els.assistantInput.focus(), 80);
     if (els.assistantLog && els.assistantLog.childElementCount === 0) {
       appendAssistant("bot", "Hola. Soy el asistente de SCORE STORE. ¿Qué buscas hoy?");
@@ -1777,6 +1741,7 @@ Redes públicas:
     els.productModal.classList.add("modal--open");
     setBodyNoScroll(true);
     if (els.overlay) els.overlay.hidden = false;
+    updateBodyLocks();
     setTimeout(() => els.pmAddBtn?.focus(), 50);
   }
 
@@ -1966,42 +1931,35 @@ Redes públicas:
     if (sku) setTimeout(() => openProduct(sku), 180);
   }
 
-  function syncSearch(value) {
-    searchQuery = safeStr(value || "").trim();
-    if (els.searchInput && els.searchInput.value !== searchQuery) els.searchInput.value = searchQuery;
-    if (els.mobileSearchInput && els.mobileSearchInput.value !== searchQuery) els.mobileSearchInput.value = searchQuery;
-    if (els.menuSearchInput && els.menuSearchInput.value !== searchQuery) els.menuSearchInput.value = searchQuery;
-    writeStorage(STORAGE_KEYS.ui, { searchQuery, activeCategory });
-  }
-
-  function updateBodyLocks() {
-    const open = Boolean(
-      (els.cartDrawer && !els.cartDrawer.hidden) ||
-      (els.assistantDrawer && !els.assistantDrawer.hidden) ||
-      (els.productModal && !els.productModal.hidden) ||
-      (els.splash && !els.splash.hidden)
-    );
-    setBodyNoScroll(open);
-    if (els.overlay) els.overlay.hidden = !open;
+  function registerServiceWorker() {
+    if (serviceWorkerRegistered) return;
+    if (!("serviceWorker" in navigator)) return;
+    serviceWorkerRegistered = true;
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
   }
 
   function hideSplash(force = false) {
-    if (!els.splash || els.splash.hidden || splashClosing) return;
-    splashClosing = true;
+    if (!els.splash || els.splash.hidden || introClosing) return;
+    introClosing = true;
 
-    if (force) {
-      els.splash.hidden = true;
-      splashClosing = false;
-      updateBodyLocks();
-      return;
+    const elapsed = performance.now() - introStartedAt;
+    const wait = force ? 0 : Math.max(0, INTRO_MIN_VISIBLE_MS - elapsed);
+
+    const doExit = () => {
+      if (!els.splash || els.splash.hidden) return;
+      els.splash.classList.add("fade-out");
+      introExitTimer = window.setTimeout(() => {
+        if (els.splash) els.splash.hidden = true;
+        introClosing = false;
+        updateBodyLocks();
+      }, INTRO_FADE_MS);
+    };
+
+    if (wait > 0) {
+      introExitTimer = window.setTimeout(doExit, wait);
+    } else {
+      doExit();
     }
-
-    els.splash.classList.add("fade-out");
-    setTimeout(() => {
-      if (els.splash) els.splash.hidden = true;
-      splashClosing = false;
-      updateBodyLocks();
-    }, 800);
   }
 
   function bindEvents() {
@@ -2141,14 +2099,9 @@ Redes públicas:
     });
   }
 
-  function registerServiceWorker() {
-    if (serviceWorkerRegistered) return;
-    if (!("serviceWorker" in navigator)) return;
-    serviceWorkerRegistered = true;
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
-  }
-
   async function boot() {
+    introStartedAt = performance.now();
+
     updateFooterVersion();
     restoreCart();
     restoreCustomer();
@@ -2183,22 +2136,22 @@ Redes públicas:
     updateBodyLocks();
 
     if (els.splash && !els.splash.hidden) {
-      introFailSafeTimer = setTimeout(() => {
-        if (els.splash && !els.splash.hidden) hideSplash(false);
-      }, 4000);
+      introFailSafeTimer = window.setTimeout(() => {
+        hideSplash(true);
+      }, INTRO_MIN_VISIBLE_MS);
     }
 
     try {
       await Promise.race([
         Promise.allSettled([loadPromos(), loadSiteSettings(), loadCatalog()]),
-        delay(3500),
+        delay(INTRO_MIN_VISIBLE_MS - 500),
       ]);
     } catch (err) {
       console.error("[boot]", err);
     } finally {
       if (introFailSafeTimer) clearTimeout(introFailSafeTimer);
       introFailSafeTimer = null;
-      introTimer = setTimeout(() => hideSplash(false), 180);
+      hideSplash(false);
     }
 
     renderCategories();
