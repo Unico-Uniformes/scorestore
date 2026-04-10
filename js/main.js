@@ -271,23 +271,34 @@
     }).format(value / 100);
   }
 
-  function normalizeAssetPath(input) {
-    let s = String(input ?? "").trim();
+  
+  const legacyAssetUrl = (u) => {
+    let s = String(u || "").trim();
     if (!s) return "";
     if (/^(https?:|data:|blob:)/i.test(s)) return s;
-    s = s.replaceAll("\\", "/").replace(/^\.\//, "");
-    s = s.replaceAll("/assets/products/baja1000/", "/assets/products/baja1000/edicion_2025/");
-    s = s.replaceAll("", "/assets/products/baja1000/edicion_2025/");
-    s = s.replaceAll("/assets/products/baja1000/edicion_2025/", "/assets/products/baja1000/edicion_2025/");
-    s = s.replaceAll("/assets/products/baja500/", "/assets/products/baja1000/edicion_2025/");
-    s = s.replaceAll("/assets/products/baja500/", "/assets/products/baja1000/edicion_2025/");
-    s = s.replaceAll("/assets/products/baja400/", "/assets/products/baja400/");
-    s = s.replaceAll("/assets/products/baja400/", "/assets/products/baja400/");
-    s = s.replaceAll("/assets/products/sf250/", "/assets/products/sf250/");
-    s = s.replaceAll("/assets/products/sf250/", "/assets/products/sf250/");
-    s = s.replaceAll("/assets/products/baja1000/otras_ediciones/", "/assets/products/baja1000/otras_ediciones/");
-    return s.startsWith("/") ? s : `/${s.replace(/^\/+/, "")}`;
-  }
+
+    s = s
+      .replace(/\.jpg\.webp$/ig, ".webp")
+      .replace(/\.png\.webp$/ig, ".webp")
+      .replace(/^\/?assets\/EDICION_2025\//i, "/assets/products/baja1000/edicion_2025/")
+      .replace(/^\/?assets\/BAJA_1000\//i, "/assets/products/baja1000/edicion_2025/")
+      .replace(/^\/?assets\/BAJA1000\//i, "/assets/products/baja1000/edicion_2025/")
+      .replace(/^\/?assets\/OTRAS_EDICIONES\//i, "/assets/products/baja1000/otras_ediciones/")
+      .replace(/^\/?assets\/BAJA_500\//i, "/assets/products/baja500/")
+      .replace(/^\/?assets\/BAJA500\//i, "/assets/products/baja500/")
+      .replace(/^\/?assets\/BAJA_400\//i, "/assets/products/baja400/")
+      .replace(/^\/?assets\/BAJA400\//i, "/assets/products/baja400/")
+      .replace(/^\/?assets\/SF_250\//i, "/assets/products/sf250/")
+      .replace(/^\/?assets\/SF250\//i, "/assets/products/sf250/");
+
+    if (s.startsWith("/")) return s;
+    if (s.startsWith("assets/")) return `/${s}`;
+    return s;
+  };
+
+  const safeUrl = legacyAssetUrl;
+  const normalizeAssetPath = legacyAssetUrl;
+
 
   function getCategoryConfig(uiId) {
     const id = safeStr(uiId).trim().toUpperCase();
@@ -971,6 +982,31 @@ Redes públicas:
       origin
     );
   }
+
+
+  const legacyVisualBootstrap = () => {
+    document.documentElement.classList.add("legacy-visual-ready");
+    document.body.classList.add("legacy-visual");
+
+    const touch = (el, ...classes) => {
+      if (!el) return;
+      classes.forEach((c) => el.classList.add(c));
+    };
+
+    touch(els.splash, "splash");
+    touch(els.promoBar, "promo-bar");
+    touch(els.heroImage, "hero__desert", "hero-vfx-float");
+    touch(els.categoryGrid, "catgrid");
+    touch(els.catalogCarouselSection, "vfx-glass-container");
+    touch(els.productGrid, "carousel-track", "custom-scrollbar");
+    touch(els.cartDrawer, "glass-panel");
+    touch(els.assistantDrawer, "glass-panel");
+    touch(els.productModal, "vfx-modal-panel");
+    touch(els.cookieBanner, "cookie-banner");
+    touch(els.salesNotification, "sales-toast");
+    touch(els.scrollTopBtn, "floating-scroll");
+    touch(els.openAssistantBtn, "tech-glow");
+  };
 
   function updateFooterVersion() {
     if (els.appVersionLabel) els.appVersionLabel.textContent = APP_VERSION;
@@ -2129,6 +2165,7 @@ Redes públicas:
       els.footerWhatsappLink.textContent = waDisplay;
     }
 
+    legacyVisualBootstrap();
     bindEvents();
     initCookieBanner();
     renderCart();
