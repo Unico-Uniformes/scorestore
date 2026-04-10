@@ -220,8 +220,8 @@
       "cover_image": "/assets/edicion_2025/camiseta-negra-baja1000.webp",
       "images": [
         "/assets/edicion_2025/camiseta-negra-baja1000.webp",
-        "/assets/edicion_2025/camiseta-negra-baja1000-atras.jpg.webp",
-        "/assets/edicion_2025/camiseta-negra-baja1000-detalles.jpg.webp"
+        "/assets/edicion_2025/camiseta-negra-baja1000-atras.webp",
+        "/assets/edicion_2025/camiseta-negra-baja1000-detalles.webp"
       ],
       "stock": 28,
       "active": true,
@@ -339,13 +339,13 @@
       "category": "BAJA 1000",
       "rank": 7,
       "sizes": ["S", "M", "L", "XL", "XXL"],
-      "image_url": "/assets/edicion_2025/camisa-gris-pits-baja1000.jpg.webp",
-      "img": "/assets/edicion_2025/camisa-gris-pits-baja1000.jpg.webp",
-      "image": "/assets/edicion_2025/camisa-gris-pits-baja1000.jpg.webp",
-      "cover_image": "/assets/edicion_2025/camisa-gris-pits-baja1000.jpg.webp",
+      "image_url": "/assets/edicion_2025/camisa-gris-pits-baja1000.webp",
+      "img": "/assets/edicion_2025/camisa-gris-pits-baja1000.webp",
+      "image": "/assets/edicion_2025/camisa-gris-pits-baja1000.webp",
+      "cover_image": "/assets/edicion_2025/camisa-gris-pits-baja1000.webp",
       "images": [
-        "/assets/edicion_2025/camisa-gris-pits-baja1000.jpg.webp",
-        "/assets/edicion_2025/camisa-gris-pits-baja1000-detalles.jpg.webp"
+        "/assets/edicion_2025/camisa-gris-pits-baja1000.webp",
+        "/assets/edicion_2025/camisa-gris-pits-baja1000-detalles.webp"
       ],
       "stock": 14,
       "active": true,
@@ -370,13 +370,13 @@
       "category": "BAJA 1000",
       "rank": 8,
       "sizes": ["S", "M", "L", "XL", "XXL"],
-      "image_url": "/assets/edicion_2025/camisa-rosa-pits-baja1000.jpg.webp",
-      "img": "/assets/edicion_2025/camisa-rosa-pits-baja1000.jpg.webp",
-      "image": "/assets/edicion_2025/camisa-rosa-pits-baja1000.jpg.webp",
-      "cover_image": "/assets/edicion_2025/camisa-rosa-pits-baja1000.jpg.webp",
+      "image_url": "/assets/edicion_2025/camisa-rosa-pits-baja1000.webp",
+      "img": "/assets/edicion_2025/camisa-rosa-pits-baja1000.webp",
+      "image": "/assets/edicion_2025/camisa-rosa-pits-baja1000.webp",
+      "cover_image": "/assets/edicion_2025/camisa-rosa-pits-baja1000.webp",
       "images": [
-        "/assets/edicion_2025/camisa-rosa-pits-baja1000.jpg.webp",
-        "/assets/edicion_2025/camisa-rosa-pits-baja1000-detalles.jpg.webp"
+        "/assets/edicion_2025/camisa-rosa-pits-baja1000.webp",
+        "/assets/edicion_2025/camisa-rosa-pits-baja1000-detalles.webp"
       ],
       "stock": 10,
       "active": true,
@@ -492,12 +492,12 @@
       "category": "BAJA 1000",
       "rank": 12,
       "sizes": ["S", "M", "L", "XL", "XXL"],
-      "image_url": "/assets/otras_ediciones/hoodie-rosa-baja1000.jpg.webp",
-      "img": "/assets/otras_ediciones/hoodie-rosa-baja1000.jpg.webp",
-      "image": "/assets/otras_ediciones/hoodie-rosa-baja1000.jpg.webp",
-      "cover_image": "/assets/otras_ediciones/hoodie-rosa-baja1000.jpg.webp",
+      "image_url": "/assets/otras_ediciones/hoodie-rosa-baja1000.webp",
+      "img": "/assets/otras_ediciones/hoodie-rosa-baja1000.webp",
+      "image": "/assets/otras_ediciones/hoodie-rosa-baja1000.webp",
+      "cover_image": "/assets/otras_ediciones/hoodie-rosa-baja1000.webp",
       "images": [
-        "/assets/otras_ediciones/hoodie-rosa-baja1000.jpg.webp"
+        "/assets/otras_ediciones/hoodie-rosa-baja1000.webp"
       ],
       "stock": 7,
       "active": true,

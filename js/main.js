@@ -278,14 +278,14 @@
     s = s.replaceAll("\\", "/").replace(/^\.\//, "");
     s = s.replaceAll("/assets/BAJA_1000/", "/assets/edicion_2025/");
     s = s.replaceAll("/assets/BAJA1000/", "/assets/edicion_2025/");
-    s = s.replaceAll("/assets/EDICION_2025/", "/assets/edicion_2025/");
-    s = s.replaceAll("/assets/BAJA_500/", "/assets/edicion_2025/");
-    s = s.replaceAll("/assets/BAJA500/", "/assets/edicion_2025/");
-    s = s.replaceAll("/assets/BAJA_400/", "/assets/baja400/");
-    s = s.replaceAll("/assets/BAJA400/", "/assets/baja400/");
-    s = s.replaceAll("/assets/SF_250/", "/assets/sf250/");
-    s = s.replaceAll("/assets/SF250/", "/assets/sf250/");
-    s = s.replaceAll("/assets/OTRAS_EDICIONES/", "/assets/otras_ediciones/");
+    s = s.replaceAll("/assets/edicion_2025/", "/assets/edicion_2025/");
+    s = s.replaceAll("/assets/baja500/", "/assets/edicion_2025/");
+    s = s.replaceAll("/assets/baja500/", "/assets/edicion_2025/");
+    s = s.replaceAll("/assets/baja400/", "/assets/baja400/");
+    s = s.replaceAll("/assets/baja400/", "/assets/baja400/");
+    s = s.replaceAll("/assets/sf250/", "/assets/sf250/");
+    s = s.replaceAll("/assets/sf250/", "/assets/sf250/");
+    s = s.replaceAll("/assets/otras_ediciones/", "/assets/otras_ediciones/");
     return s.startsWith("/") ? s : `/${s.replace(/^\/+/, "")}`;
   }
 
