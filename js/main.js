@@ -2245,3 +2245,162 @@ Redes públicas:
     persistCart();
   });
 })();
+
+/* =========================================================
+   SCORE STORE — Visual/UX compatibility bridge
+========================================================= */
+(() => {
+  if (window.__SS_VISUAL_BRIDGE__) return;
+  window.__SS_VISUAL_BRIDGE__ = true;
+
+  const byId = (...ids) => ids.map((id) => document.getElementById(id)).find(Boolean) || null;
+  const getAny = (...ids) => byId(...ids);
+
+  const openPanel = (el) => {
+    if (!el) return;
+    el.hidden = false;
+    el.classList.add("is-open");
+    el.setAttribute("aria-hidden", "false");
+    document.body.classList.add("no-scroll");
+  };
+
+  const closePanel = (el) => {
+    if (!el) return;
+    el.hidden = true;
+    el.classList.remove("is-open");
+    el.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("no-scroll");
+  };
+
+  const togglePanel = (el) => {
+    if (!el) return;
+    if (el.hidden) openPanel(el); else closePanel(el);
+  };
+
+  const scrollToCategories = () => {
+    const target = getAny("categories", "categoriesSection", "categoryGrid");
+    if (target && target.scrollIntoView) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const bindClick = (id, fn) => {
+    const el = getAny(id);
+    if (el && !el.dataset.ssBound) {
+      el.dataset.ssBound = "1";
+      el.addEventListener("click", fn);
+    }
+  };
+
+  const menu = getAny("sideMenu", "menuDrawer");
+  const cart = getAny("cartDrawer");
+  const assistant = getAny("assistantDrawer", "assistantModal");
+  const overlay = getAny("overlay");
+
+  bindClick("openMenuBtn", () => { togglePanel(menu); if (overlay) overlay.hidden = false; });
+  bindClick("closeMenuBtn", () => { closePanel(menu); if (overlay) overlay.hidden = true; });
+
+  bindClick("openCartBtn", () => { togglePanel(cart); if (overlay) overlay.hidden = false; });
+  bindClick("closeCartBtn", () => { closePanel(cart); if (overlay) overlay.hidden = true; });
+
+  bindClick("openAssistantBtn", () => { togglePanel(assistant); if (overlay) overlay.hidden = false; });
+  bindClick("assistantClose", () => { closePanel(assistant); if (overlay) overlay.hidden = true; });
+  bindClick("assistantCloseBtn", () => { closePanel(assistant); if (overlay) overlay.hidden = true; });
+  bindClick("floatingAssistantBtn", () => { togglePanel(assistant); if (overlay) overlay.hidden = false; });
+
+  bindClick("mobileSearchBtn", () => {
+    const wrap = getAny("mobileSearchWrap");
+    if (wrap) wrap.hidden = !wrap.hidden;
+  });
+  bindClick("closeMobileSearchBtn", () => {
+    const wrap = getAny("mobileSearchWrap");
+    if (wrap) wrap.hidden = true;
+  });
+
+  bindClick("scrollToCategoriesBtn", scrollToCategories);
+
+  bindClick("scrollLeftBtn", () => {
+    const grid = getAny("productGrid");
+    if (grid) grid.scrollBy({ left: -420, behavior: "smooth" });
+  });
+  bindClick("scrollRightBtn", () => {
+    const grid = getAny("productGrid");
+    if (grid) grid.scrollBy({ left: 420, behavior: "smooth" });
+  });
+
+  bindClick("promoBarClose", () => {
+    const bar = getAny("promoBar");
+    if (bar) bar.hidden = true;
+  });
+
+  bindClick("pmClose", () => {
+    const modal = getAny("productModal");
+    if (modal) closePanel(modal);
+  });
+  bindClick("pmBackBtn", () => {
+    const modal = getAny("productModal");
+    if (modal) closePanel(modal);
+  });
+
+  bindClick("pmQtyDec", () => {
+    const out = getAny("pmQtyDisplay");
+    if (!out) return;
+    const n = Math.max(1, (parseInt(out.textContent || "1", 10) || 1) - 1);
+    out.textContent = String(n);
+  });
+
+  bindClick("pmQtyInc", () => {
+    const out = getAny("pmQtyDisplay");
+    if (!out) return;
+    const n = Math.min(99, (parseInt(out.textContent || "1", 10) || 1) + 1);
+    out.textContent = String(n);
+  });
+
+  const normalizeSectionIdToUi = window.normalizeSectionIdToUi || function normalizeSectionIdToUi(id) {
+    return String(id || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  };
+
+  const normalizeAssetPath = window.normalizeAssetPath || function normalizeAssetPath(input) {
+    let s = String(input || "").trim();
+    if (!s) return s;
+    s = s
+      .replace(/\.jpg\.webp$/ig, ".webp")
+      .replace(/\.png\.webp$/ig, ".webp")
+      .replace(/^\/?assets\//i, "/assets/");
+    return s;
+  };
+
+  window.normalizeSectionIdToUi = normalizeSectionIdToUi;
+  window.normalizeAssetPath = normalizeAssetPath;
+  window.safeUrl = window.safeUrl || normalizeAssetPath;
+
+  window.applySiteSettings = window.applySiteSettings || async () => null;
+  window.fetchCatalog = window.fetchCatalog || async () => null;
+  window.fetchSiteSettings = window.fetchSiteSettings || async () => null;
+
+  const hero = getAny("heroImage", "heroImg");
+  const heroTitle = getAny("heroTitle");
+  const heroText = getAny("heroText");
+  const heroTagline = getAny("heroTagline");
+
+  if (hero && !hero.getAttribute("src")) hero.setAttribute("src", "/assets/logo-world-desert.webp");
+  if (heroTitle && !heroTitle.textContent.trim()) heroTitle.textContent = "SCORE STORE";
+  if (heroText && !heroText.textContent.trim()) heroText.textContent = "Diseño, pasión y rendimiento extremo.";
+  if (heroTagline && !heroTagline.textContent.trim()) heroTagline.textContent = "Official Merchandise";
+
+  const loader = getAny("checkoutLoader");
+  if (loader) loader.hidden = true;
+
+  const onReady = () => {
+    const body = document.body;
+    if (body) body.classList.remove("no-scroll");
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", onReady, { once: true });
+  } else {
+    onReady();
+  }
+})();
