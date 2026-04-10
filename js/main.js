@@ -2404,3 +2404,10 @@ Redes públicas:
     onReady();
   }
 })();
+
+
+/* Checkout handler */
+document.getElementById("checkoutBtn")?.addEventListener("click", () => {
+  console.log("Checkout iniciado");
+  alert("Checkout en construcción");
+});
