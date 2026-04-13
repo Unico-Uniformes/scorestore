@@ -1,9 +1,6 @@
 /* =========================================================
-   SCORE STORE — Service Worker (Vercel-safe)
-   - No cachea /api/*
-   - Network-first para navegación
-   - Cache-first para assets estáticos
-   - Skip waiting + claim
+   SCORE STORE — Service Worker
+   Vercel-safe, no API caching, no Netlify assumptions
    ========================================================= */
 
 const SW_VERSION = "2026.04.PREMIUM.VERCEL";
@@ -11,12 +8,7 @@ const STATIC_CACHE = `scorestore-static-${SW_VERSION}`;
 const RUNTIME_CACHE = `scorestore-runtime-${SW_VERSION}`;
 
 const OFFLINE_FALLBACK = "/";
-const BYPASS_PREFIXES = [
-  "/api/",
-  "/_next/",
-  "/.well-known/",
-  "/favicon.ico",
-];
+const BYPASS_PREFIXES = ["/api/", "/_next/", "/.well-known/"];
 
 const SAME_ORIGIN = self.location.origin;
 
@@ -36,12 +28,6 @@ const cachePutSafe = async (cacheName, request, response) => {
   } catch {}
 };
 
-const fetchAndCache = async (request, cacheName = RUNTIME_CACHE) => {
-  const response = await fetch(request);
-  await cachePutSafe(cacheName, request, response.clone());
-  return response;
-};
-
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil((async () => {
@@ -57,8 +43,8 @@ self.addEventListener("activate", (event) => {
     const keys = await caches.keys();
     await Promise.all(
       keys
-        .filter((key) => key.startsWith("scorestore-") && key !== STATIC_CACHE && key !== RUNTIME_CACHE)
-        .map((key) => caches.delete(key))
+        .filter((k) => k.startsWith("scorestore-") && k !== STATIC_CACHE && k !== RUNTIME_CACHE)
+        .map((k) => caches.delete(k))
     );
     await self.clients.claim();
   })());
@@ -88,8 +74,8 @@ self.addEventListener("fetch", (event) => {
         await cachePutSafe(STATIC_CACHE, OFFLINE_FALLBACK, networkResponse.clone());
         return networkResponse;
       } catch {
-        const cached = await caches.match(request, { ignoreSearch: true });
-        if (cached) return cached;
+        const cachedPage = await caches.match(request, { ignoreSearch: true });
+        if (cachedPage) return cachedPage;
 
         const fallback = await caches.match(OFFLINE_FALLBACK);
         if (fallback) return fallback;
@@ -143,7 +129,9 @@ self.addEventListener("fetch", (event) => {
     }
 
     try {
-      return await fetchAndCache(request, RUNTIME_CACHE);
+      const fresh = await fetch(request);
+      await cachePutSafe(RUNTIME_CACHE, request, fresh.clone());
+      return fresh;
     } catch {
       return new Response("", { status: 504, statusText: "Gateway Timeout" });
     }
