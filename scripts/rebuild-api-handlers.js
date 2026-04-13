@@ -7,8 +7,9 @@ const path = require("path");
 const root = process.cwd();
 const apiDir = path.join(root, "api");
 const handlersDir = path.join(root, "lib", "handlers");
+const libDir = path.join(root, "lib");
 
-const filesToMove = [
+const handlersToMove = [
   "_auth.js",
   "_catalog.js",
   "_checkout_status.js",
@@ -19,6 +20,12 @@ const filesToMove = [
   "_quote_shipping.js",
   "_site_settings.js",
   "_stripe_webhook.js",
+];
+
+const supportFilesToMove = [
+  "_shared.js",
+  "_rate_limit.js",
+  "idempotency.js",
 ];
 
 const routerCode = `// api/index.js
@@ -128,67 +135,36 @@ function patchImports(code) {
     .replace(/require\((['"])\.\/idempotency(?:\.js)?\1\)/g, 'require("../idempotency")');
 }
 
-function patchSpecialCases(file, code) {
-  let out = patchImports(code);
-
-  if (file === "_catalog.js") {
-    out = out.replace(/const\s*\{\s*jsonResponse,\s*handleOptions,\s*rateLimit,/, "const {\n  jsonResponse,\n  handleOptions,");
-    if (!/require\("\.\.\/_rate_limit"\)/.test(out)) {
-      out = out.replace(
-        /const\s*\{\s*jsonResponse,\s*handleOptions,\s*supabaseAdmin/,
-        'const { rateLimit } = require("../_rate_limit");\n\nconst { jsonResponse, handleOptions, supabaseAdmin'
-      );
-    }
-  }
-
-  if (file === "_quote_shipping.js") {
-    out = out.replace(/require\("\.\.\/_shared"\)/g, 'require("../_shared")');
-  }
-
-  if (file === "_health_check.js") {
-    out = out.replace(/require\("\.\/_auth"\)/g, 'require("../_auth")');
-  }
-
-  if (file === "_promos.js") {
-    out = out.replace(/res\.status\(out\.statusCode \|\| 200\)\.send\(out\.body\);/g, `res.statusCode = out.statusCode || 200;
-  Object.entries(out.headers || {}).forEach(([key, value]) => res.setHeader(key, value));
-  res.end(out.body || "");`);
-  }
-
-  if (file === "_site_settings.js") {
-    out = out.replace(/onConflict:\s*"org_id"/g, 'onConflict: "organization_id"');
-  }
-
-  if (file === "_stripe_webhook.js") {
-    out = out.replace(/apiVersion:\s*"2024-06-20"/g, 'apiVersion: "2025-01-27.acacia"');
-  }
-
-  return out;
-}
-
 function main() {
   ensureDir(handlersDir);
+  ensureDir(libDir);
 
   if (!fs.existsSync(apiDir)) {
     throw new Error("No existe /api");
   }
 
+  // Router central
   write(path.join(apiDir, "index.js"), routerCode);
 
-  for (const file of filesToMove) {
+  // Mover handlers
+  for (const file of handlersToMove) {
     const src = path.join(apiDir, file);
     const dest = path.join(handlersDir, file);
-
-    if (!fs.existsSync(src)) {
-      continue;
-    }
-
-    const content = read(src);
-    write(dest, patchSpecialCases(file, content));
+    if (!fs.existsSync(src)) continue;
+    write(dest, patchImports(read(src)));
     fs.unlinkSync(src);
   }
 
-  console.log("OK: handlers movidos a lib/handlers y router central regenerado.");
+  // Mover utilidades compartidas
+  for (const file of supportFilesToMove) {
+    const src = path.join(apiDir, file);
+    const dest = path.join(libDir, file);
+    if (!fs.existsSync(src)) continue;
+    write(dest, patchImports(read(src)));
+    fs.unlinkSync(src);
+  }
+
+  console.log("OK: router regenerado, handlers y helpers movidos a lib/.");
 }
 
 main();
